@@ -2,7 +2,7 @@
   "agents": {
     "defaults": {
       "workspace": "~/.pepebot/workspace",
-      "model": "glm-4.7",
+      "model": "maia/gemini-3-pro-preview",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -40,6 +40,10 @@
     }
   },
   "providers": {
+    "maiarouter": {
+      "api_key": "YOUR_MAIA_API_KEY",
+      "api_base": "https://api.maiarouter.ai/v1"
+    },
     "anthropic": {
       "api_key": "",
       "api_base": ""

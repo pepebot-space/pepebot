@@ -173,6 +173,14 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 	lowerModel := strings.ToLower(model)
 
 	switch {
+	case strings.HasPrefix(model, "maia/"):
+		apiKey = cfg.Providers.MAIARouter.APIKey
+		if cfg.Providers.MAIARouter.APIBase != "" {
+			apiBase = cfg.Providers.MAIARouter.APIBase
+		} else {
+			apiBase = "https://api.maiarouter.ai/v1"
+		}
+
 	case strings.HasPrefix(model, "openrouter/") || strings.HasPrefix(model, "anthropic/") || strings.HasPrefix(model, "openai/") || strings.HasPrefix(model, "meta-llama/") || strings.HasPrefix(model, "deepseek/") || strings.HasPrefix(model, "google/"):
 		apiKey = cfg.Providers.OpenRouter.APIKey
 		if cfg.Providers.OpenRouter.APIBase != "" {
@@ -221,7 +229,14 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		apiBase = cfg.Providers.VLLM.APIBase
 
 	default:
-		if cfg.Providers.OpenRouter.APIKey != "" {
+		if cfg.Providers.MAIARouter.APIKey != "" {
+			apiKey = cfg.Providers.MAIARouter.APIKey
+			if cfg.Providers.MAIARouter.APIBase != "" {
+				apiBase = cfg.Providers.MAIARouter.APIBase
+			} else {
+				apiBase = "https://api.maiarouter.ai/v1"
+			}
+		} else if cfg.Providers.OpenRouter.APIKey != "" {
 			apiKey = cfg.Providers.OpenRouter.APIKey
 			if cfg.Providers.OpenRouter.APIBase != "" {
 				apiBase = cfg.Providers.OpenRouter.APIBase

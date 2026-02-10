@@ -73,6 +73,7 @@ type MaixCamConfig struct {
 }
 
 type ProvidersConfig struct {
+	MAIARouter ProviderConfig `json:"maiarouter"`
 	Anthropic  ProviderConfig `json:"anthropic"`
 	OpenAI     ProviderConfig `json:"openai"`
 	OpenRouter ProviderConfig `json:"openrouter"`
@@ -110,7 +111,7 @@ func DefaultConfig() *Config {
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
 				Workspace:         "~/.pepebot/workspace",
-				Model:             "glm-4.7",
+				Model:             "maia/gemini-3-pro-preview",
 				MaxTokens:         8192,
 				Temperature:       0.7,
 				MaxToolIterations: 20,
@@ -148,6 +149,7 @@ func DefaultConfig() *Config {
 			},
 		},
 		Providers: ProvidersConfig{
+			MAIARouter: ProviderConfig{},
 			Anthropic:  ProviderConfig{},
 			OpenAI:     ProviderConfig{},
 			OpenRouter: ProviderConfig{},
@@ -219,6 +221,9 @@ func (c *Config) WorkspacePath() string {
 func (c *Config) GetAPIKey() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if c.Providers.MAIARouter.APIKey != "" {
+		return c.Providers.MAIARouter.APIKey
+	}
 	if c.Providers.OpenRouter.APIKey != "" {
 		return c.Providers.OpenRouter.APIKey
 	}
@@ -246,6 +251,12 @@ func (c *Config) GetAPIKey() string {
 func (c *Config) GetAPIBase() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if c.Providers.MAIARouter.APIKey != "" {
+		if c.Providers.MAIARouter.APIBase != "" {
+			return c.Providers.MAIARouter.APIBase
+		}
+		return "https://api.maiarouter.ai/v1"
+	}
 	if c.Providers.OpenRouter.APIKey != "" {
 		if c.Providers.OpenRouter.APIBase != "" {
 			return c.Providers.OpenRouter.APIBase

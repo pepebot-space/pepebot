@@ -18,7 +18,8 @@ Pepebot is an ultra-lightweight and efficient personal AI agent written in Go. I
 
 ## ✨ Key Features
 
-- 🤖 **Multi-Provider LLM**: Support for various AI providers (Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, vLLM)
+- 🤖 **Multi-Provider LLM**: Support for various AI providers including [MAIA Router](https://maiarouter.ai) (recommended), Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, and vLLM
+- 🌏 **Indonesian-Friendly**: MAIA Router integration with QRIS payment support and 52+ free models
 - 💬 **Multi-Channel**: Integration with Telegram, Discord, WhatsApp, MaixCam, and Feishu
 - 🛠️ **Tools System**: Filesystem operations, shell execution, web search, and more
 - 🎯 **Skills System**: Customizable and extensible skill system
@@ -81,7 +82,7 @@ nano ~/.pepebot/config.json
   "agents": {
     "defaults": {
       "workspace": "~/.pepebot/workspace",
-      "model": "claude-3-5-sonnet-20241022",
+      "model": "maia/gemini-3-pro-preview",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -90,7 +91,41 @@ nano ~/.pepebot/config.json
 }
 ```
 
+The default model is set to `maia/gemini-3-pro-preview` which uses MAIA Router. You can change this to any supported model from the providers below.
+
 #### Provider Configuration
+
+**MAIA Router (Recommended)**
+
+[MAIA Router](https://maiarouter.ai) is a universal AI gateway that provides access to 200+ AI models (including 52+ free models) through a single OpenAI-compatible API. Perfect for Indonesian users with local payment support (QRIS).
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "maia/gemini-3-pro-preview"
+    }
+  },
+  "providers": {
+    "maiarouter": {
+      "api_key": "YOUR_MAIA_API_KEY",
+      "api_base": "https://api.maiarouter.ai/v1"
+    }
+  }
+}
+```
+
+To get your API key:
+1. Visit [maiarouter.ai](https://maiarouter.ai) or [router.maia.id](https://router.maia.id)
+2. Create an account
+3. Generate your API key from the dashboard
+
+Popular models available:
+- `maia/gemini-3-pro-preview` (Recommended, free tier available)
+- `maia/gemini-2.5-flash`
+- `maia/claude-3-5-sonnet`
+- `maia/gpt-4o`
+- And 200+ more models
 
 **Anthropic (Claude)**
 ```json
