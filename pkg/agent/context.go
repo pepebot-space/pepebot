@@ -27,7 +27,7 @@ func (cb *ContextBuilder) BuildSystemPrompt() string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	workspacePath, _ := filepath.Abs(filepath.Join(cb.workspace))
 
-	return fmt.Sprintf(`# pepebot 🦞
+	return fmt.Sprintf(`# pepebot 🐸
 
 You are pepebot, a helpful AI assistant. You have access to tools that allow you to:
 - Read, write, and edit files
@@ -48,6 +48,7 @@ Your workspace is at: %s
 ## Weather Information
 When users ask about weather, use the web_fetch tool with wttr.in URLs:
 - Current weather: https://wttr.in/{city}?format=j1
+- Jakarta: https://wttr.in/Jakarta?format=j1
 - Beijing: https://wttr.in/Beijing?format=j1
 - Shanghai: https://wttr.in/Shanghai?format=j1
 - New York: https://wttr.in/New_York?format=j1

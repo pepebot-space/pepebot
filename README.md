@@ -295,9 +295,9 @@ pepebot
 Then type your commands or questions:
 
 ```
-🦞 > Hello! How are you?
-🦞 > Create a Python script for web scraping
-🦞 > /weather Jakarta
+🐸 > Hello! How are you?
+🐸 > Create a Python script for web scraping
+🐸 > /weather Jakarta
 ```
 
 ### Bot Mode (Daemon)
@@ -342,7 +342,7 @@ Pepebot has an extensible skill system. Skills are prompt templates that provide
 
 ```bash
 # In CLI
-🦞 > /weather Jakarta
+🐸 > /weather Jakarta
 
 # Via bot (Telegram/Discord)
 /weather Jakarta
@@ -444,27 +444,27 @@ go test -v ./...
 ### Basic Conversation
 
 ```bash
-🦞 > Explain Go channels
+🐸 > Explain Go channels
 ```
 
 ### File Operations
 
 ```bash
-🦞 > Create a hello.py file with a hello world program
-🦞 > Read config.json and explain its structure
+🐸 > Create a hello.py file with a hello world program
+🐸 > Read config.json and explain its structure
 ```
 
 ### Web Search
 
 ```bash
-🦞 > Search for the latest information about Go 1.22
+🐸 > Search for the latest information about Go 1.22
 ```
 
 ### Shell Commands
 
 ```bash
-🦞 > Run command: ls -la
-🦞 > Check the status of this git repository
+🐸 > Run command: ls -la
+🐸 > Check the status of this git repository
 ```
 
 ## 🔒 Security Notes

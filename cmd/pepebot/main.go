@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chzyer/readline"
 	"github.com/anak10thn/pepebot/pkg/agent"
 	"github.com/anak10thn/pepebot/pkg/bus"
 	"github.com/anak10thn/pepebot/pkg/channels"
@@ -28,10 +27,11 @@ import (
 	"github.com/anak10thn/pepebot/pkg/providers"
 	"github.com/anak10thn/pepebot/pkg/skills"
 	"github.com/anak10thn/pepebot/pkg/voice"
+	"github.com/chzyer/readline"
 )
 
 const version = "0.1.0"
-const logo = "🦞"
+const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
@@ -141,8 +141,15 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Printf("%s pepebot - Personal AI Assistant v%s\n\n", logo, version)
-	fmt.Println("Usage: pepebot <command>\n")
+	fmt.Println("\n     ___")
+	fmt.Println("    (o o)")
+	fmt.Println("   (  >  )")
+	fmt.Println("   /|   |\\")
+	fmt.Println("  (_|   |_)")
+	fmt.Printf("\n  🐸 PEPEBOT v%s\n", version)
+	fmt.Println("  Personal AI Assistant")
+	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("\nUsage: pepebot <command>\n")
 	fmt.Println("Commands:")
 	fmt.Println("  onboard     Initialize pepebot configuration and workspace")
 	fmt.Println("  agent       Interact with the agent directly")
@@ -151,40 +158,256 @@ func printHelp() {
 	fmt.Println("  cron        Manage scheduled tasks")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
 	fmt.Println("  version     Show version information")
+	fmt.Println("")
 }
 
 func onboard() {
 	configPath := getConfigPath()
 
+	// Check if config already exists
 	if _, err := os.Stat(configPath); err == nil {
 		fmt.Printf("Config already exists at %s\n", configPath)
 		fmt.Print("Overwrite? (y/n): ")
 		var response string
 		fmt.Scanln(&response)
-		if response != "y" {
+		if strings.ToLower(strings.TrimSpace(response)) != "y" {
 			fmt.Println("Aborted.")
 			return
 		}
 	}
 
+	// Welcome banner with ASCII art
+	fmt.Println("\n")
+	fmt.Println("     ___")
+	fmt.Println("    (o o)")
+	fmt.Println("   (  >  )")
+	fmt.Println("   /|   |\\")
+	fmt.Println("  (_|   |_)")
+	fmt.Println("")
+	fmt.Println("  🐸 PEPEBOT SETUP WIZARD")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("Let's get you started with your AI assistant.\n")
+
+	reader := bufio.NewReader(os.Stdin)
 	cfg := config.DefaultConfig()
-	if err := config.SaveConfig(configPath, cfg); err != nil {
-		fmt.Printf("Error saving config: %v\n", err)
-		os.Exit(1)
+
+	// Step 1: Choose Provider
+	fmt.Println("Step 1/4: Choose your AI Provider")
+	fmt.Println("──────────────────────────────────")
+	fmt.Println("1. MAIA Router (Recommended) - 200+ models, Indonesian-friendly")
+	fmt.Println("2. Anthropic Claude")
+	fmt.Println("3. OpenAI GPT")
+	fmt.Println("4. OpenRouter")
+	fmt.Println("5. Google Gemini")
+	fmt.Println("6. Groq")
+	fmt.Println("7. Zhipu (GLM)")
+	fmt.Println("8. Skip (configure later)")
+	fmt.Print("\nSelect provider [1-8] (default: 1): ")
+
+	providerChoice, _ := reader.ReadString('\n')
+	providerChoice = strings.TrimSpace(providerChoice)
+	if providerChoice == "" {
+		providerChoice = "1"
 	}
 
+	var selectedProvider string
+	var defaultModel string
+	var providerURL string
+
+	switch providerChoice {
+	case "1":
+		selectedProvider = "maiarouter"
+		defaultModel = "maia/gemini-3-pro-preview"
+		providerURL = "https://maiarouter.ai"
+		fmt.Println("\n✓ MAIA Router selected")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "2":
+		selectedProvider = "anthropic"
+		defaultModel = "claude-3-5-sonnet-20241022"
+		providerURL = "https://console.anthropic.com"
+		fmt.Println("\n✓ Anthropic selected")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "3":
+		selectedProvider = "openai"
+		defaultModel = "gpt-4o"
+		providerURL = "https://platform.openai.com/api-keys"
+		fmt.Println("\n✓ OpenAI selected")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "4":
+		selectedProvider = "openrouter"
+		defaultModel = "anthropic/claude-3.5-sonnet"
+		providerURL = "https://openrouter.ai/keys"
+		fmt.Println("\n✓ OpenRouter selected")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "5":
+		selectedProvider = "gemini"
+		defaultModel = "gemini-2.0-flash-exp"
+		providerURL = "https://makersuite.google.com/app/apikey"
+		fmt.Println("\n✓ Google Gemini selected")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "6":
+		selectedProvider = "groq"
+		defaultModel = "llama-3.3-70b-versatile"
+		providerURL = "https://console.groq.com/keys"
+		fmt.Println("\n✓ Groq selected")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "7":
+		selectedProvider = "zhipu"
+		defaultModel = "glm-4-plus"
+		providerURL = "https://open.bigmodel.cn"
+		fmt.Println("\n✓ Zhipu (GLM) selected")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "8":
+		fmt.Println("\n⊙ Skipped provider configuration")
+		selectedProvider = ""
+	default:
+		fmt.Println("\n✓ Using default: MAIA Router")
+		selectedProvider = "maiarouter"
+		defaultModel = "maia/gemini-3-pro-preview"
+		providerURL = "https://maiarouter.ai"
+	}
+
+	// Step 2: API Key
+	if selectedProvider != "" {
+		fmt.Println("\nStep 2/4: API Key")
+		fmt.Println("──────────────────────────────────")
+		fmt.Print("Enter your API key (or press Enter to skip): ")
+		apiKey, _ := reader.ReadString('\n')
+		apiKey = strings.TrimSpace(apiKey)
+
+		if apiKey != "" {
+			switch selectedProvider {
+			case "maiarouter":
+				cfg.Providers.MAIARouter.APIKey = apiKey
+				cfg.Providers.MAIARouter.APIBase = "https://api.maiarouter.ai/v1"
+			case "anthropic":
+				cfg.Providers.Anthropic.APIKey = apiKey
+			case "openai":
+				cfg.Providers.OpenAI.APIKey = apiKey
+			case "openrouter":
+				cfg.Providers.OpenRouter.APIKey = apiKey
+			case "gemini":
+				cfg.Providers.Gemini.APIKey = apiKey
+			case "groq":
+				cfg.Providers.Groq.APIKey = apiKey
+			case "zhipu":
+				cfg.Providers.Zhipu.APIKey = apiKey
+			}
+			cfg.Agents.Defaults.Model = defaultModel
+			fmt.Println("✓ API key configured")
+		} else {
+			fmt.Println("⊙ Skipped API key (you can add it later in config.json)")
+		}
+	} else {
+		fmt.Println("\nStep 2/4: API Key")
+		fmt.Println("──────────────────────────────────")
+		fmt.Println("⊙ Skipped (no provider selected)")
+	}
+
+	// Step 3: Channels
+	fmt.Println("\nStep 3/4: Enable Chat Channels (optional)")
+	fmt.Println("──────────────────────────────────")
+	fmt.Println("Would you like to enable any chat channels?")
+	fmt.Print("(T)elegram, (D)iscord, (W)hatsApp, or (N)one [T/D/W/N] (default: N): ")
+
+	channelChoice, _ := reader.ReadString('\n')
+	channelChoice = strings.ToLower(strings.TrimSpace(channelChoice))
+
+	if channelChoice == "t" {
+		fmt.Print("\nTelegram Bot Token: ")
+		token, _ := reader.ReadString('\n')
+		token = strings.TrimSpace(token)
+		if token != "" {
+			cfg.Channels.Telegram.Enabled = true
+			cfg.Channels.Telegram.Token = token
+			fmt.Println("✓ Telegram enabled")
+			fmt.Println("  Note: Use /status in Telegram to check bot status")
+		}
+	} else if channelChoice == "d" {
+		fmt.Print("\nDiscord Bot Token: ")
+		token, _ := reader.ReadString('\n')
+		token = strings.TrimSpace(token)
+		if token != "" {
+			cfg.Channels.Discord.Enabled = true
+			cfg.Channels.Discord.Token = token
+			fmt.Println("✓ Discord enabled")
+		}
+	} else if channelChoice == "w" {
+		fmt.Println("\n✓ WhatsApp Bridge (requires external bridge)")
+		fmt.Println("  Default bridge URL: ws://localhost:3001")
+		cfg.Channels.WhatsApp.Enabled = true
+	} else {
+		fmt.Println("⊙ No channels enabled (you can enable them later)")
+	}
+
+	// Step 4: Workspace
+	fmt.Println("\nStep 4/4: Workspace Setup")
+	fmt.Println("──────────────────────────────────")
+	fmt.Printf("Default workspace: %s\n", cfg.WorkspacePath())
+	fmt.Print("Use default? (Y/n): ")
+
+	workspaceChoice, _ := reader.ReadString('\n')
+	workspaceChoice = strings.ToLower(strings.TrimSpace(workspaceChoice))
+
+	if workspaceChoice == "n" {
+		fmt.Print("Enter workspace path: ")
+		customWorkspace, _ := reader.ReadString('\n')
+		customWorkspace = strings.TrimSpace(customWorkspace)
+		if customWorkspace != "" {
+			cfg.Agents.Defaults.Workspace = customWorkspace
+		}
+	}
+
+	// Save configuration
+	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("Saving configuration...")
+
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		fmt.Printf("✗ Error saving config: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Config saved to: %s\n", configPath)
+
+	// Create workspace structure
 	workspace := cfg.WorkspacePath()
 	os.MkdirAll(workspace, 0755)
 	os.MkdirAll(filepath.Join(workspace, "memory"), 0755)
 	os.MkdirAll(filepath.Join(workspace, "skills"), 0755)
+	fmt.Printf("✓ Workspace created at: %s\n", workspace)
 
+	// Create workspace templates
 	createWorkspaceTemplates(workspace)
 
-	fmt.Printf("%s pepebot is ready!\n", logo)
-	fmt.Println("\nNext steps:")
-	fmt.Println("  1. Add your API key to", configPath)
-	fmt.Println("     Get one at: https://openrouter.ai/keys")
-	fmt.Println("  2. Chat: pepebot agent -m \"Hello!\"")
+	// Success message
+	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("     ___")
+	fmt.Println("    (^ ^)")
+	fmt.Println("   (  v  )   🎉 SETUP COMPLETE!")
+	fmt.Println("   /|   |\\")
+	fmt.Println("  (_|   |_)")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	fmt.Println("\n📚 Quick Start:")
+	fmt.Println("  • Test in CLI:     pepebot agent -m \"Hello!\"")
+	fmt.Println("  • Interactive:     pepebot agent")
+	if cfg.Channels.Telegram.Enabled || cfg.Channels.Discord.Enabled || cfg.Channels.WhatsApp.Enabled {
+		fmt.Println("  • Start gateway:   pepebot gateway")
+	}
+	fmt.Println("  • View status:     pepebot status")
+	fmt.Println("  • Install skills:  pepebot skills install-builtin")
+
+	if selectedProvider != "" && (selectedProvider == "maiarouter" || selectedProvider == "anthropic" || selectedProvider == "openai") {
+		fmt.Println("\n💡 Tips:")
+		if selectedProvider == "maiarouter" {
+			fmt.Println("  • MAIA Router offers 52+ free models!")
+			fmt.Println("  • Try: maia/gemini-2.5-flash (fast & free)")
+			fmt.Println("  • Payment: QRIS supported for Indonesian users")
+		}
+		fmt.Printf("  • Edit config: %s\n", configPath)
+		fmt.Printf("  • Documentation: https://github.com/anak10thn/pepebot\n")
+	}
+
+	fmt.Println("\n🎉 Happy chatting with Pepebot!")
 }
 
 func createWorkspaceTemplates(workspace string) {
@@ -309,7 +532,7 @@ This document describes the tools available to pepebot.
 		"IDENTITY.md": `# Identity
 
 ## Name
-Pepebot 🦞
+Pepebot 🐸
 
 ## Description
 Ultra-lightweight personal AI assistant written in Go, inspired by nanobot.
@@ -669,6 +892,7 @@ func statusCmd() {
 	if _, err := os.Stat(configPath); err == nil {
 		fmt.Printf("Model: %s\n", cfg.Agents.Defaults.Model)
 
+		hasMAIARouter := cfg.Providers.MAIARouter.APIKey != ""
 		hasOpenRouter := cfg.Providers.OpenRouter.APIKey != ""
 		hasAnthropic := cfg.Providers.Anthropic.APIKey != ""
 		hasOpenAI := cfg.Providers.OpenAI.APIKey != ""
@@ -683,6 +907,8 @@ func statusCmd() {
 			}
 			return "not set"
 		}
+		fmt.Println("\nProviders:")
+		fmt.Println("MAIA Router:", status(hasMAIARouter))
 		fmt.Println("OpenRouter API:", status(hasOpenRouter))
 		fmt.Println("Anthropic API:", status(hasAnthropic))
 		fmt.Println("OpenAI API:", status(hasOpenAI))
