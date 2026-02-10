@@ -30,7 +30,7 @@ import (
 	"github.com/chzyer/readline"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
