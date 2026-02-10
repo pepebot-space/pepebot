@@ -1,0 +1,366 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Multi-Platform Binaries
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          # Linux x86_64
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+
+          # Linux ARM64
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+
+          # Linux ARMv7
+          - goos: linux
+            goarch: arm
+            goarm: 7
+            name: linux-armv7
+
+          # Linux ARMv6
+          - goos: linux
+            goarch: arm
+            goarm: 6
+            name: linux-armv6
+
+          # Linux RISC-V 64
+          - goos: linux
+            goarch: riscv64
+            name: linux-riscv64
+
+          # Linux MIPS (big endian)
+          - goos: linux
+            goarch: mips
+            name: linux-mips
+
+          # Linux MIPSle (little endian)
+          - goos: linux
+            goarch: mipsle
+            name: linux-mipsle
+
+          # Linux MIPS64
+          - goos: linux
+            goarch: mips64
+            name: linux-mips64
+
+          # Linux MIPS64le
+          - goos: linux
+            goarch: mips64le
+            name: linux-mips64le
+
+          # macOS x86_64
+          - goos: darwin
+            goarch: amd64
+            name: darwin-amd64
+
+          # macOS ARM64 (Apple Silicon)
+          - goos: darwin
+            goarch: arm64
+            name: darwin-arm64
+
+          # Windows x86_64
+          - goos: windows
+            goarch: amd64
+            name: windows-amd64
+            ext: .exe
+
+          # Windows ARM64
+          - goos: windows
+            goarch: arm64
+            name: windows-arm64
+            ext: .exe
+
+          # FreeBSD x86_64
+          - goos: freebsd
+            goarch: amd64
+            name: freebsd-amd64
+
+          # FreeBSD ARM64
+          - goos: freebsd
+            goarch: arm64
+            name: freebsd-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          BINARY_NAME="pepebot-${{ matrix.name }}${{ matrix.ext }}"
+
+          echo "Building $BINARY_NAME for $GOOS/$GOARCH..."
+
+          go build \
+            -v \
+            -trimpath \
+            -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+            -o "build/${BINARY_NAME}" \
+            ./cmd/pepebot
+
+          echo "Build complete: build/${BINARY_NAME}"
+          ls -lh build/
+
+      - name: Create archive
+        run: |
+          cd build
+          BINARY_NAME="pepebot-${{ matrix.name }}${{ matrix.ext }}"
+          ARCHIVE_NAME="pepebot-${{ matrix.name }}.tar.gz"
+
+          # Create README for the release
+          cat > README.txt << EOF
+          Pepebot - Personal AI Assistant
+
+          Version: ${{ steps.version.outputs.VERSION }}
+          Platform: ${{ matrix.goos }}/${{ matrix.goarch }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          Installation:
+          1. Extract this archive
+          2. Run: pepebot onboard
+          3. Follow the setup wizard
+
+          Documentation: https://github.com/anak10thn/pepebot
+          Issues: https://github.com/anak10thn/pepebot/issues
+          EOF
+
+          # Create archive
+          tar czf "${ARCHIVE_NAME}" "${BINARY_NAME}" README.txt
+
+          # Create checksum
+          sha256sum "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
+
+          echo "Archive created: ${ARCHIVE_NAME}"
+          ls -lh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pepebot-${{ matrix.name }}
+          path: |
+            build/pepebot-${{ matrix.name }}.tar.gz
+            build/pepebot-${{ matrix.name }}.tar.gz.sha256
+          retention-days: 7
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          find artifacts -name "*.tar.gz" -o -name "*.sha256" | while read file; do
+            cp "$file" release/
+          done
+          ls -lh release/
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate release notes
+        run: |
+          cat > RELEASE_NOTES.md << 'EOF'
+          # Pepebot ${{ steps.version.outputs.VERSION }}
+
+          🐸 Ultra-lightweight Personal AI Assistant
+
+          ## 🎉 What's New
+
+          - Multi-architecture support (x86_64, ARM64, RISC-V, MIPS)
+          - MAIA Router integration (recommended for Indonesian users)
+          - Interactive setup wizard
+          - Multiple LLM provider support
+
+          ## 📦 Downloads
+
+          Choose the appropriate binary for your system:
+
+          ### Linux
+          - **x86_64**: `pepebot-linux-amd64.tar.gz`
+          - **ARM64**: `pepebot-linux-arm64.tar.gz`
+          - **ARMv7**: `pepebot-linux-armv7.tar.gz` (Raspberry Pi 3/4)
+          - **ARMv6**: `pepebot-linux-armv6.tar.gz` (Raspberry Pi 1/Zero)
+          - **RISC-V 64**: `pepebot-linux-riscv64.tar.gz`
+          - **MIPS**: `pepebot-linux-mips.tar.gz` / `pepebot-linux-mipsle.tar.gz`
+          - **MIPS64**: `pepebot-linux-mips64.tar.gz` / `pepebot-linux-mips64le.tar.gz`
+
+          ### macOS
+          - **Intel**: `pepebot-darwin-amd64.tar.gz`
+          - **Apple Silicon (M1/M2/M3)**: `pepebot-darwin-arm64.tar.gz`
+
+          ### Windows
+          - **x86_64**: `pepebot-windows-amd64.tar.gz`
+          - **ARM64**: `pepebot-windows-arm64.tar.gz`
+
+          ### BSD
+          - **FreeBSD x86_64**: `pepebot-freebsd-amd64.tar.gz`
+          - **FreeBSD ARM64**: `pepebot-freebsd-arm64.tar.gz`
+
+          ## 🚀 Quick Start
+
+          ```bash
+          # Download and extract
+          tar xzf pepebot-*.tar.gz
+
+          # Run setup wizard
+          ./pepebot-* onboard
+
+          # Start chatting
+          ./pepebot-* agent
+          ```
+
+          ## 📚 Documentation
+
+          - [README](https://github.com/anak10thn/pepebot#readme)
+          - [Setup Guide](https://github.com/anak10thn/pepebot#installation)
+          - [Configuration](https://github.com/anak10thn/pepebot#configuration)
+
+          ## 🔐 Verification
+
+          All binaries include SHA256 checksums. Verify your download:
+
+          ```bash
+          sha256sum -c pepebot-*.tar.gz.sha256
+          ```
+
+          ## 💬 Support
+
+          - [Issues](https://github.com/anak10thn/pepebot/issues)
+          - [Discussions](https://github.com/anak10thn/pepebot/discussions)
+
+          ---
+
+          Built with ❤️ using Go
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Pepebot ${{ steps.version.outputs.VERSION }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Build Docker Images
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION_NO_V=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.VERSION }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.VERSION }}
+            type=raw,value=latest
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/riscv64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.VERSION }}
+            BUILD_TIME=${{ github.event.repository.updated_at }}

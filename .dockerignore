@@ -1,0 +1,59 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Build artifacts
+build/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+pepebot
+pepebot-*
+
+# Test files
+*_test.go
+testdata/
+coverage.txt
+*.test
+*.out
+
+# Documentation
+*.md
+!README.md
+docs/
+LICENSE
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Development
+.env
+.env.local
+.env.*.local
+*.log
+
+# Data directories
+data/
+workspace/
+.pepebot/
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Other
+tmp/
+temp/
+node_modules/

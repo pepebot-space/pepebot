@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  pepebot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: pepebot:latest
+    container_name: pepebot
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      - PEPEBOT_AGENTS_DEFAULTS_MODEL=${PEPEBOT_MODEL:-maia/gemini-3-pro-preview}
+      - PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS=${PEPEBOT_MAX_TOKENS:-8192}
+      - PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE=${PEPEBOT_TEMPERATURE:-0.7}
+      - TZ=${TZ:-UTC}
+
+    # Volumes
+    volumes:
+      - ./data/.pepebot:/root/.pepebot
+      - ./data/workspace:/root/.pepebot/workspace
+
+    # Ports
+    ports:
+      - "18790:18790"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "pepebot", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Add a lightweight web UI (future)
+  # pepebot-ui:
+  #   image: pepebot-ui:latest
+  #   container_name: pepebot-ui
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - PEPEBOT_API_URL=http://pepebot:18790
+  #   depends_on:
+  #     - pepebot
+
+volumes:
+  pepebot-data:
+    driver: local
+
+networks:
+  default:
+    name: pepebot-network
