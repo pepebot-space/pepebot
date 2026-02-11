@@ -535,7 +535,7 @@ This document describes the tools available to pepebot.
 Pepebot 🐸
 
 ## Description
-Ultra-lightweight personal AI assistant written in Go, inspired by nanobot.
+Ultra-lightweight personal AI assistant.
 
 ## Version
 0.1.0

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -14,8 +15,10 @@ import (
 
 type DiscordChannel struct {
 	*BaseChannel
-	session *discordgo.Session
-	config  config.DiscordConfig
+	session        *discordgo.Session
+	config         config.DiscordConfig
+	typingChannels map[string]chan bool
+	typingMutex    sync.RWMutex
 }
 
 func NewDiscordChannel(cfg config.DiscordConfig, bus *bus.MessageBus) (*DiscordChannel, error) {
@@ -27,9 +30,10 @@ func NewDiscordChannel(cfg config.DiscordConfig, bus *bus.MessageBus) (*DiscordC
 	base := NewBaseChannel("discord", cfg, bus, cfg.AllowFrom)
 
 	return &DiscordChannel{
-		BaseChannel: base,
-		session:     session,
-		config:      cfg,
+		BaseChannel:    base,
+		session:        session,
+		config:         cfg,
+		typingChannels: make(map[string]chan bool),
 	}, nil
 }
 
@@ -76,6 +80,9 @@ func (c *DiscordChannel) Send(ctx context.Context, msg bus.OutboundMessage) erro
 	if channelID == "" {
 		return fmt.Errorf("channel ID is empty")
 	}
+
+	// Stop typing indicator since we're about to send the response
+	c.stopTyping(channelID)
 
 	message := msg.Content
 
@@ -172,6 +179,14 @@ func (c *DiscordChannel) handleMessage(s *discordgo.Session, m *discordgo.Messag
 		})
 		// Don't fail the whole message processing just because reaction failed
 	}
+
+	// Start typing indicator to show bot is processing
+	// Discord typing indicator lasts ~10 seconds, so we need to keep refreshing it
+	stopTyping := make(chan bool, 1)
+	go c.keepTyping(s, m.ChannelID, stopTyping)
+
+	// Store the stop channel so we can stop typing when response is sent
+	c.storeTypingChannel(m.ChannelID, stopTyping)
 
 	senderID := m.Author.ID
 	senderName := m.Author.Username
@@ -275,4 +290,69 @@ func splitMessage(message string, maxLength int) []string {
 	}
 
 	return parts
+}
+
+// keepTyping continuously sends typing indicator to Discord channel
+// Discord typing indicator lasts ~10 seconds, so we refresh every 8 seconds
+func (c *DiscordChannel) keepTyping(s *discordgo.Session, channelID string, stop chan bool) {
+	ticker := time.NewTicker(8 * time.Second)
+	defer ticker.Stop()
+
+	// Send initial typing indicator
+	if err := s.ChannelTyping(channelID); err != nil {
+		logger.DebugCF("discord", "Failed to send typing indicator", map[string]interface{}{
+			"error":      err.Error(),
+			"channel_id": channelID,
+		})
+		return
+	}
+
+	// Keep refreshing typing indicator until stop signal or timeout (2 minutes max)
+	timeout := time.After(2 * time.Minute)
+
+	for {
+		select {
+		case <-stop:
+			// Stop signal received, exit goroutine
+			return
+		case <-timeout:
+			// Timeout reached, stop typing
+			logger.DebugCF("discord", "Typing indicator timeout", map[string]interface{}{
+				"channel_id": channelID,
+			})
+			return
+		case <-ticker.C:
+			// Refresh typing indicator
+			if err := s.ChannelTyping(channelID); err != nil {
+				logger.DebugCF("discord", "Failed to refresh typing indicator", map[string]interface{}{
+					"error":      err.Error(),
+					"channel_id": channelID,
+				})
+				return
+			}
+		}
+	}
+}
+
+// storeTypingChannel stores the stop channel for a specific Discord channel
+func (c *DiscordChannel) storeTypingChannel(channelID string, stop chan bool) {
+	c.typingMutex.Lock()
+	defer c.typingMutex.Unlock()
+	c.typingChannels[channelID] = stop
+}
+
+// stopTyping stops the typing indicator for a specific Discord channel
+func (c *DiscordChannel) stopTyping(channelID string) {
+	c.typingMutex.Lock()
+	defer c.typingMutex.Unlock()
+
+	if stop, exists := c.typingChannels[channelID]; exists {
+		// Send stop signal (non-blocking)
+		select {
+		case stop <- true:
+		default:
+		}
+		// Remove from map
+		delete(c.typingChannels, channelID)
+	}
 }
