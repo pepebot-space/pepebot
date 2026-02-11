@@ -14,7 +14,7 @@
 
 ## 📋 Description
 
-Pepebot is an ultra-lightweight and efficient personal AI agent written in Go. Inspired by [nanobot](https://github.com/HKUDS/nanobot), Pepebot is designed to provide a powerful AI assistant experience while maintaining minimal resource usage.
+Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is designed to provide a powerful AI assistant experience while maintaining minimal resource usage.
 
 ## ✨ Key Features
 
