@@ -111,11 +111,6 @@ jobs:
             goarch: amd64
             name: android-x86_64
 
-          # Android x86 (older emulators)
-          - goos: android
-            goarch: 386
-            name: android-x86
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -282,7 +277,6 @@ jobs:
           ### Android
           - **ARM64**: `pepebot-android-arm64.tar.gz` (Most devices, Android 5.0+)
           - **x86_64**: `pepebot-android-x86_64.tar.gz` (Emulators, x86 tablets)
-          - **x86**: `pepebot-android-x86.tar.gz` (Older emulators)
 
           ## 🚀 Quick Start
 

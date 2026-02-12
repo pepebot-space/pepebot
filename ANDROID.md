@@ -42,7 +42,6 @@ uname -m
 Output will be one of:
 - `aarch64` or `arm64` → Use **ARM64** (most common)
 - `x86_64` → Use **x86_64** (emulators, some tablets)
-- `i686` or `i386` → Use **x86** (older emulators)
 
 #### For ARM64 devices (most Android phones/tablets):
 
@@ -74,22 +73,6 @@ chmod +x pepebot-android-x86_64
 
 # Move to easy location
 mv pepebot-android-x86_64 ~/pepebot
-```
-
-#### For x86 (older emulators):
-
-```bash
-# Download
-wget https://github.com/anak10thn/pepebot/releases/latest/download/pepebot-android-x86.tar.gz
-
-# Extract
-tar xzf pepebot-android-x86.tar.gz
-
-# Make executable
-chmod +x pepebot-android-x86
-
-# Move to easy location
-mv pepebot-android-x86 ~/pepebot
 ```
 
 ### 4. Run Setup Wizard
