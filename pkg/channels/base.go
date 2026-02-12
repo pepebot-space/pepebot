@@ -2,6 +2,7 @@ package channels
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/anak10thn/pepebot/pkg/bus"
 )
@@ -60,13 +61,19 @@ func (c *BaseChannel) HandleMessage(senderID, chatID, content string, media []st
 		return
 	}
 
+	// Generate session key: {channel}:{chatID}
+	// - Group chats: all users in same chat share conversation context
+	// - DMs: each DM has unique chatID, so per-user isolation
+	sessionKey := fmt.Sprintf("%s:%s", c.name, chatID)
+
 	msg := bus.InboundMessage{
-		Channel:  c.name,
-		SenderID: senderID,
-		ChatID:   chatID,
-		Content:  content,
-		Media:    media,
-		Metadata: metadata,
+		Channel:    c.name,
+		SenderID:   senderID,
+		ChatID:     chatID,
+		Content:    content,
+		Media:      media,
+		SessionKey: sessionKey,
+		Metadata:   metadata,
 	}
 
 	c.bus.PublishInbound(msg)

@@ -17,6 +17,7 @@ import (
 
 	"github.com/anak10thn/pepebot/pkg/bus"
 	"github.com/anak10thn/pepebot/pkg/config"
+	"github.com/anak10thn/pepebot/pkg/logger"
 	"github.com/anak10thn/pepebot/pkg/providers"
 	"github.com/anak10thn/pepebot/pkg/session"
 	"github.com/anak10thn/pepebot/pkg/tools"
@@ -27,6 +28,7 @@ type AgentLoop struct {
 	provider       providers.LLMProvider
 	workspace      string
 	model          string
+	temperature    float64
 	contextWindow  int
 	maxIterations  int
 	sessions       *session.SessionManager
@@ -34,6 +36,7 @@ type AgentLoop struct {
 	tools          *tools.ToolRegistry
 	running        bool
 	summarizing    sync.Map
+	agentName      string
 }
 
 func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
@@ -50,6 +53,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
 	toolsRegistry.Register(tools.NewSendImageTool(bus))
+	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
 
@@ -58,6 +62,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		provider:       provider,
 		workspace:      workspace,
 		model:          cfg.Agents.Defaults.Model,
+		temperature:    cfg.Agents.Defaults.Temperature,
 		contextWindow:  cfg.Agents.Defaults.MaxTokens,
 		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
 		sessions:       sessionsManager,
@@ -65,6 +70,62 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		tools:          toolsRegistry,
 		running:        false,
 		summarizing:    sync.Map{},
+		agentName:      "default",
+	}
+}
+
+// NewAgentLoopWithDefinition creates a new agent loop with specific agent definition
+func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider, agentName string, agentDef *AgentDefinition) *AgentLoop {
+	workspace := cfg.WorkspacePath()
+	os.MkdirAll(workspace, 0755)
+
+	toolsRegistry := tools.NewToolRegistry()
+	toolsRegistry.Register(&tools.ReadFileTool{})
+	toolsRegistry.Register(&tools.WriteFileTool{})
+	toolsRegistry.Register(&tools.ListDirTool{})
+	toolsRegistry.Register(tools.NewExecTool(workspace))
+
+	braveAPIKey := cfg.Tools.Web.Search.APIKey
+	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
+	toolsRegistry.Register(tools.NewWebFetchTool(50000))
+	toolsRegistry.Register(tools.NewSendImageTool(bus))
+	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
+
+	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
+
+	// Use agent definition values, fallback to config defaults
+	model := agentDef.Model
+	temperature := agentDef.Temperature
+	if temperature == 0 {
+		temperature = cfg.Agents.Defaults.Temperature
+	}
+	maxTokens := agentDef.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = cfg.Agents.Defaults.MaxTokens
+	}
+
+	// Use agent-specific prompt dir if PromptFile is set
+	var contextBuilder *ContextBuilder
+	if agentDef.PromptFile != "" {
+		contextBuilder = NewContextBuilderWithAgentDir(workspace, agentDef.PromptFile)
+	} else {
+		contextBuilder = NewContextBuilder(workspace)
+	}
+
+	return &AgentLoop{
+		bus:            bus,
+		provider:       provider,
+		workspace:      workspace,
+		model:          model,
+		temperature:    temperature,
+		contextWindow:  maxTokens,
+		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
+		sessions:       sessionsManager,
+		contextBuilder: contextBuilder,
+		tools:          toolsRegistry,
+		running:        false,
+		summarizing:    sync.Map{},
+		agentName:      agentName,
 	}
 }
 
@@ -103,6 +164,18 @@ func (al *AgentLoop) Stop() {
 	al.running = false
 }
 
+func (al *AgentLoop) ClearSession(sessionKey string) {
+	al.sessions.ClearSession(sessionKey)
+}
+
+func (al *AgentLoop) Model() string {
+	return al.model
+}
+
+func (al *AgentLoop) AgentName() string {
+	return al.agentName
+}
+
 func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey string) (string, error) {
 	msg := bus.InboundMessage{
 		Channel:    "cli",
@@ -116,6 +189,14 @@ func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey stri
 }
 
 func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
+	logger.DebugCF("agent", "Processing message", map[string]interface{}{
+		"channel":     msg.Channel,
+		"sender_id":   msg.SenderID,
+		"chat_id":     msg.ChatID,
+		"session_key": msg.SessionKey,
+		"has_media":   len(msg.Media) > 0,
+	})
+
 	history := al.sessions.GetHistory(msg.SessionKey)
 	summary := al.sessions.GetSummary(msg.SessionKey)
 
@@ -158,14 +239,29 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			})
 		}
 
+		logger.DebugCF("agent", "Calling LLM", map[string]interface{}{
+			"iteration": iteration,
+			"model":     al.model,
+			"tools":     len(providerToolDefs),
+		})
+
 		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
-			"max_tokens":  8192,
-			"temperature": 0.7,
+			"max_tokens":  al.contextWindow,
+			"temperature": al.temperature,
 		})
 
 		if err != nil {
+			logger.ErrorCF("agent", "LLM call failed", map[string]interface{}{
+				"error": err.Error(),
+			})
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
+
+		logger.DebugCF("agent", "LLM response received", map[string]interface{}{
+			"has_content":   response.Content != "",
+			"tool_calls":    len(response.ToolCalls),
+			"content_preview": truncateString(response.Content, 100),
+		})
 
 		if len(response.ToolCalls) == 0 {
 			finalContent = response.Content
@@ -191,9 +287,23 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		messages = append(messages, assistantMsg)
 
 		for _, tc := range response.ToolCalls {
+			logger.DebugCF("agent", "Executing tool", map[string]interface{}{
+				"tool_name": tc.Name,
+				"tool_id":   tc.ID,
+			})
+
 			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
 			if err != nil {
+				logger.ErrorCF("agent", "Tool execution failed", map[string]interface{}{
+					"tool_name": tc.Name,
+					"error":     err.Error(),
+				})
 				result = fmt.Sprintf("Error: %v", err)
+			} else {
+				logger.DebugCF("agent", "Tool execution completed", map[string]interface{}{
+					"tool_name":      tc.Name,
+					"result_preview": truncateString(result, 100),
+				})
 			}
 
 			toolResultMsg := providers.Message{
@@ -358,3 +468,9 @@ func (al *AgentLoop) getContentLength(content interface{}) int {
 	}
 }
 
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}

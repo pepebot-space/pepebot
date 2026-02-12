@@ -11,8 +11,9 @@ import (
 )
 
 type ContextBuilder struct {
-	workspace    string
-	skillsLoader *skills.SkillsLoader
+	workspace      string
+	agentPromptDir string
+	skillsLoader   *skills.SkillsLoader
 }
 
 func NewContextBuilder(workspace string) *ContextBuilder {
@@ -20,6 +21,16 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 	return &ContextBuilder{
 		workspace:    workspace,
 		skillsLoader: skills.NewSkillsLoader(workspace, builtinSkillsDir),
+	}
+}
+
+// NewContextBuilderWithAgentDir creates a ContextBuilder that checks agent-specific dir first
+func NewContextBuilderWithAgentDir(workspace, agentPromptDir string) *ContextBuilder {
+	builtinSkillsDir := filepath.Join(filepath.Dir(workspace), "pepebot", "skills")
+	return &ContextBuilder{
+		workspace:      workspace,
+		agentPromptDir: agentPromptDir,
+		skillsLoader:   skills.NewSkillsLoader(workspace, builtinSkillsDir),
 	}
 }
 
@@ -78,8 +89,21 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 
 	var result string
 	for _, filename := range bootstrapFiles {
-		filePath := filepath.Join(cb.workspace, filename)
-		if data, err := os.ReadFile(filePath); err == nil {
+		// Per-file fallback: check agent dir first, then workspace root
+		var data []byte
+		var err error
+
+		if cb.agentPromptDir != "" {
+			agentPath := filepath.Join(cb.agentPromptDir, filename)
+			data, err = os.ReadFile(agentPath)
+		}
+
+		if data == nil || err != nil {
+			filePath := filepath.Join(cb.workspace, filename)
+			data, err = os.ReadFile(filePath)
+		}
+
+		if err == nil {
 			result += fmt.Sprintf("## %s\n\n%s\n\n", filename, string(data))
 		}
 	}

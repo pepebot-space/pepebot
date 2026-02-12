@@ -30,7 +30,7 @@ import (
 	"github.com/chzyer/readline"
 )
 
-const version = "0.2.3"
+const version = "0.3.0"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -79,6 +79,34 @@ func main() {
 	case "onboard":
 		onboard()
 	case "agent":
+		// Check for subcommands
+		if len(os.Args) >= 3 {
+			subcommand := os.Args[2]
+			switch subcommand {
+			case "list":
+				agentListCmd()
+				return
+			case "register":
+				agentRegisterCmd()
+				return
+			case "remove", "unregister":
+				agentRemoveCmd()
+				return
+			case "enable":
+				agentEnableCmd()
+				return
+			case "disable":
+				agentDisableCmd()
+				return
+			case "show":
+				agentShowCmd()
+				return
+			case "help":
+				agentHelpCmd()
+				return
+			}
+		}
+		// Default to chat mode
 		agentCmd()
 	case "gateway":
 		gatewayCmd()
@@ -149,11 +177,24 @@ func printHelp() {
 	fmt.Printf("\n  🐸 PEPEBOT v%s\n", version)
 	fmt.Println("  Personal AI Assistant")
 	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("\nUsage: pepebot <command>\n")
+	fmt.Println("\nUsage: pepebot <command> [options]\n")
 	fmt.Println("Commands:")
 	fmt.Println("  onboard     Initialize pepebot configuration and workspace")
 	fmt.Println("  agent       Interact with the agent directly")
+	fmt.Println("              Options:")
+	fmt.Println("                -a, --agent <name>    Use specific agent (default: default agent)")
+	fmt.Println("                -m, --message <text>  Send a single message")
+	fmt.Println("                -s, --session <key>   Session key for context")
+	fmt.Println("              Subcommands:")
+	fmt.Println("                list                  List all registered agents")
+	fmt.Println("                register              Register a new agent")
+	fmt.Println("                remove                Remove an agent")
+	fmt.Println("                enable/disable        Enable or disable an agent")
+	fmt.Println("                show                  Show agent details")
+	fmt.Println("                help                  Show agent management help")
 	fmt.Println("  gateway     Start pepebot gateway")
+	fmt.Println("              Options:")
+	fmt.Println("                -v, --verbose    Enable verbose logging (show DEBUG logs)")
 	fmt.Println("  status      Show pepebot status")
 	fmt.Println("  cron        Manage scheduled tasks")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
@@ -644,6 +685,7 @@ This file stores important information that should persist across sessions.
 func agentCmd() {
 	message := ""
 	sessionKey := "cli:default"
+	agentName := "" // empty = use default agent
 
 	args := os.Args[2:]
 	for i := 0; i < len(args); i++ {
@@ -656,6 +698,11 @@ func agentCmd() {
 		case "-s", "--session":
 			if i+1 < len(args) {
 				sessionKey = args[i+1]
+				i++
+			}
+		case "-a", "--agent":
+			if i+1 < len(args) {
+				agentName = args[i+1]
 				i++
 			}
 		}
@@ -674,7 +721,30 @@ func agentCmd() {
 	}
 
 	bus := bus.NewMessageBus()
-	agentLoop := agent.NewAgentLoop(cfg, bus, provider)
+
+	// Create agent manager for multi-agent support
+	agentManager, err := agent.NewAgentManager(cfg, bus, provider)
+	if err != nil {
+		fmt.Printf("Error creating agent manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get the specific agent or default agent
+	var agentLoop *agent.AgentLoop
+	if agentName != "" {
+		agentLoop, err = agentManager.GetOrCreateAgent(agentName)
+		if err != nil {
+			fmt.Printf("Error getting agent '%s': %v\n", agentName, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Using agent: %s\n", agentName)
+	} else {
+		agentLoop, err = agentManager.GetDefaultAgent()
+		if err != nil {
+			fmt.Printf("Error getting default agent: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	if message != "" {
 		ctx := context.Background()
@@ -688,6 +758,33 @@ func agentCmd() {
 		fmt.Printf("%s Interactive mode (Ctrl+C to exit)\n\n", logo)
 		interactiveMode(agentLoop, sessionKey)
 	}
+}
+
+func handleCLICommand(input string, agentLoop *agent.AgentLoop, sessionKey string) bool {
+	parts := strings.Fields(input)
+	command := strings.ToLower(parts[0])
+
+	switch command {
+	case "/new":
+		agentLoop.ClearSession(sessionKey)
+		fmt.Printf("\n%s Session cleared. Starting fresh conversation.\n\n", logo)
+		return true
+	case "/help":
+		fmt.Printf("\n%s Available commands:\n", logo)
+		fmt.Println("  /new    - Clear session, start fresh conversation")
+		fmt.Println("  /help   - Show this help message")
+		fmt.Println("  /status - Show agent & session info")
+		fmt.Println("  exit    - Exit interactive mode")
+		fmt.Println()
+		return true
+	case "/status":
+		fmt.Printf("\n%s Agent: %s\n", logo, agentLoop.AgentName())
+		fmt.Printf("  Model: %s\n", agentLoop.Model())
+		fmt.Printf("  Session: %s\n\n", sessionKey)
+		return true
+	}
+
+	return false
 }
 
 func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
@@ -730,6 +827,12 @@ func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 			return
 		}
 
+		if strings.HasPrefix(input, "/") {
+			if handleCLICommand(input, agentLoop, sessionKey) {
+				continue
+			}
+		}
+
 		ctx := context.Background()
 		response, err := agentLoop.ProcessDirect(ctx, input, sessionKey)
 		if err != nil {
@@ -765,6 +868,12 @@ func simpleInteractiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 			return
 		}
 
+		if strings.HasPrefix(input, "/") {
+			if handleCLICommand(input, agentLoop, sessionKey) {
+				continue
+			}
+		}
+
 		ctx := context.Background()
 		response, err := agentLoop.ProcessDirect(ctx, input, sessionKey)
 		if err != nil {
@@ -777,6 +886,22 @@ func simpleInteractiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 }
 
 func gatewayCmd() {
+	// Parse flags
+	verbose := false
+	args := os.Args[2:]
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-v", "--verbose":
+			verbose = true
+		}
+	}
+
+	// Enable verbose logging if requested
+	if verbose {
+		logger.SetLevel(logger.DEBUG)
+		fmt.Println("✓ Verbose logging enabled")
+	}
+
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
@@ -790,7 +915,23 @@ func gatewayCmd() {
 	}
 
 	bus := bus.NewMessageBus()
-	agentLoop := agent.NewAgentLoop(cfg, bus, provider)
+
+	// Create agent manager for multi-agent support
+	agentManager, err := agent.NewAgentManager(cfg, bus, provider)
+	if err != nil {
+		fmt.Printf("Error creating agent manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	// List enabled agents
+	enabledAgents := agentManager.ListEnabledAgents()
+	if len(enabledAgents) > 0 {
+		agentNames := make([]string, 0, len(enabledAgents))
+		for name := range enabledAgents {
+			agentNames = append(agentNames, name)
+		}
+		fmt.Printf("✓ Agents enabled: %v\n", agentNames)
+	}
 
 	cronStorePath := filepath.Join(filepath.Dir(getConfigPath()), "cron", "jobs.json")
 	cronService := cron.NewCronService(cronStorePath, nil)
@@ -850,7 +991,7 @@ func gatewayCmd() {
 		fmt.Printf("Error starting channels: %v\n", err)
 	}
 
-	go agentLoop.Run(ctx)
+	go agentManager.Run(ctx)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
@@ -860,7 +1001,6 @@ func gatewayCmd() {
 	cancel()
 	heartbeatService.Stop()
 	cronService.Stop()
-	agentLoop.Stop()
 	channelManager.StopAll(ctx)
 	fmt.Println("✓ Gateway stopped")
 }
@@ -1195,7 +1335,7 @@ func skillsHelp() {
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  pepebot skills list")
-	fmt.Println("  pepebot skills install sipeed/pepebot-skills/weather")
+	fmt.Println("  pepebot skills install pepebot/skills/weather")
 	fmt.Println("  pepebot skills install-builtin")
 	fmt.Println("  pepebot skills list-builtin")
 	fmt.Println("  pepebot skills remove weather")
@@ -1229,7 +1369,7 @@ func skillsListCmd(loader *skills.SkillsLoader) {
 func skillsInstallCmd(installer *skills.SkillInstaller) {
 	if len(os.Args) < 4 {
 		fmt.Println("Usage: pepebot skills install <github-repo>")
-		fmt.Println("Example: pepebot skills install pepebot/pepebot-skills/weather")
+		fmt.Println("Example: pepebot skills install pepebot/skills/weather")
 		return
 	}
 
@@ -1389,4 +1529,330 @@ func skillsShowCmd(loader *skills.SkillsLoader, skillName string) {
 	fmt.Printf("\n📦 Skill: %s\n", skillName)
 	fmt.Println("----------------------")
 	fmt.Println(content)
+}
+
+// =============================================================================
+// Agent Management Commands
+// =============================================================================
+
+func loadAgentRegistry() (*agent.AgentRegistry, error) {
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	registry := agent.NewAgentRegistry(cfg.WorkspacePath())
+
+	// Load existing registry
+	if err := registry.Load(); err != nil {
+		return nil, fmt.Errorf("failed to load registry: %w", err)
+	}
+
+	// Initialize from config if empty
+	if err := registry.InitializeFromConfig(cfg); err != nil {
+		return nil, fmt.Errorf("failed to initialize registry: %w", err)
+	}
+
+	return registry, nil
+}
+
+func agentHelpCmd() {
+	fmt.Println("\n🐸 Pepebot Agent Management")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Println("Usage: pepebot agent <subcommand> [options]\n")
+	fmt.Println("Subcommands:")
+	fmt.Println("  list                    List all registered agents")
+	fmt.Println("  register <name>         Register a new agent")
+	fmt.Println("  remove <name>           Remove an agent")
+	fmt.Println("  enable <name>           Enable an agent")
+	fmt.Println("  disable <name>          Disable an agent")
+	fmt.Println("  show <name>             Show agent details")
+	fmt.Println("  help                    Show this help message")
+	fmt.Println("\nOptions for 'register':")
+	fmt.Println("  --model <model>         Model to use (required)")
+	fmt.Println("  --provider <provider>   Provider name (optional)")
+	fmt.Println("  --description <desc>    Agent description (optional)")
+	fmt.Println("  --temperature <temp>    Temperature (0.0-1.0, optional)")
+	fmt.Println("  --max-tokens <n>        Max tokens (optional)")
+	fmt.Println("\nExamples:")
+	fmt.Println("  pepebot agent list")
+	fmt.Println("  pepebot agent register coder --model \"maia/claude-3-5-sonnet\" --description \"Coding specialist\"")
+	fmt.Println("  pepebot agent enable coder")
+	fmt.Println("  pepebot agent show coder")
+	fmt.Println("  pepebot agent remove coder")
+	fmt.Println()
+}
+
+func agentListCmd() {
+	registry, err := loadAgentRegistry()
+	if err != nil {
+		fmt.Printf("Error loading registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	agents := registry.List()
+	if len(agents) == 0 {
+		fmt.Println("No agents registered")
+		return
+	}
+
+	fmt.Println("\n🐸 Registered Agents")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+	// Sort agent names for consistent output
+	names := make([]string, 0, len(agents))
+	for name := range agents {
+		names = append(names, name)
+	}
+
+	for _, name := range names {
+		agent := agents[name]
+		status := "✗ disabled"
+		if agent.Enabled {
+			status = "✓ enabled"
+		}
+
+		fmt.Printf("  %s  %s\n", status, name)
+		fmt.Printf("           Model: %s\n", agent.Model)
+		if agent.Description != "" {
+			fmt.Printf("           Description: %s\n", agent.Description)
+		}
+		if agent.Temperature > 0 {
+			fmt.Printf("           Temperature: %.1f\n", agent.Temperature)
+		}
+		if agent.MaxTokens > 0 {
+			fmt.Printf("           Max Tokens: %d\n", agent.MaxTokens)
+		}
+		fmt.Println()
+	}
+}
+
+func agentRegisterCmd() {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: pepebot agent register <name> --model <model> [options]")
+		fmt.Println("Run 'pepebot agent help' for more information")
+		os.Exit(1)
+	}
+
+	name := os.Args[3]
+	var model, provider, description string
+	var temperature float64
+	var maxTokens int
+
+	// Parse flags
+	args := os.Args[4:]
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--model":
+			if i+1 < len(args) {
+				model = args[i+1]
+				i++
+			}
+		case "--provider":
+			if i+1 < len(args) {
+				provider = args[i+1]
+				i++
+			}
+		case "--description":
+			if i+1 < len(args) {
+				description = args[i+1]
+				i++
+			}
+		case "--temperature":
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%f", &temperature)
+				i++
+			}
+		case "--max-tokens":
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%d", &maxTokens)
+				i++
+			}
+		}
+	}
+
+	if model == "" {
+		fmt.Println("Error: --model is required")
+		os.Exit(1)
+	}
+
+	registry, err := loadAgentRegistry()
+	if err != nil {
+		fmt.Printf("Error loading registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	agentDef := &agent.AgentDefinition{
+		Enabled:     true,
+		Model:       model,
+		Provider:    provider,
+		Description: description,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
+	}
+
+	if err := registry.Register(name, agentDef); err != nil {
+		fmt.Printf("Error registering agent: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := registry.Save(); err != nil {
+		fmt.Printf("Error saving registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create agent-specific directory for bootstrap files
+	agentDir, err := registry.EnsureAgentDir(name)
+	if err != nil {
+		fmt.Printf("Warning: could not create agent directory: %v\n", err)
+	}
+
+	fmt.Printf("✓ Registered agent '%s' with model '%s'\n", name, model)
+	if agentDir != "" {
+		fmt.Printf("  Agent directory: %s\n", agentDir)
+		fmt.Printf("  Tip: Add SOUL.md, USER.md, etc. in this folder to personalize the agent\n")
+	}
+}
+
+func agentRemoveCmd() {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: pepebot agent remove <name>")
+		os.Exit(1)
+	}
+
+	name := os.Args[3]
+
+	registry, err := loadAgentRegistry()
+	if err != nil {
+		fmt.Printf("Error loading registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := registry.Unregister(name); err != nil {
+		fmt.Printf("Error removing agent: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := registry.Save(); err != nil {
+		fmt.Printf("Error saving registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ Removed agent '%s'\n", name)
+}
+
+func agentEnableCmd() {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: pepebot agent enable <name>")
+		os.Exit(1)
+	}
+
+	name := os.Args[3]
+
+	registry, err := loadAgentRegistry()
+	if err != nil {
+		fmt.Printf("Error loading registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := registry.Enable(name); err != nil {
+		fmt.Printf("Error enabling agent: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := registry.Save(); err != nil {
+		fmt.Printf("Error saving registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ Enabled agent '%s'\n", name)
+}
+
+func agentDisableCmd() {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: pepebot agent disable <name>")
+		os.Exit(1)
+	}
+
+	name := os.Args[3]
+
+	registry, err := loadAgentRegistry()
+	if err != nil {
+		fmt.Printf("Error loading registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := registry.Disable(name); err != nil {
+		fmt.Printf("Error disabling agent: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := registry.Save(); err != nil {
+		fmt.Printf("Error saving registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ Disabled agent '%s'\n", name)
+}
+
+func agentShowCmd() {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: pepebot agent show <name>")
+		os.Exit(1)
+	}
+
+	name := os.Args[3]
+
+	registry, err := loadAgentRegistry()
+	if err != nil {
+		fmt.Printf("Error loading registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	agentDef, err := registry.Get(name)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	status := "disabled"
+	if agentDef.Enabled {
+		status = "enabled"
+	}
+
+	fmt.Printf("\n🐸 Agent: %s\n", name)
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("  Status:      %s\n", status)
+	fmt.Printf("  Model:       %s\n", agentDef.Model)
+	if agentDef.Provider != "" {
+		fmt.Printf("  Provider:    %s\n", agentDef.Provider)
+	}
+	if agentDef.Description != "" {
+		fmt.Printf("  Description: %s\n", agentDef.Description)
+	}
+	if agentDef.Temperature > 0 {
+		fmt.Printf("  Temperature: %.1f\n", agentDef.Temperature)
+	}
+	if agentDef.MaxTokens > 0 {
+		fmt.Printf("  Max Tokens:  %d\n", agentDef.MaxTokens)
+	}
+	if agentDef.PromptFile != "" {
+		fmt.Printf("  Prompt Dir:  %s\n", agentDef.PromptFile)
+		// Check if directory exists and list files
+		if entries, err := os.ReadDir(agentDef.PromptFile); err == nil {
+			if len(entries) > 0 {
+				fmt.Printf("  Bootstrap files:\n")
+				for _, entry := range entries {
+					if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
+						fmt.Printf("    - %s\n", entry.Name())
+					}
+				}
+			} else {
+				fmt.Printf("  Bootstrap files: (none - using workspace defaults)\n")
+			}
+		} else {
+			fmt.Printf("  Bootstrap files: (directory not found - using workspace defaults)\n")
+		}
+	}
+	fmt.Println()
 }

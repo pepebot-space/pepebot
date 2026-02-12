@@ -5,7 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-13
+
+### Added
+- **Multi-Agent System**: Agent registry with management commands
+  - Register, remove, enable/disable agents via CLI (`pepebot agent list/register/remove/enable/disable/show`)
+  - Per-agent model, temperature, max tokens, and prompt directory configuration
+  - Agent definitions stored in workspace registry file
+- **Session Key Generation**: Conversation context isolation per channel/chat
+  - Each channel generates unique session keys for separate conversation histories
+  - Prevents cross-chat context leakage in multi-channel setups
+- **Command Handling**: Slash commands for chat channels and CLI interactive mode
+  - `/new` — Clear session, start fresh conversation
+  - `/stop` — Cancel in-flight LLM processing (channels only)
+  - `/help` — List available commands
+  - `/status` — Show current agent, model, and session info
+- **Concurrent Message Processing**: Gateway now processes messages in goroutines
+  - LLM calls run with cancellable contexts for `/stop` support
+  - In-flight request tracking per session key via `sync.Map`
+- **Verbose Logging Option**: Added `--verbose` flag to `gateway` command
+  - Enables DEBUG level logging for detailed diagnostics
+
+### Changed
+- **AgentManager.Run()**: Refactored from sequential blocking to concurrent processing
+  - Messages are dispatched to goroutines with per-session cancellation
+  - Command messages are handled synchronously before dispatch
+- **AgentLoop**: Added public accessors `Model()`, `AgentName()`, `ClearSession()`
+- **SessionManager**: Added `ClearSession()` method to clear in-memory and on-disk session data
+
 ## [0.2.3] - 2026-02-12
+
+### Added
+- **Verbose Logging Option**: Added `--verbose` flag to `gateway` command
+  - Enables DEBUG level logging for detailed diagnostics
+  - Shows incoming chat messages, API calls, and internal operations
+  - Usage: `pepebot gateway --verbose` or `pepebot gateway -v`
+  - Helpful for debugging and monitoring bot activity
 
 ### Fixed
 - **Discord Image Sending**: Fixed images being sent to private messages instead of target channel
