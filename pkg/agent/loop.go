@@ -119,11 +119,24 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	history := al.sessions.GetHistory(msg.SessionKey)
 	summary := al.sessions.GetSummary(msg.SessionKey)
 
+	// Ensure metadata has channel information
+	metadata := msg.Metadata
+	if metadata == nil {
+		metadata = make(map[string]string)
+	}
+	if metadata["channel"] == "" {
+		metadata["channel"] = msg.Channel
+	}
+	if metadata["channel_id"] == "" {
+		metadata["channel_id"] = msg.ChatID
+	}
+
 	messages := al.contextBuilder.BuildMessages(
 		history,
 		summary,
 		msg.Content,
-		msg.Media, // Pass media for vision support
+		msg.Media,    // Pass media for vision support
+		metadata,     // Pass conversation context for send_image tool
 	)
 
 	iteration := 0

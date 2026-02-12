@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-02-12
+
+### Fixed
+- **Discord Image Sending**: Fixed images being sent to private messages instead of target channel
+  - Added conversation context (channel and chat_id) to system prompt
+  - AI now knows the correct chat_id to use when calling send_image tool
+  - Prevents accidental PM uploads when user requests channel uploads
+- **Discord Reply Image Reading**: Bot can now read and analyze images from replied messages
+  - Added support for reading attachments from referenced messages (replies)
+  - Previously only read attachments from current message
+  - Enables image analysis when user replies to a message containing images
+
+### Changed
+- **Agent Context Builder**: Enhanced `BuildMessages()` to accept metadata parameter
+  - System prompt now includes "Current Conversation Context" section
+  - Provides clear instructions to AI about active channel and chat_id
+- **Discord Message Handler**: Improved attachment processing
+  - Checks both current message and referenced message for attachments
+  - Better indication of attachment source in content text
+
+### Technical Details
+- Modified `pkg/agent/context.go`:
+  - Updated `BuildMessages()` signature to include `metadata map[string]string`
+  - Added conversation context to system prompt when metadata is available
+- Modified `pkg/agent/loop.go`:
+  - Updated `processMessage()` to ensure metadata includes channel information
+  - Passes metadata to `BuildMessages()` for context awareness
+- Modified `pkg/channels/discord.go`:
+  - Added check for `m.ReferencedMessage.Attachments`
+  - Processes attachments from both current and replied messages
+
 ## [0.2.2] - 2026-02-12
 
 ### Removed

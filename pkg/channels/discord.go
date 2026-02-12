@@ -213,6 +213,18 @@ func (c *DiscordChannel) handleMessage(s *discordgo.Session, m *discordgo.Messag
 		}
 	}
 
+	// Check for attachments in the referenced message (reply)
+	if m.ReferencedMessage != nil && len(m.ReferencedMessage.Attachments) > 0 {
+		for _, attachment := range m.ReferencedMessage.Attachments {
+			mediaPaths = append(mediaPaths, attachment.URL)
+			if content != "" {
+				content += "\n"
+			}
+			content += fmt.Sprintf("[referenced attachment: %s]", attachment.URL)
+		}
+	}
+
+	// Check for attachments in the current message
 	for _, attachment := range m.Attachments {
 		mediaPaths = append(mediaPaths, attachment.URL)
 		if content != "" {

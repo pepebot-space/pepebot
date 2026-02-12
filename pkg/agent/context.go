@@ -87,7 +87,7 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 	return result
 }
 
-func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary string, currentMessage string, media []string) []providers.Message {
+func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary string, currentMessage string, media []string, metadata map[string]string) []providers.Message {
 	messages := []providers.Message{}
 
 	systemPrompt := cb.BuildSystemPrompt()
@@ -108,6 +108,22 @@ func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary str
 
 	if summary != "" {
 		systemPrompt += "\n\n## Summary of Previous Conversation\n\n" + summary
+	}
+
+	// Add current conversation context
+	if metadata != nil && metadata["channel_id"] != "" {
+		channel := metadata["channel"]
+		if channel == "" {
+			channel = "unknown"
+		}
+		chatID := metadata["channel_id"]
+
+		systemPrompt += fmt.Sprintf("\n\n## Current Conversation Context\n\n")
+		systemPrompt += fmt.Sprintf("- Channel: %s\n", channel)
+		systemPrompt += fmt.Sprintf("- Chat ID: %s\n", chatID)
+		systemPrompt += fmt.Sprintf("\nIMPORTANT: When using the send_image tool, use these values:\n")
+		systemPrompt += fmt.Sprintf("- channel: \"%s\"\n", channel)
+		systemPrompt += fmt.Sprintf("- chat_id: \"%s\"\n", chatID)
 	}
 
 	messages = append(messages, providers.Message{
