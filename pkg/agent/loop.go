@@ -164,6 +164,18 @@ func (al *AgentLoop) Stop() {
 	al.running = false
 }
 
+func (al *AgentLoop) ClearSession(sessionKey string) {
+	al.sessions.ClearSession(sessionKey)
+}
+
+func (al *AgentLoop) Model() string {
+	return al.model
+}
+
+func (al *AgentLoop) AgentName() string {
+	return al.agentName
+}
+
 func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey string) (string, error) {
 	msg := bus.InboundMessage{
 		Channel:    "cli",

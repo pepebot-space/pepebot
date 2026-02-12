@@ -30,7 +30,7 @@ import (
 	"github.com/chzyer/readline"
 )
 
-const version = "0.2.3"
+const version = "0.3.0"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -760,6 +760,33 @@ func agentCmd() {
 	}
 }
 
+func handleCLICommand(input string, agentLoop *agent.AgentLoop, sessionKey string) bool {
+	parts := strings.Fields(input)
+	command := strings.ToLower(parts[0])
+
+	switch command {
+	case "/new":
+		agentLoop.ClearSession(sessionKey)
+		fmt.Printf("\n%s Session cleared. Starting fresh conversation.\n\n", logo)
+		return true
+	case "/help":
+		fmt.Printf("\n%s Available commands:\n", logo)
+		fmt.Println("  /new    - Clear session, start fresh conversation")
+		fmt.Println("  /help   - Show this help message")
+		fmt.Println("  /status - Show agent & session info")
+		fmt.Println("  exit    - Exit interactive mode")
+		fmt.Println()
+		return true
+	case "/status":
+		fmt.Printf("\n%s Agent: %s\n", logo, agentLoop.AgentName())
+		fmt.Printf("  Model: %s\n", agentLoop.Model())
+		fmt.Printf("  Session: %s\n\n", sessionKey)
+		return true
+	}
+
+	return false
+}
+
 func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 	prompt := fmt.Sprintf("%s You: ", logo)
 
@@ -800,6 +827,12 @@ func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 			return
 		}
 
+		if strings.HasPrefix(input, "/") {
+			if handleCLICommand(input, agentLoop, sessionKey) {
+				continue
+			}
+		}
+
 		ctx := context.Background()
 		response, err := agentLoop.ProcessDirect(ctx, input, sessionKey)
 		if err != nil {
@@ -833,6 +866,12 @@ func simpleInteractiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 		if input == "exit" || input == "quit" {
 			fmt.Println("Goodbye!")
 			return
+		}
+
+		if strings.HasPrefix(input, "/") {
+			if handleCLICommand(input, agentLoop, sessionKey) {
+				continue
+			}
 		}
 
 		ctx := context.Background()
@@ -1503,7 +1542,7 @@ func loadAgentRegistry() (*agent.AgentRegistry, error) {
 	}
 
 	registry := agent.NewAgentRegistry(cfg.WorkspacePath())
-	
+
 	// Load existing registry
 	if err := registry.Load(); err != nil {
 		return nil, fmt.Errorf("failed to load registry: %w", err)
@@ -1565,7 +1604,7 @@ func agentListCmd() {
 	for name := range agents {
 		names = append(names, name)
 	}
-	
+
 	for _, name := range names {
 		agent := agents[name]
 		status := "✗ disabled"

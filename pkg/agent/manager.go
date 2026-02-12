@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/anak10thn/pepebot/pkg/bus"
@@ -13,13 +14,14 @@ import (
 
 // AgentManager manages multiple agent instances
 type AgentManager struct {
-	config    *config.Config
-	bus       *bus.MessageBus
-	provider  providers.LLMProvider
-	registry  *AgentRegistry
-	agents    map[string]*AgentLoop
-	mu        sync.RWMutex
+	config       *config.Config
+	bus          *bus.MessageBus
+	provider     providers.LLMProvider
+	registry     *AgentRegistry
+	agents       map[string]*AgentLoop
+	mu           sync.RWMutex
 	defaultAgent string
+	inFlight     sync.Map // map[sessionKey]context.CancelFunc
 }
 
 // NewAgentManager creates a new agent manager
@@ -163,24 +165,141 @@ func (am *AgentManager) Run(ctx context.Context) error {
 				continue
 			}
 
-			// Extract agent name from metadata if present
-			agentName := ""
-			if msg.Metadata != nil {
-				agentName = msg.Metadata["agent"]
+			// Check if message is a command
+			if strings.HasPrefix(msg.Content, "/") {
+				am.handleCommand(ctx, msg)
+				continue
 			}
 
-			response, err := am.ProcessMessage(ctx, msg, agentName)
-			if err != nil {
-				response = fmt.Sprintf("Error processing message: %v", err)
-			}
-
-			if response != "" {
-				am.bus.PublishOutbound(bus.OutboundMessage{
-					Channel: msg.Channel,
-					ChatID:  msg.ChatID,
-					Content: response,
-				})
-			}
+			// Process normal messages in a goroutine for concurrency
+			go am.processAndRespond(ctx, msg)
 		}
 	}
+}
+
+// processAndRespond processes a message with cancellation support and publishes the response
+func (am *AgentManager) processAndRespond(ctx context.Context, msg bus.InboundMessage) {
+	chatCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Store cancel func so /stop can abort this
+	am.inFlight.Store(msg.SessionKey, cancel)
+	defer am.inFlight.Delete(msg.SessionKey)
+
+	// Extract agent name from metadata if present
+	agentName := ""
+	if msg.Metadata != nil {
+		agentName = msg.Metadata["agent"]
+	}
+
+	response, err := am.ProcessMessage(chatCtx, msg, agentName)
+	if err != nil {
+		if chatCtx.Err() != nil {
+			// Context was cancelled (by /stop)
+			response = "Processing stopped."
+		} else {
+			response = fmt.Sprintf("Error processing message: %v", err)
+		}
+	}
+
+	if response != "" {
+		am.bus.PublishOutbound(bus.OutboundMessage{
+			Channel: msg.Channel,
+			ChatID:  msg.ChatID,
+			Content: response,
+		})
+	}
+}
+
+// handleCommand dispatches slash commands
+func (am *AgentManager) handleCommand(ctx context.Context, msg bus.InboundMessage) {
+	parts := strings.Fields(msg.Content)
+	command := strings.ToLower(parts[0])
+
+	var response string
+
+	switch command {
+	case "/new":
+		response = am.cmdNew(msg)
+	case "/stop":
+		response = am.cmdStop(msg)
+	case "/help":
+		response = am.cmdHelp()
+	case "/status":
+		response = am.cmdStatus(msg)
+	default:
+		// Not a known command, process as normal message
+		go am.processAndRespond(ctx, msg)
+		return
+	}
+
+	if response != "" {
+		am.bus.PublishOutbound(bus.OutboundMessage{
+			Channel: msg.Channel,
+			ChatID:  msg.ChatID,
+			Content: response,
+		})
+	}
+}
+
+// cmdNew clears the session for the current chat
+func (am *AgentManager) cmdNew(msg bus.InboundMessage) string {
+	agentName := am.defaultAgent
+	if msg.Metadata != nil && msg.Metadata["agent"] != "" {
+		agentName = msg.Metadata["agent"]
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	agentLoop.ClearSession(msg.SessionKey)
+	return "Session cleared. Starting fresh conversation."
+}
+
+// cmdStop cancels any in-flight LLM call for this session
+func (am *AgentManager) cmdStop(msg bus.InboundMessage) string {
+	cancelVal, ok := am.inFlight.Load(msg.SessionKey)
+	if !ok {
+		return "No active processing to stop."
+	}
+
+	if cancel, ok := cancelVal.(context.CancelFunc); ok {
+		cancel()
+		return "Stopping current processing..."
+	}
+
+	return "No active processing to stop."
+}
+
+// cmdHelp returns a list of available commands
+func (am *AgentManager) cmdHelp() string {
+	return "Available commands:\n" +
+		"/new    - Clear session, start fresh conversation\n" +
+		"/stop   - Cancel current LLM processing\n" +
+		"/help   - Show this help message\n" +
+		"/status - Show agent & session info"
+}
+
+// cmdStatus returns info about the current agent and session
+func (am *AgentManager) cmdStatus(msg bus.InboundMessage) string {
+	agentName := am.defaultAgent
+	if msg.Metadata != nil && msg.Metadata["agent"] != "" {
+		agentName = msg.Metadata["agent"]
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	_, processing := am.inFlight.Load(msg.SessionKey)
+	processingStatus := "idle"
+	if processing {
+		processingStatus = "processing"
+	}
+
+	return fmt.Sprintf("Agent: %s\nModel: %s\nSession: %s\nStatus: %s",
+		agentLoop.AgentName(), agentLoop.Model(), msg.SessionKey, processingStatus)
 }

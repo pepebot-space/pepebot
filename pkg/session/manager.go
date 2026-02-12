@@ -132,6 +132,17 @@ func (sm *SessionManager) TruncateHistory(key string, keepLast int) {
 	session.Updated = time.Now()
 }
 
+func (sm *SessionManager) ClearSession(key string) {
+	sm.mu.Lock()
+	delete(sm.sessions, key)
+	sm.mu.Unlock()
+
+	if sm.storage != "" {
+		sessionPath := filepath.Join(sm.storage, key+".json")
+		os.Remove(sessionPath)
+	}
+}
+
 func (sm *SessionManager) Save(session *Session) error {
 	if sm.storage == "" {
 		return nil
