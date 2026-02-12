@@ -28,6 +28,7 @@ type AgentLoop struct {
 	provider       providers.LLMProvider
 	workspace      string
 	model          string
+	temperature    float64
 	contextWindow  int
 	maxIterations  int
 	sessions       *session.SessionManager
@@ -35,6 +36,7 @@ type AgentLoop struct {
 	tools          *tools.ToolRegistry
 	running        bool
 	summarizing    sync.Map
+	agentName      string
 }
 
 func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
@@ -51,6 +53,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
 	toolsRegistry.Register(tools.NewSendImageTool(bus))
+	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
 
@@ -59,6 +62,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		provider:       provider,
 		workspace:      workspace,
 		model:          cfg.Agents.Defaults.Model,
+		temperature:    cfg.Agents.Defaults.Temperature,
 		contextWindow:  cfg.Agents.Defaults.MaxTokens,
 		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
 		sessions:       sessionsManager,
@@ -66,6 +70,62 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		tools:          toolsRegistry,
 		running:        false,
 		summarizing:    sync.Map{},
+		agentName:      "default",
+	}
+}
+
+// NewAgentLoopWithDefinition creates a new agent loop with specific agent definition
+func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider, agentName string, agentDef *AgentDefinition) *AgentLoop {
+	workspace := cfg.WorkspacePath()
+	os.MkdirAll(workspace, 0755)
+
+	toolsRegistry := tools.NewToolRegistry()
+	toolsRegistry.Register(&tools.ReadFileTool{})
+	toolsRegistry.Register(&tools.WriteFileTool{})
+	toolsRegistry.Register(&tools.ListDirTool{})
+	toolsRegistry.Register(tools.NewExecTool(workspace))
+
+	braveAPIKey := cfg.Tools.Web.Search.APIKey
+	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
+	toolsRegistry.Register(tools.NewWebFetchTool(50000))
+	toolsRegistry.Register(tools.NewSendImageTool(bus))
+	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
+
+	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
+
+	// Use agent definition values, fallback to config defaults
+	model := agentDef.Model
+	temperature := agentDef.Temperature
+	if temperature == 0 {
+		temperature = cfg.Agents.Defaults.Temperature
+	}
+	maxTokens := agentDef.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = cfg.Agents.Defaults.MaxTokens
+	}
+
+	// Use agent-specific prompt dir if PromptFile is set
+	var contextBuilder *ContextBuilder
+	if agentDef.PromptFile != "" {
+		contextBuilder = NewContextBuilderWithAgentDir(workspace, agentDef.PromptFile)
+	} else {
+		contextBuilder = NewContextBuilder(workspace)
+	}
+
+	return &AgentLoop{
+		bus:            bus,
+		provider:       provider,
+		workspace:      workspace,
+		model:          model,
+		temperature:    temperature,
+		contextWindow:  maxTokens,
+		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
+		sessions:       sessionsManager,
+		contextBuilder: contextBuilder,
+		tools:          toolsRegistry,
+		running:        false,
+		summarizing:    sync.Map{},
+		agentName:      agentName,
 	}
 }
 
@@ -174,8 +234,8 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		})
 
 		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
-			"max_tokens":  8192,
-			"temperature": 0.7,
+			"max_tokens":  al.contextWindow,
+			"temperature": al.temperature,
 		})
 
 		if err != nil {
