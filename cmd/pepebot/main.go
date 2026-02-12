@@ -1229,7 +1229,7 @@ func skillsListCmd(loader *skills.SkillsLoader) {
 func skillsInstallCmd(installer *skills.SkillInstaller) {
 	if len(os.Args) < 4 {
 		fmt.Println("Usage: pepebot skills install <github-repo>")
-		fmt.Println("Example: pepebot skills install sipeed/pepebot-skills/weather")
+		fmt.Println("Example: pepebot skills install pepebot/pepebot-skills/weather")
 		return
 	}
 

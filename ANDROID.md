@@ -232,6 +232,51 @@ Make executable:
 chmod +x ~/.termux/boot/pepebot.sh
 ```
 
+## 📱 Termux API Integration
+
+Pepebot includes a powerful **Termux API skill** that lets you control Android device features!
+
+### Install Termux API
+
+```bash
+# 1. Install Termux:API app from F-Droid
+# https://f-droid.org/packages/com.termux.api/
+
+# 2. Install API package in Termux
+pkg install termux-api
+```
+
+### What You Can Do
+
+The Termux API skill enables:
+- 🔋 **Battery monitoring** - Check status, temperature, charging state
+- 📸 **Camera control** - Take photos/videos
+- 📋 **Clipboard** - Read/write system clipboard
+- 📍 **Location** - GPS coordinates and tracking
+- 🔔 **Notifications** - Display Android notifications
+- 💬 **SMS** - Send/receive text messages
+- 🔊 **Audio** - Text-to-speech, speech-to-text
+- 🌐 **WiFi** - Network scanning and info
+- 📱 **Sensors** - Accelerometer, gyroscope, light, etc.
+- And much more!
+
+### Quick Examples
+
+```bash
+# Start interactive mode
+~/pepebot agent
+
+# Try these commands:
+> Check my battery percentage
+> Take a photo with back camera
+> What's my current GPS location?
+> Send me a notification saying "Hello"
+> What's in my clipboard?
+> Speak "Hello from Pepebot"
+```
+
+**📚 Complete Documentation**: See [skills/termux-api](https://github.com/anak10thn/pepebot/tree/main/skills/termux-api) for full API reference and automation examples.
+
 ## 🤖 Using with Telegram Bot
 
 Perfect for running Telegram bot on Android:
