@@ -60,6 +60,16 @@ Supported platforms:
 - Linux (x86_64, ARM64, RISC-V)
 - macOS (x86_64, ARM64)
 - Windows (x86_64)
+- **Android (ARM64, x86_64, x86)** 📱 - See [ANDROID.md](ANDROID.md) for Termux setup
+
+### Build for Android
+
+```bash
+# Build Android binary
+make build-android
+```
+
+For detailed Android setup instructions, see **[ANDROID.md](ANDROID.md)**.
 
 ## ⚙️ Configuration
 
