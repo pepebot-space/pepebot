@@ -106,11 +106,6 @@ jobs:
             goarch: arm64
             name: android-arm64
 
-          # Android x86_64 (emulators & x86 devices)
-          - goos: android
-            goarch: amd64
-            name: android-x86_64
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

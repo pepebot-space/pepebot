@@ -60,7 +60,7 @@ Supported platforms:
 - Linux (x86_64, ARM64, RISC-V)
 - macOS (x86_64, ARM64)
 - Windows (x86_64)
-- **Android (ARM64, x86_64)** 📱 - See [ANDROID.md](ANDROID.md) for Termux setup
+- **Android (ARM64)** 📱 - See [ANDROID.md](ANDROID.md) for Termux setup
 
 ### Build for Android
 

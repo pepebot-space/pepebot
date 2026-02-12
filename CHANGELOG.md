@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-02-12
+
+### Removed
+- **Android x86_64 Support**: Removed x86_64/amd64 builds for Android
+  - Keeping only ARM64 build which works on most Android devices
+  - Simplified build matrix and reduced release artifacts
+  - Removed from GitHub Actions CI/CD workflows
+  - Updated documentation to reflect ARM64-only support
+
+### Changed
+- **Documentation**: Updated README.md and ANDROID.md
+  - Simplified installation instructions for Android
+  - Removed x86_64 download sections
+  - Streamlined architecture detection steps
+- **Makefile**: Simplified `build-android` target to ARM64 only
+  - Removed x86_64 build commands
+  - Cleaner build output
+
+### Technical Details
+- Removed android/amd64 from `.github/workflows/release.yml`
+- Removed android/amd64 from `.github/workflows/ci.yml`
+- Updated Makefile `build-android` and `build-all` targets
+- Cleaned up documentation references to x86_64
+
 ## [0.2.1] - 2026-02-12
 
 ### Fixed

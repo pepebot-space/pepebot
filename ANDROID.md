@@ -33,17 +33,7 @@ pkg install wget tar -y
 
 ### 3. Download Pepebot
 
-First, check your device architecture:
-
-```bash
-uname -m
-```
-
-Output will be one of:
-- `aarch64` or `arm64` → Use **ARM64** (most common)
-- `x86_64` → Use **x86_64** (emulators, some tablets)
-
-#### For ARM64 devices (most Android phones/tablets):
+Download the ARM64 binary (works on most Android devices):
 
 ```bash
 # Download
@@ -57,22 +47,6 @@ chmod +x pepebot-android-arm64
 
 # Move to easy location
 mv pepebot-android-arm64 ~/pepebot
-```
-
-#### For x86_64 (Android emulators, x86 tablets):
-
-```bash
-# Download
-wget https://github.com/anak10thn/pepebot/releases/latest/download/pepebot-android-x86_64.tar.gz
-
-# Extract
-tar xzf pepebot-android-x86_64.tar.gz
-
-# Make executable
-chmod +x pepebot-android-x86_64
-
-# Move to easy location
-mv pepebot-android-x86_64 ~/pepebot
 ```
 
 ### 4. Run Setup Wizard

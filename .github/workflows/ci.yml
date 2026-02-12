@@ -113,8 +113,6 @@ jobs:
             goarch: amd64
           - goos: android
             goarch: arm64
-          - goos: android
-            goarch: amd64
 
     steps:
       - name: Checkout code
