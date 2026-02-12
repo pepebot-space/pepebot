@@ -3,6 +3,10 @@ package channels
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -85,6 +89,11 @@ func (c *DiscordChannel) Send(ctx context.Context, msg bus.OutboundMessage) erro
 	c.stopTyping(channelID)
 
 	message := msg.Content
+
+	// If there are media attachments, send with files
+	if len(msg.Media) > 0 {
+		return c.sendWithMedia(channelID, message, msg.Media)
+	}
 
 	// Discord has a 2000 character limit per message
 	const maxLength = 2000
@@ -355,4 +364,166 @@ func (c *DiscordChannel) stopTyping(channelID string) {
 		// Remove from map
 		delete(c.typingChannels, channelID)
 	}
+}
+
+// sendWithMedia sends a message with media attachments (images/files)
+func (c *DiscordChannel) sendWithMedia(channelID, content string, mediaURLs []string) error {
+	// Download and prepare files
+	files := make([]*discordgo.File, 0, len(mediaURLs))
+	tempFiles := make([]string, 0, len(mediaURLs))
+	defer func() {
+		// Clean up temporary files
+		for _, tf := range tempFiles {
+			os.Remove(tf)
+		}
+	}()
+
+	for i, mediaURL := range mediaURLs {
+		logger.DebugCF("discord", "Preparing media attachment", map[string]interface{}{
+			"url":   mediaURL,
+			"index": i + 1,
+			"total": len(mediaURLs),
+		})
+
+		// Download file
+		tempFile, filename, err := c.downloadMedia(mediaURL)
+		if err != nil {
+			logger.ErrorCF("discord", "Failed to download media", map[string]interface{}{
+				"url":   mediaURL,
+				"error": err.Error(),
+			})
+			continue // Skip this file but continue with others
+		}
+
+		tempFiles = append(tempFiles, tempFile)
+
+		// Open file for reading
+		file, err := os.Open(tempFile)
+		if err != nil {
+			logger.ErrorCF("discord", "Failed to open temp file", map[string]interface{}{
+				"file":  tempFile,
+				"error": err.Error(),
+			})
+			continue
+		}
+		defer file.Close()
+
+		files = append(files, &discordgo.File{
+			Name:   filename,
+			Reader: file,
+		})
+	}
+
+	if len(files) == 0 {
+		// No files to send, fallback to text-only
+		logger.WarnC("discord", "No media files could be prepared, sending text only")
+		if content != "" {
+			_, err := c.session.ChannelMessageSend(channelID, content)
+			return err
+		}
+		return fmt.Errorf("no content or media to send")
+	}
+
+	// Send message with files
+	_, err := c.session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+		Content: content,
+		Files:   files,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to send message with media: %w", err)
+	}
+
+	logger.InfoCF("discord", "Sent message with media", map[string]interface{}{
+		"channel_id":  channelID,
+		"media_count": len(files),
+	})
+
+	return nil
+}
+
+// downloadMedia downloads a file from URL or copies from local path
+// Returns: (tempFilePath, filename, error)
+func (c *DiscordChannel) downloadMedia(urlOrPath string) (string, string, error) {
+	// Check if it's a URL or local file path
+	if strings.HasPrefix(urlOrPath, "http://") || strings.HasPrefix(urlOrPath, "https://") {
+		return c.downloadFromURL(urlOrPath)
+	}
+	return c.copyLocalFile(urlOrPath)
+}
+
+// downloadFromURL downloads a file from a URL to a temporary file
+func (c *DiscordChannel) downloadFromURL(url string) (string, string, error) {
+	// Create HTTP request
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to download: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	// Extract filename from URL or Content-Disposition
+	filename := filepath.Base(url)
+	if filename == "." || filename == "/" {
+		filename = "image.png"
+	}
+
+	// Create temp file
+	tempDir := os.TempDir()
+	tempFile := filepath.Join(tempDir, fmt.Sprintf("pepebot_discord_%d_%s", time.Now().Unix(), filename))
+
+	out, err := os.Create(tempFile)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer out.Close()
+
+	// Copy content
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		os.Remove(tempFile)
+		return "", "", fmt.Errorf("failed to save file: %w", err)
+	}
+
+	return tempFile, filename, nil
+}
+
+// copyLocalFile copies a local file to a temporary location
+func (c *DiscordChannel) copyLocalFile(filePath string) (string, string, error) {
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return "", "", fmt.Errorf("file not found: %s", filePath)
+	}
+
+	// Open source file
+	src, err := os.Open(filePath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer src.Close()
+
+	// Extract filename
+	filename := filepath.Base(filePath)
+
+	// Create temp file
+	tempDir := os.TempDir()
+	tempFile := filepath.Join(tempDir, fmt.Sprintf("pepebot_discord_%d_%s", time.Now().Unix(), filename))
+
+	dst, err := os.Create(tempFile)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer dst.Close()
+
+	// Copy content
+	_, err = io.Copy(dst, src)
+	if err != nil {
+		os.Remove(tempFile)
+		return "", "", fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	return tempFile, filename, nil
 }
