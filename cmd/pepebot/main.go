@@ -149,11 +149,13 @@ func printHelp() {
 	fmt.Printf("\n  🐸 PEPEBOT v%s\n", version)
 	fmt.Println("  Personal AI Assistant")
 	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("\nUsage: pepebot <command>\n")
+	fmt.Println("\nUsage: pepebot <command> [options]\n")
 	fmt.Println("Commands:")
 	fmt.Println("  onboard     Initialize pepebot configuration and workspace")
 	fmt.Println("  agent       Interact with the agent directly")
 	fmt.Println("  gateway     Start pepebot gateway")
+	fmt.Println("              Options:")
+	fmt.Println("                -v, --verbose    Enable verbose logging (show DEBUG logs)")
 	fmt.Println("  status      Show pepebot status")
 	fmt.Println("  cron        Manage scheduled tasks")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
@@ -777,6 +779,22 @@ func simpleInteractiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 }
 
 func gatewayCmd() {
+	// Parse flags
+	verbose := false
+	args := os.Args[2:]
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-v", "--verbose":
+			verbose = true
+		}
+	}
+
+	// Enable verbose logging if requested
+	if verbose {
+		logger.SetLevel(logger.DEBUG)
+		fmt.Println("✓ Verbose logging enabled")
+	}
+
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
@@ -1195,7 +1213,7 @@ func skillsHelp() {
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  pepebot skills list")
-	fmt.Println("  pepebot skills install sipeed/pepebot-skills/weather")
+	fmt.Println("  pepebot skills install pepebot/skills/weather")
 	fmt.Println("  pepebot skills install-builtin")
 	fmt.Println("  pepebot skills list-builtin")
 	fmt.Println("  pepebot skills remove weather")
@@ -1229,7 +1247,7 @@ func skillsListCmd(loader *skills.SkillsLoader) {
 func skillsInstallCmd(installer *skills.SkillInstaller) {
 	if len(os.Args) < 4 {
 		fmt.Println("Usage: pepebot skills install <github-repo>")
-		fmt.Println("Example: pepebot skills install pepebot/pepebot-skills/weather")
+		fmt.Println("Example: pepebot skills install pepebot/skills/weather")
 		return
 	}
 

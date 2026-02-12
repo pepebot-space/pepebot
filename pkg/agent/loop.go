@@ -17,6 +17,7 @@ import (
 
 	"github.com/anak10thn/pepebot/pkg/bus"
 	"github.com/anak10thn/pepebot/pkg/config"
+	"github.com/anak10thn/pepebot/pkg/logger"
 	"github.com/anak10thn/pepebot/pkg/providers"
 	"github.com/anak10thn/pepebot/pkg/session"
 	"github.com/anak10thn/pepebot/pkg/tools"
@@ -116,6 +117,14 @@ func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey stri
 }
 
 func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
+	logger.DebugCF("agent", "Processing message", map[string]interface{}{
+		"channel":     msg.Channel,
+		"sender_id":   msg.SenderID,
+		"chat_id":     msg.ChatID,
+		"session_key": msg.SessionKey,
+		"has_media":   len(msg.Media) > 0,
+	})
+
 	history := al.sessions.GetHistory(msg.SessionKey)
 	summary := al.sessions.GetSummary(msg.SessionKey)
 
@@ -158,14 +167,29 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			})
 		}
 
+		logger.DebugCF("agent", "Calling LLM", map[string]interface{}{
+			"iteration": iteration,
+			"model":     al.model,
+			"tools":     len(providerToolDefs),
+		})
+
 		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
 			"max_tokens":  8192,
 			"temperature": 0.7,
 		})
 
 		if err != nil {
+			logger.ErrorCF("agent", "LLM call failed", map[string]interface{}{
+				"error": err.Error(),
+			})
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
+
+		logger.DebugCF("agent", "LLM response received", map[string]interface{}{
+			"has_content":   response.Content != "",
+			"tool_calls":    len(response.ToolCalls),
+			"content_preview": truncateString(response.Content, 100),
+		})
 
 		if len(response.ToolCalls) == 0 {
 			finalContent = response.Content
@@ -191,9 +215,23 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		messages = append(messages, assistantMsg)
 
 		for _, tc := range response.ToolCalls {
+			logger.DebugCF("agent", "Executing tool", map[string]interface{}{
+				"tool_name": tc.Name,
+				"tool_id":   tc.ID,
+			})
+
 			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
 			if err != nil {
+				logger.ErrorCF("agent", "Tool execution failed", map[string]interface{}{
+					"tool_name": tc.Name,
+					"error":     err.Error(),
+				})
 				result = fmt.Sprintf("Error: %v", err)
+			} else {
+				logger.DebugCF("agent", "Tool execution completed", map[string]interface{}{
+					"tool_name":      tc.Name,
+					"result_preview": truncateString(result, 100),
+				})
 			}
 
 			toolResultMsg := providers.Message{
@@ -358,3 +396,9 @@ func (al *AgentLoop) getContentLength(content interface{}) int {
 	}
 }
 
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}

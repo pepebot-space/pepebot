@@ -3,6 +3,8 @@ package bus
 import (
 	"context"
 	"sync"
+
+	"github.com/anak10thn/pepebot/pkg/logger"
 )
 
 type MessageBus struct {
@@ -21,7 +23,21 @@ func NewMessageBus() *MessageBus {
 }
 
 func (mb *MessageBus) PublishInbound(msg InboundMessage) {
+	logger.DebugCF("bus", "Publishing inbound message", map[string]interface{}{
+		"channel":   msg.Channel,
+		"sender_id": msg.SenderID,
+		"chat_id":   msg.ChatID,
+		"has_media": len(msg.Media) > 0,
+		"preview":   truncateString(msg.Content, 100),
+	})
 	mb.inbound <- msg
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func (mb *MessageBus) ConsumeInbound(ctx context.Context) (InboundMessage, bool) {
@@ -34,6 +50,12 @@ func (mb *MessageBus) ConsumeInbound(ctx context.Context) (InboundMessage, bool)
 }
 
 func (mb *MessageBus) PublishOutbound(msg OutboundMessage) {
+	logger.DebugCF("bus", "Publishing outbound message", map[string]interface{}{
+		"channel":   msg.Channel,
+		"chat_id":   msg.ChatID,
+		"has_media": len(msg.Media) > 0,
+		"preview":   truncateString(msg.Content, 100),
+	})
 	mb.outbound <- msg
 }
 

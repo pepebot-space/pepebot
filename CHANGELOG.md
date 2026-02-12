@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.3] - 2026-02-12
 
+### Added
+- **Verbose Logging Option**: Added `--verbose` flag to `gateway` command
+  - Enables DEBUG level logging for detailed diagnostics
+  - Shows incoming chat messages, API calls, and internal operations
+  - Usage: `pepebot gateway --verbose` or `pepebot gateway -v`
+  - Helpful for debugging and monitoring bot activity
+
 ### Fixed
 - **Discord Image Sending**: Fixed images being sent to private messages instead of target channel
   - Added conversation context (channel and chat_id) to system prompt
