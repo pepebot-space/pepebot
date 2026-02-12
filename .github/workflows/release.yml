@@ -143,14 +143,9 @@ jobs:
 
           echo "Building $BINARY_NAME for $GOOS/$GOARCH..."
 
-          # Enable CGO for Android x86 builds (they require it)
-          if [ "$GOOS" = "android" ] && [ "$GOARCH" != "arm64" ]; then
-            export CGO_ENABLED=1
-            echo "CGO enabled for Android x86 build"
-          else
-            export CGO_ENABLED=0
-            echo "CGO disabled for static build"
-          fi
+          # Disable CGO for all builds (including Android)
+          export CGO_ENABLED=0
+          echo "CGO disabled for static build"
 
           go build \
             -v \

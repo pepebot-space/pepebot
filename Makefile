@@ -79,20 +79,18 @@ build-all:
 # 	GOOS=darwin GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./$(CMD_DIR)
 	GOOS=windows GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./$(CMD_DIR)
 	GOOS=android GOARCH=arm64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-android-arm64 ./$(CMD_DIR)
-	@echo "All builds complete (Android x86 variants require CGO, built in CI/CD)"
+	@echo "All builds complete (Android x86_64 also built in CI/CD)"
 
-## build-android: Build pepebot for Android (ARM64 only locally, x86 in CI/CD)
+## build-android: Build pepebot for Android (ARM64 and x86_64)
 build-android:
 	@echo "Building for Android..."
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building ARM64..."
-	GOOS=android GOARCH=arm64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-android-arm64 ./$(CMD_DIR)
+	GOOS=android GOARCH=arm64 CGO_ENABLED=0 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-android-arm64 ./$(CMD_DIR)
+	@echo "Building x86_64..."
+	GOOS=android GOARCH=amd64 CGO_ENABLED=0 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-android-x86_64 ./$(CMD_DIR)
 	@echo ""
-	@echo "Note: x86/x86_64 builds require CGO and Android NDK."
-	@echo "These are built automatically in GitHub Actions CI/CD."
-	@echo "Download pre-built x86 binaries from GitHub Releases."
-	@echo ""
-	@echo "Android ARM64 build complete"
+	@echo "Android builds complete"
 	@ls -lh $(BUILD_DIR)/$(BINARY_NAME)-android-*
 
 ## install: Install pepebot to system and copy builtin skills
