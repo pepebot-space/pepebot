@@ -30,7 +30,7 @@ import (
 	"github.com/chzyer/readline"
 )
 
-const version = "0.1.2"
+const version = "0.2.0"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -1229,7 +1229,7 @@ func skillsListCmd(loader *skills.SkillsLoader) {
 func skillsInstallCmd(installer *skills.SkillInstaller) {
 	if len(os.Args) < 4 {
 		fmt.Println("Usage: pepebot skills install <github-repo>")
-		fmt.Println("Example: pepebot skills install sipeed/pepebot-skills/weather")
+		fmt.Println("Example: pepebot skills install pepebot/pepebot-skills/weather")
 		return
 	}
 

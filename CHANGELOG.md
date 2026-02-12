@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-12
+
+### Added
+- **Multimodal Vision Support**: Bot can now read and analyze images from Discord
+  - Support for OpenAI Vision API format with ContentBlock
+  - Automatic image attachment processing
+  - Compatible with multimodal LLM providers (GPT-4V, Claude 3, Gemini Pro Vision, etc.)
+  - Images are passed directly to AI for analysis
+- **Image Sending Capability**: Bot can now send images to Discord
+  - New `SendImageTool` for AI to send images
+  - Automatic image download from URLs
+  - Support for local file paths
+  - Upload to Discord CDN with proper file handling
+  - Optional caption support for sent images
+- **Android Platform Support**: Native Android binaries via Termux
+  - ARM64 binary for modern Android devices (Android 5.0+)
+  - x86_64 binary for Android emulators and x86 tablets
+  - Automated GitHub Actions builds for Android
+  - Comprehensive Android setup documentation (ANDROID.md)
+  - Performance optimizations for mobile devices
+- **Termux API Skill**: Complete Android device control integration
+  - 30+ Termux API commands for hardware and system access
+  - Battery monitoring and power management
+  - Camera control (take photos with front/back camera)
+  - Clipboard read/write operations
+  - GPS and network location services
+  - System notifications and alerts
+  - Text-to-speech and speech-to-text
+  - WiFi scanning and connection info
+  - Sensor data access (accelerometer, gyroscope, light, etc.)
+  - SMS and phone call capabilities
+  - Storage and file system access
+  - System controls (brightness, volume, vibration)
+  - Complete documentation with 20+ automation examples
+
+### Changed
+- **Message Content Structure**: Updated from string to interface{} for multimodal support
+  - Added `ContentBlock` type for text and image content
+  - Added `ImageURL` type for vision API compatibility
+  - Enhanced `buildUserMessage()` to format multimodal content
+- **Discord Media Handling**: Improved file attachment processing
+  - New `sendWithMedia()` method for file uploads
+  - Enhanced `downloadMedia()` for URL and local file handling
+  - Better error handling for media operations
+- **Agent System Prompt**: Updated to include image sending capabilities
+- **OutboundMessage Structure**: Added `Media []string` field for attachments
+
+### Fixed
+- **Vision Not Working**: Fixed media not being passed to LLM
+  - Changed `nil` to `msg.Media` in processMessage() call
+  - Properly propagate media attachments through agent loop
+- **Content Length Calculation**: Fixed for interface{} content type
+  - Added `getContentLength()` helper for proper type switching
+  - Handles both string and []ContentBlock content
+
+### Technical Details
+- Modified `pkg/providers/types.go` for multimodal message structure
+- Enhanced `pkg/agent/context.go` with vision API formatting
+- Updated `pkg/agent/loop.go` for proper media handling
+- Implemented `pkg/tools/send_image.go` for image sending
+- Extended `pkg/channels/discord.go` with media upload support
+- Added Android build targets to CI/CD workflows
+- Created comprehensive Termux API skill documentation
+
+### Platform Support
+- **New**: Android (ARM64, x86_64) via Termux
+- Existing: Linux, macOS, Windows, FreeBSD
+- Architectures: x86_64, ARM64, ARMv6, ARMv7, RISC-V, MIPS variants
+
 ## [0.1.2] - 2026-02-11
 
 ### Added

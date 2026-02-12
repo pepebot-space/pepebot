@@ -49,6 +49,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
+	toolsRegistry.Register(tools.NewSendImageTool(bus))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
 
@@ -122,7 +123,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		history,
 		summary,
 		msg.Content,
-		nil,
+		msg.Media, // Pass media for vision support
 	)
 
 	iteration := 0
@@ -245,7 +246,7 @@ func (al *AgentLoop) summarizeSession(sessionKey string) {
 			continue
 		}
 		// Estimate tokens for this message
-		msgTokens := len(m.Content) / 4
+		msgTokens := al.getContentLength(m.Content) / 4
 		if msgTokens > maxMessageTokens {
 			omitted = true
 			continue
@@ -317,8 +318,30 @@ func (al *AgentLoop) summarizeBatch(ctx context.Context, batch []providers.Messa
 func (al *AgentLoop) estimateTokens(messages []providers.Message) int {
 	total := 0
 	for _, m := range messages {
-		total += len(m.Content) / 4 // Simple heuristic: 4 chars per token
+		total += al.getContentLength(m.Content) / 4 // Simple heuristic: 4 chars per token
 	}
 	return total
+}
+
+// getContentLength returns the character length of message content
+// Handles both string and multimodal content blocks
+func (al *AgentLoop) getContentLength(content interface{}) int {
+	switch v := content.(type) {
+	case string:
+		return len(v)
+	case []providers.ContentBlock:
+		total := 0
+		for _, block := range v {
+			if block.Type == "text" {
+				total += len(block.Text)
+			} else if block.Type == "image_url" {
+				// Estimate tokens for images (varies by model, rough estimate)
+				total += 1000 // Rough estimate for image tokens
+			}
+		}
+		return total
+	default:
+		return 0
+	}
 }
 

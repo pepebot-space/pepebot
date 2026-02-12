@@ -101,6 +101,16 @@ jobs:
             goarch: arm64
             name: freebsd-arm64
 
+          # Android ARM64 (requires Android 5.0+)
+          - goos: android
+            goarch: arm64
+            name: android-arm64
+
+          # Android x86_64 (emulators & x86 devices)
+          - goos: android
+            goarch: amd64
+            name: android-x86_64
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,13 +136,21 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
-          CGO_ENABLED: 0
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           BINARY_NAME="pepebot-${{ matrix.name }}${{ matrix.ext }}"
 
           echo "Building $BINARY_NAME for $GOOS/$GOARCH..."
+
+          # Enable CGO for Android x86 builds (they require it)
+          if [ "$GOOS" = "android" ] && [ "$GOARCH" != "arm64" ]; then
+            export CGO_ENABLED=1
+            echo "CGO enabled for Android x86 build"
+          else
+            export CGO_ENABLED=0
+            echo "CGO disabled for static build"
+          fi
 
           go build \
             -v \
@@ -255,6 +273,10 @@ jobs:
           ### BSD
           - **FreeBSD x86_64**: `pepebot-freebsd-amd64.tar.gz`
           - **FreeBSD ARM64**: `pepebot-freebsd-arm64.tar.gz`
+
+          ### Android
+          - **ARM64**: `pepebot-android-arm64.tar.gz` (Most devices, Android 5.0+)
+          - **x86_64**: `pepebot-android-x86_64.tar.gz` (Emulators, x86 tablets)
 
           ## 🚀 Quick Start
 

@@ -34,6 +34,8 @@ You are pepebot, a helpful AI assistant. You have access to tools that allow you
 - Execute shell commands
 - Search the web and fetch web pages
 - Send messages to users on chat channels
+- Send images to chat channels (Discord, Telegram, etc.)
+- View and analyze images sent by users
 - Spawn subagents for complex background tasks
 
 ## Current Time
@@ -115,10 +117,9 @@ func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary str
 
 	messages = append(messages, history...)
 
-	messages = append(messages, providers.Message{
-		Role:    "user",
-		Content: currentMessage,
-	})
+	// Build user message with optional media (vision support)
+	userMessage := cb.buildUserMessage(currentMessage, media)
+	messages = append(messages, userMessage)
 
 	return messages
 }
@@ -160,4 +161,42 @@ func (cb *ContextBuilder) loadSkills() string {
 	}
 
 	return "# Skill Definitions\n\n" + content
+}
+
+// buildUserMessage creates a user message with optional media attachments for vision support
+func (cb *ContextBuilder) buildUserMessage(text string, media []string) providers.Message {
+	// If no media, return simple text message
+	if len(media) == 0 {
+		return providers.Message{
+			Role:    "user",
+			Content: text,
+		}
+	}
+
+	// Build multimodal content with text and images
+	content := []providers.ContentBlock{}
+
+	// Add text if present
+	if text != "" {
+		content = append(content, providers.ContentBlock{
+			Type: "text",
+			Text: text,
+		})
+	}
+
+	// Add images
+	for _, mediaURL := range media {
+		content = append(content, providers.ContentBlock{
+			Type: "image_url",
+			ImageURL: &providers.ImageURL{
+				URL:    mediaURL,
+				Detail: "auto", // Let the model decide the detail level
+			},
+		})
+	}
+
+	return providers.Message{
+		Role:    "user",
+		Content: content,
+	}
 }
