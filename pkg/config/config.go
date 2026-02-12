@@ -40,7 +40,7 @@ type ChannelsConfig struct {
 
 type WhatsAppConfig struct {
 	Enabled   bool     `json:"enabled" env:"PEPEBOT_CHANNELS_WHATSAPP_ENABLED"`
-	BridgeURL string   `json:"bridge_url" env:"PEPEBOT_CHANNELS_WHATSAPP_BRIDGE_URL"`
+	DBPath    string   `json:"db_path" env:"PEPEBOT_CHANNELS_WHATSAPP_DB_PATH"`
 	AllowFrom []string `json:"allow_from" env:"PEPEBOT_CHANNELS_WHATSAPP_ALLOW_FROM"`
 }
 
@@ -120,7 +120,7 @@ func DefaultConfig() *Config {
 		Channels: ChannelsConfig{
 			WhatsApp: WhatsAppConfig{
 				Enabled:   false,
-				BridgeURL: "ws://localhost:3001",
+				DBPath:    "~/.pepebot/whatsapp.db",
 				AllowFrom: []string{},
 			},
 			Telegram: TelegramConfig{

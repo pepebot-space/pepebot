@@ -374,9 +374,8 @@ func onboard() {
 			fmt.Println("✓ Discord enabled")
 		}
 	} else if channelChoice == "w" {
-		fmt.Println("\n✓ WhatsApp Bridge (requires external bridge)")
-		fmt.Println("  Default bridge URL: ws://localhost:3001")
 		cfg.Channels.WhatsApp.Enabled = true
+		fmt.Println("\n✓ WhatsApp enabled (scan QR code when gateway starts)")
 	} else {
 		fmt.Println("⊙ No channels enabled (you can enable them later)")
 	}
