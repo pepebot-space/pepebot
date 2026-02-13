@@ -44,10 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `pkg/channels/manager.go`: Simplified WhatsApp initialization
 - Modified `pkg/agent/registry.go`: Fixed default agent creation logic
 - Updated `cmd/pepebot/main.go`: Simplified WhatsApp onboarding
+- Added `pkg/channels/whatsapp_stub.go`: MIPS architecture stub (WhatsApp disabled)
 - Added dependencies:
   - `go.mau.fi/whatsmeow` - WhatsApp Web client library
   - `modernc.org/sqlite` - Pure Go SQLite driver
   - `github.com/skip2/go-qrcode` - QR code generation for terminal
+
+### Platform Support Notes
+- **WhatsApp channel unavailable on MIPS architectures** (mips, mipsle, mips64, mips64le)
+  - SQLite dependency (`modernc.org/sqlite`) does not support MIPS
+  - MIPS builds will compile but WhatsApp channel will return an error if enabled
+  - All other channels (Telegram, Discord, Feishu, MaixCam) work normally on MIPS
 
 ### Migration Notes
 - Existing users with WhatsApp bridge setup need to re-onboard or manually update config
