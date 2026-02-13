@@ -236,29 +236,23 @@ func (ar *AgentRegistry) Disable(name string) error {
 	return nil
 }
 
-// InitializeFromConfig creates a default agent from config if registry is empty
+// InitializeFromConfig ensures a default agent exists from config
 func (ar *AgentRegistry) InitializeFromConfig(cfg *config.Config) error {
 	ar.mu.Lock()
 	defer ar.mu.Unlock()
 
-	// If registry already has agents, don't initialize
-	if len(ar.Agents) > 0 {
-		return nil
+	// Always ensure "default" agent exists
+	if _, exists := ar.Agents["default"]; !exists {
+		ar.Agents["default"] = &AgentDefinition{
+			Enabled:     true,
+			Model:       cfg.Agents.Defaults.Model,
+			Provider:    "",
+			Description: "Default general-purpose agent",
+			Temperature: cfg.Agents.Defaults.Temperature,
+			MaxTokens:   cfg.Agents.Defaults.MaxTokens,
+		}
+		logger.InfoC("agent", "Initialized default agent from config")
 	}
-
-	// Create default agent from config
-	defaultAgent := &AgentDefinition{
-		Enabled:     true,
-		Model:       cfg.Agents.Defaults.Model,
-		Provider:    "", // Will auto-detect from model prefix
-		Description: "Default general-purpose agent",
-		Temperature: cfg.Agents.Defaults.Temperature,
-		MaxTokens:   cfg.Agents.Defaults.MaxTokens,
-	}
-
-	ar.Agents["default"] = defaultAgent
-
-	logger.InfoC("agent", "Initialized default agent from config")
 
 	return nil
 }

@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-02-13
+
+### Added
+- **WhatsApp Native Support**: Direct WhatsApp Web integration via whatsmeow
+  - Replaced external WebSocket bridge with native Go implementation
+  - QR code login displayed directly in terminal
+  - Session persistence using SQLite (no re-login required)
+  - Pure Go SQLite driver (`modernc.org/sqlite`) - works on all platforms without CGO
+  - WAL mode for concurrent access and better performance
+  - No external dependencies or bridge setup needed
+
+### Changed
+- **WhatsApp Configuration**: Simplified config structure
+  - Removed `bridge_url` field (no longer needed)
+  - Added `db_path` field for session storage (default: `~/.pepebot/whatsapp.db`)
+  - Onboarding wizard updated with simpler WhatsApp setup
+- **WhatsApp Channel Implementation**: Complete rewrite
+  - Uses `go.mau.fi/whatsmeow` for direct WhatsApp Web protocol
+  - QR code rendering in terminal using `github.com/skip2/go-qrcode`
+  - Automatic session restoration from SQLite on restart
+  - Improved connection stability and error handling
+
+### Fixed
+- **Default Agent Registry**: Fixed "default agent not found" error
+  - `InitializeFromConfig` now always ensures "default" agent exists
+  - Previously only created default agent when registry was completely empty
+  - Now creates default agent if missing, regardless of other agents
+
+### Removed
+- **WebSocket Bridge Dependency**: No longer requires external WhatsApp bridge
+  - Removed `gorilla/websocket` dependency (unused after migration)
+  - Simplified deployment - one binary, no additional services
+
+### Technical Details
+- Modified `pkg/config/config.go`: Updated WhatsAppConfig structure
+- Rewritten `pkg/channels/whatsapp.go`: Native whatsmeow implementation
+- Updated `pkg/channels/manager.go`: Simplified WhatsApp initialization
+- Modified `pkg/agent/registry.go`: Fixed default agent creation logic
+- Updated `cmd/pepebot/main.go`: Simplified WhatsApp onboarding
+- Added dependencies:
+  - `go.mau.fi/whatsmeow` - WhatsApp Web client library
+  - `modernc.org/sqlite` - Pure Go SQLite driver
+  - `github.com/skip2/go-qrcode` - QR code generation for terminal
+
+### Migration Notes
+- Existing users with WhatsApp bridge setup need to re-onboard or manually update config
+- Old `bridge_url` field will be ignored (can be manually removed from config.json)
+- First run will show QR code - scan once to authenticate
+- Session persists in `~/.pepebot/whatsapp.db` for automatic reconnection
+
 ## [0.3.0] - 2026-02-13
 
 ### Added
