@@ -73,7 +73,13 @@ Only use the 'message' tool when you need to send a message to a specific chat c
 For normal conversation, just respond with text - do not call the message tool.
 
 Always be helpful, accurate, and concise. When using tools, explain what you're doing.
-When remembering something, write to %s/memory/MEMORY.md`,
+
+## Memory Instructions
+When the user asks you to remember, save, or note something:
+- You MUST use the write_file tool to write to %s/memory/MEMORY.md
+- First read_file the current MEMORY.md, then write_file with updated content
+- NEVER just say "I'll remember that" without actually calling write_file
+- If you don't call write_file, the information WILL BE LOST`,
 		now, workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
 }
 
@@ -84,7 +90,7 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 		"USER.md",
 		"TOOLS.md",
 		"IDENTITY.md",
-		"MEMORY.md",
+		"memory/MEMORY.md",
 	}
 
 	var result string
