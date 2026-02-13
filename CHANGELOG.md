@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `InitializeFromConfig` now always ensures "default" agent exists
   - Previously only created default agent when registry was completely empty
   - Now creates default agent if missing, regardless of other agents
+- **Agent Memory Not Persisting**: Fixed memory writes silently failing
+  - Bootstrap loaded MEMORY.md from wrong path (workspace root instead of `memory/` subdirectory)
+  - Strengthened system prompt so agent MUST call `write_file` tool for memory saves
+  - Agent previously claimed "I'll remember" without actually writing to disk
+- **File Tools Path Resolution**: Relative paths now resolve to workspace
+  - `read_file`, `write_file`, `list_dir` tools now accept relative paths
+  - Relative paths resolve to workspace directory (`~/.pepebot/workspace/`)
+  - Absolute paths still work as before
 
 ### Removed
 - **WebSocket Bridge Dependency**: No longer requires external WhatsApp bridge
@@ -45,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Modified `pkg/agent/registry.go`: Fixed default agent creation logic
 - Updated `cmd/pepebot/main.go`: Simplified WhatsApp onboarding
 - Added `pkg/channels/whatsapp_stub.go`: MIPS architecture stub (WhatsApp disabled)
+- Modified `pkg/agent/context.go`: Fixed MEMORY.md path, strengthened memory instructions
+- Modified `pkg/tools/filesystem.go`: Added workspace-aware path resolution
+- Modified `pkg/agent/loop.go`: Pass workspace to file tools
 - Added dependencies:
   - `go.mau.fi/whatsmeow` - WhatsApp Web client library
   - `modernc.org/sqlite` - Pure Go SQLite driver
