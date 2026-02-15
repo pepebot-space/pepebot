@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/anak10thn/pepebot/pkg/config"
-	"github.com/anak10thn/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 // AgentDefinition defines a registered agent configuration

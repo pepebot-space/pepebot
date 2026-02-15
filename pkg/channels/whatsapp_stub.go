@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/anak10thn/pepebot/pkg/bus"
-	"github.com/anak10thn/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/config"
 )
 
 // WhatsAppChannel stub for MIPS architectures (SQLite not supported)

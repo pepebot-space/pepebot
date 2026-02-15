@@ -2,7 +2,7 @@
 <img src="assets/logo.webp" alt="Pepebot" width="512">
 
 <h1>🐸 Pepebot</h1>
-<h3>Ultra-Lightweight Personal AI Agent in Go</h3>
+<h3>Ultra-Lightweight Personal AI Agent</h3>
 
 <p>
 <img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
@@ -39,7 +39,7 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 
 ```bash
 # Clone repository
-git clone https://github.com/anak10thn/pepebot.git
+git clone https://github.com/pepebot-space/pepebot.git
 cd pepebot
 
 # Build binary
@@ -505,8 +505,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/anak10thn/pepebot/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/anak10thn/pepebot/discussions)
+- **Issues**: [GitHub Issues](https://github.com/pepebot-space/pepebot/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/pepebot-space/pepebot/discussions)
 
 ---
 

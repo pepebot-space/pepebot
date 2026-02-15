@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anak10thn/pepebot/pkg/bus"
-	"github.com/anak10thn/pepebot/pkg/config"
-	"github.com/anak10thn/pepebot/pkg/logger"
-	"github.com/anak10thn/pepebot/pkg/providers"
-	"github.com/anak10thn/pepebot/pkg/session"
-	"github.com/anak10thn/pepebot/pkg/tools"
+	"github.com/pepebot-space/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/providers"
+	"github.com/pepebot-space/pepebot/pkg/session"
+	"github.com/pepebot-space/pepebot/pkg/tools"
 )
 
 type AgentLoop struct {

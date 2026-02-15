@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/anak10thn/pepebot/pkg/bus"
-	"github.com/anak10thn/pepebot/pkg/config"
-	"github.com/anak10thn/pepebot/pkg/logger"
-	"github.com/anak10thn/pepebot/pkg/providers"
+	"github.com/pepebot-space/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/providers"
 )
 
 // AgentManager manages multiple agent instances

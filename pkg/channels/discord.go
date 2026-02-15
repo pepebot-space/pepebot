@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/anak10thn/pepebot/pkg/bus"
-	"github.com/anak10thn/pepebot/pkg/config"
-	"github.com/anak10thn/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 type DiscordChannel struct {

@@ -39,11 +39,11 @@ Bot can now read and analyze images from replied messages!
 ## Installation
 
 ### Binary Download
-Download the pre-built binary for your platform from the [releases page](https://github.com/anak10thn/pepebot/releases/tag/v0.2.3).
+Download the pre-built binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.2.3).
 
 ### Build from Source
 ```bash
-git clone https://github.com/anak10thn/pepebot.git
+git clone https://github.com/pepebot-space/pepebot.git
 cd pepebot
 make build
 ```
@@ -101,8 +101,8 @@ Thanks to everyone who contributed to this release! 🎉
 ## Support
 
 - 📖 [Documentation](README.md)
-- 🐛 [Report Issues](https://github.com/anak10thn/pepebot/issues)
-- 💬 [Discussions](https://github.com/anak10thn/pepebot/discussions)
+- 🐛 [Report Issues](https://github.com/pepebot-space/pepebot/issues)
+- 💬 [Discussions](https://github.com/pepebot-space/pepebot/discussions)
 
 ---
 

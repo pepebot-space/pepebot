@@ -11,9 +11,9 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-	"github.com/anak10thn/pepebot/pkg/bus"
-	"github.com/anak10thn/pepebot/pkg/config"
-	"github.com/anak10thn/pepebot/pkg/voice"
+	"github.com/pepebot-space/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/voice"
 )
 
 type TelegramChannel struct {

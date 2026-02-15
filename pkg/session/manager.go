@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anak10thn/pepebot/pkg/providers"
+	"github.com/pepebot-space/pepebot/pkg/providers"
 )
 
 type Session struct {

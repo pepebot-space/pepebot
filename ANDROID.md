@@ -37,7 +37,7 @@ Download the ARM64 binary (works on most Android devices):
 
 ```bash
 # Download
-wget https://github.com/anak10thn/pepebot/releases/latest/download/pepebot-android-arm64.tar.gz
+wget https://github.com/pepebot-space/pepebot/releases/latest/download/pepebot-android-arm64.tar.gz
 
 # Extract
 tar xzf pepebot-android-arm64.tar.gz
@@ -232,7 +232,7 @@ The Termux API skill enables:
 > Speak "Hello from Pepebot"
 ```
 
-**📚 Complete Documentation**: See [skills/termux-api](https://github.com/anak10thn/pepebot/tree/main/skills/termux-api) for full API reference and automation examples.
+**📚 Complete Documentation**: See [skills/termux-api](https://github.com/pepebot-space/pepebot/tree/main/skills/termux-api) for full API reference and automation examples.
 
 ## 🤖 Using with Telegram Bot
 
@@ -327,7 +327,7 @@ cp ~/.pepebot/config.json ~/config.json.backup
 # Download new version
 cd ~
 rm pepebot
-wget https://github.com/anak10thn/pepebot/releases/latest/download/pepebot-android-arm64.tar.gz
+wget https://github.com/pepebot-space/pepebot/releases/latest/download/pepebot-android-arm64.tar.gz
 tar xzf pepebot-android-arm64.tar.gz
 chmod +x pepebot-android-arm64
 mv pepebot-android-arm64 pepebot
@@ -406,15 +406,15 @@ Get API key: https://brave.com/search/api/
 ## 🔗 Links
 
 - **Termux Documentation**: https://wiki.termux.com
-- **Pepebot Docs**: https://github.com/anak10thn/pepebot
+- **Pepebot Docs**: https://github.com/pepebot-space/pepebot
 - **MAIA Router**: https://maiarouter.ai
-- **Support**: https://github.com/anak10thn/pepebot/issues
+- **Support**: https://github.com/pepebot-space/pepebot/issues
 
 ## 🎉 Success!
 
 You now have a powerful AI assistant running natively on your Android device! 🐸
 
-For more help, visit our [GitHub repository](https://github.com/anak10thn/pepebot).
+For more help, visit our [GitHub repository](https://github.com/pepebot-space/pepebot).
 
 ---
 

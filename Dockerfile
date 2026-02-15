@@ -51,6 +51,6 @@ CMD ["gateway"]
 LABEL org.opencontainers.image.title="Pepebot"
 LABEL org.opencontainers.image.description="Ultra-lightweight Personal AI Assistant"
 LABEL org.opencontainers.image.authors="Pepebot Contributors"
-LABEL org.opencontainers.image.url="https://github.com/anak10thn/pepebot"
-LABEL org.opencontainers.image.source="https://github.com/anak10thn/pepebot"
+LABEL org.opencontainers.image.url="https://github.com/pepebot-space/pepebot"
+LABEL org.opencontainers.image.source="https://github.com/pepebot-space/pepebot"
 LABEL org.opencontainers.image.licenses="MIT"

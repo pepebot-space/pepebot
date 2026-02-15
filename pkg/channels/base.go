@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/anak10thn/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/bus"
 )
 
 type Channel interface {

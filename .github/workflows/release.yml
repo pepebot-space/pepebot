@@ -171,8 +171,8 @@ jobs:
           2. Run: pepebot onboard
           3. Follow the setup wizard
 
-          Documentation: https://github.com/anak10thn/pepebot
-          Issues: https://github.com/anak10thn/pepebot/issues
+          Documentation: https://github.com/pepebot-space/pepebot
+          Issues: https://github.com/pepebot-space/pepebot/issues
           EOF
 
           # Create archive
@@ -283,9 +283,9 @@ jobs:
 
           ## 📚 Documentation
 
-          - [README](https://github.com/anak10thn/pepebot#readme)
-          - [Setup Guide](https://github.com/anak10thn/pepebot#installation)
-          - [Configuration](https://github.com/anak10thn/pepebot#configuration)
+          - [README](https://github.com/pepebot-space/pepebot#readme)
+          - [Setup Guide](https://github.com/pepebot-space/pepebot#installation)
+          - [Configuration](https://github.com/pepebot-space/pepebot#configuration)
 
           ## 🔐 Verification
 
@@ -297,8 +297,8 @@ jobs:
 
           ## 💬 Support
 
-          - [Issues](https://github.com/anak10thn/pepebot/issues)
-          - [Discussions](https://github.com/anak10thn/pepebot/discussions)
+          - [Issues](https://github.com/pepebot-space/pepebot/issues)
+          - [Discussions](https://github.com/pepebot-space/pepebot/discussions)
 
           ---
 

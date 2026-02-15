@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/anak10thn/pepebot/pkg/providers"
-	"github.com/anak10thn/pepebot/pkg/skills"
+	"github.com/pepebot-space/pepebot/pkg/providers"
+	"github.com/pepebot-space/pepebot/pkg/skills"
 )
 
 type ContextBuilder struct {

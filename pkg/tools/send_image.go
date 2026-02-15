@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/anak10thn/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/bus"
 )
 
 type SendImageTool struct {

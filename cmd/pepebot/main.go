@@ -17,16 +17,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anak10thn/pepebot/pkg/agent"
-	"github.com/anak10thn/pepebot/pkg/bus"
-	"github.com/anak10thn/pepebot/pkg/channels"
-	"github.com/anak10thn/pepebot/pkg/config"
-	"github.com/anak10thn/pepebot/pkg/cron"
-	"github.com/anak10thn/pepebot/pkg/heartbeat"
-	"github.com/anak10thn/pepebot/pkg/logger"
-	"github.com/anak10thn/pepebot/pkg/providers"
-	"github.com/anak10thn/pepebot/pkg/skills"
-	"github.com/anak10thn/pepebot/pkg/voice"
+	"github.com/pepebot-space/pepebot/pkg/agent"
+	"github.com/pepebot-space/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/channels"
+	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/cron"
+	"github.com/pepebot-space/pepebot/pkg/heartbeat"
+	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/providers"
+	"github.com/pepebot-space/pepebot/pkg/skills"
+	"github.com/pepebot-space/pepebot/pkg/voice"
 	"github.com/chzyer/readline"
 )
 
@@ -444,7 +444,7 @@ func onboard() {
 			fmt.Println("  • Payment: QRIS supported for Indonesian users")
 		}
 		fmt.Printf("  • Edit config: %s\n", configPath)
-		fmt.Printf("  • Documentation: https://github.com/anak10thn/pepebot\n")
+		fmt.Printf("  • Documentation: https://github.com/pepebot-space/pepebot\n")
 	}
 
 	fmt.Println("\n🎉 Happy chatting with Pepebot!")

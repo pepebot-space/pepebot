@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/anak10thn/pepebot/pkg/bus"
-	"github.com/anak10thn/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/bus"
+	"github.com/pepebot-space/pepebot/pkg/config"
 )
 
 type FeishuChannel struct {

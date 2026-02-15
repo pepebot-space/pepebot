@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/anak10thn/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 type MessageBus struct {

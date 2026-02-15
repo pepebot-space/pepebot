@@ -1,4 +1,4 @@
-module github.com/anak10thn/pepebot
+module github.com/pepebot-space/pepebot
 
 go 1.24.0
 

@@ -15,7 +15,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/anak10thn/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/config"
 )
 
 type HTTPProvider struct {
