@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-16
+
+### Added
+- **ADB Tools**: Android device control via Android Debug Bridge
+  - 7 new tools for Android automation: `adb_devices`, `adb_shell`, `adb_tap`, `adb_input_text`, `adb_screenshot`, `adb_ui_dump`, `adb_swipe`
+  - Automatic ADB binary discovery (ANDROID_HOME or system PATH)
+  - Silent graceful failure if ADB not installed
+  - Support for multi-device targeting via device serial parameter
+  - UI hierarchy inspection for automation workflows
+  - Screenshot capture with workspace-relative paths
+
+- **Workflow System**: Multi-step automation framework
+  - 3 new tools: `workflow_execute`, `workflow_save`, `workflow_list`
+  - Generic workflow engine (works with ANY tools, not limited to ADB)
+  - JSON-based workflow definitions with variable interpolation
+  - Step output tracking: `{{step_name_output}}` variables
+  - Goal-based steps for LLM-driven automation
+  - Variable override support at execution time
+  - Example workflows included: UI automation, device health check, browser research
+
+- **Example Workflows**: Pre-built automation templates
+  - `ui_automation.json`: Android app login automation with coordinate-based interaction
+  - `device_control.json`: Device health monitoring (battery, memory, storage, network)
+  - `browser_automation.json`: Web research workflow demonstrating non-ADB use case
+
+- **Documentation**: Comprehensive workflow guide
+  - `workspace/workflows/README.md`: Complete workflow documentation
+  - Usage examples, best practices, troubleshooting guide
+  - Common patterns and workflow design guidelines
+
+### Technical Details
+- Added `pkg/tools/adb.go`: ADB helper and 7 tool implementations (~800 lines)
+- Added `pkg/tools/workflow.go`: Workflow engine and 3 tool implementations (~500 lines)
+- Modified `pkg/agent/loop.go`: Tool registration in both `NewAgentLoop()` and `NewAgentLoopWithDefinition()`
+- Workflow tools always registered (no dependencies)
+- ADB tools conditionally registered (only if ADB binary found)
+- Follows existing pepebot patterns: command execution timeouts, path resolution, error handling
+- Variable interpolation supports nested step outputs and dynamic goal generation
+
+### Use Cases
+- Mobile app testing and automation
+- Android device monitoring and control
+- UI automation workflows with visual inspection
+- Remote device management via chat interfaces
+- Cross-platform automation combining ADB, shell, browser, and file tools
+- LLM-driven adaptive workflows with goal-based steps
+
 ## [0.3.1] - 2026-02-13
 
 ### Added

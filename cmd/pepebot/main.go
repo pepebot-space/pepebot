@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/pepebot-space/pepebot/pkg/agent"
 	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/channels"
@@ -27,10 +28,9 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/skills"
 	"github.com/pepebot-space/pepebot/pkg/voice"
-	"github.com/chzyer/readline"
 )
 
-const version = "0.3.1"
+const version = "0.4.0"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
