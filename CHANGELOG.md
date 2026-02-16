@@ -30,15 +30,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `device_control.json`: Device health monitoring (battery, memory, storage, network)
   - `browser_automation.json`: Web research workflow demonstrating non-ADB use case
 
+- **Builtin Skills Installation**: Automated skill installation from GitHub
+  - New command: `pepebot skills install-builtin` downloads and installs all official skills
+  - Downloads from `https://github.com/pepebot-space/skills-builtin` as ZIP archive
+  - Automatic extraction and installation to workspace
+  - Integrated into onboarding wizard (Step 5/5) with Yes as default
+  - Graceful error handling with helpful messages
+
+- **Skills Search Integration**: Centralized skill discovery
+  - `pepebot skills search` now fetches from `https://github.com/pepebot-space/skills`
+  - New registry format with metadata support
+  - Displays skill name, description, and install command
+  - Shows 4+ community skills: browser-use, claude-code, home-assistant, opencode
+
 - **Documentation**: Comprehensive workflow guide
   - `workspace/workflows/README.md`: Complete workflow documentation
   - Usage examples, best practices, troubleshooting guide
   - Common patterns and workflow design guidelines
+  - `CLAUDE.md`: Project architecture guide for AI assistants
+
+### Changed
+- **Onboarding Wizard**: Enhanced interactive setup flow
+  - Updated from 4 steps to 5 steps (added builtin skills installation)
+  - Step 5/5: "Install Builtin Skills" with GitHub repository info
+  - Default choice is Yes (user just presses Enter)
+  - Skip message shows command to install later
+  - Quick Start section conditionally shows install command only if skipped
+- **Skills Commands**: Streamlined skill management
+  - Removed `pepebot skills list-builtin` command (redundant)
+  - `install-builtin` now fetches from GitHub instead of local copy
+  - Updated help messages to reflect new workflow
+- **Skills Registry**: Updated data structure
+  - Added `SkillsRegistry` type with version, update time, and skills array
+  - Added `Path` field to `AvailableSkill` for subdirectory support
+  - Added `Metadata` field for additional skill information
+  - Improved JSON parsing for new registry format
+
+### Removed
+- **Local Builtin Skills Management**: Removed local skills directory lookup
+  - Deleted `skillsListBuiltinCmd()` function
+  - Removed local skills copying logic
+  - All builtin skills now fetched from GitHub
 
 ### Technical Details
 - Added `pkg/tools/adb.go`: ADB helper and 7 tool implementations (~800 lines)
 - Added `pkg/tools/workflow.go`: Workflow engine and 3 tool implementations (~500 lines)
 - Modified `pkg/agent/loop.go`: Tool registration in both `NewAgentLoop()` and `NewAgentLoopWithDefinition()`
+- Modified `cmd/pepebot/main.go`:
+  - Updated onboarding wizard with Step 5/5 for builtin skills
+  - Refactored `skillsInstallBuiltinCmd()` to use GitHub ZIP download
+  - Removed `skillsListBuiltinCmd()` and related case statement
+  - Updated `skillsHelp()` to remove list-builtin references
+- Modified `pkg/skills/installer.go`:
+  - Added `InstallBuiltinSkills()` method with ZIP download and extraction
+  - Updated registry URL to `pepebot-space/skills`
+  - Added `SkillsRegistry` struct for new JSON format
+  - Added `copyDir()` helper function for recursive directory copying
+  - Removed git clone dependency
 - Workflow tools always registered (no dependencies)
 - ADB tools conditionally registered (only if ADB binary found)
 - Follows existing pepebot patterns: command execution timeouts, path resolution, error handling
@@ -51,6 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remote device management via chat interfaces
 - Cross-platform automation combining ADB, shell, browser, and file tools
 - LLM-driven adaptive workflows with goal-based steps
+- One-command installation of official skill library
+- Easy discovery and installation of community skills
 
 ## [0.3.1] - 2026-02-13
 
