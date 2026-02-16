@@ -18,10 +18,11 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 
 ## ✨ Key Features
 
-- 🤖 **Multi-Provider LLM**: Support for various AI providers including [MAIA Router](https://maiarouter.ai) (recommended), Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, and vLLM
-- 🌏 **Indonesian-Friendly**: MAIA Router integration with QRIS payment support and 52+ free models
+- 🤖 **Multi-Provider LLM**: Support for various AI providers including Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, MAIA Router and vLLM
 - 💬 **Multi-Channel**: Integration with Telegram, Discord, WhatsApp, MaixCam, and Feishu
 - 🛠️ **Tools System**: Filesystem operations, shell execution, web search, and more
+- 📱 **Android Automation**: 7 ADB tools for device control and UI automation
+- 🔄 **Workflow System**: Multi-step automation with variable interpolation and LLM-driven goals
 - 🎯 **Skills System**: Customizable and extensible skill system
 - 🚀 **Lightweight & Fast**: Small binary size with high performance
 - 🔧 **Gateway Server**: HTTP server for custom integrations
@@ -476,6 +477,82 @@ go test -v ./...
 🐸 > Run command: ls -la
 🐸 > Check the status of this git repository
 ```
+
+### Android Device Automation (ADB)
+
+Pepebot includes powerful Android automation capabilities via ADB tools and workflows.
+
+#### Prerequisites
+```bash
+# Install ADB (Android Platform Tools)
+# macOS
+brew install android-platform-tools
+
+# Linux (Debian/Ubuntu)
+sudo apt install adb
+
+# Connect device and enable USB debugging
+adb devices
+```
+
+#### Available ADB Tools
+- `adb_devices` - List connected Android devices
+- `adb_shell` - Execute shell commands on device
+- `adb_tap` - Tap screen coordinates
+- `adb_input_text` - Input text to focused field
+- `adb_screenshot` - Capture device screenshots
+- `adb_ui_dump` - Get UI hierarchy (XML)
+- `adb_swipe` - Perform swipe gestures
+
+#### Workflow System
+Create multi-step automation workflows combining ADB, web, file, and shell tools.
+
+**Available Workflow Tools:**
+- `workflow_execute` - Run saved workflows
+- `workflow_save` - Create new workflows
+- `workflow_list` - List available workflows
+
+## ⚡ 5 Test Commands (Copy & Paste Ready)
+
+### 1️⃣ Basic Device Info
+```bash
+./build/pepebot agent -m "execute quick_check workflow dengan device 001a6de80412"
+```
+**Time:** ~5s | **Output:** Device list, Android version, screenshot
+
+---
+
+### 2️⃣ Health Check
+```bash
+./build/pepebot agent -m "jalankan device_control workflow untuk device 001a6de80412 dan berikan analisis lengkap tentang kesehatan device"
+```
+**Time:** ~10s | **Output:** Battery, memory, storage, network report
+
+---
+
+### 3️⃣ Create Custom Workflow
+```bash
+./build/pepebot agent -m "buatkan workflow bernama 'app_launcher' yang: 1) cek device connected, 2) launch aplikasi chrome dengan command 'am start -n com.android.chrome/com.google.android.apps.chrome.Main', 3) tunggu 2 detik, 4) ambil screenshot. Simpan dengan workflow_save"
+```
+**Time:** ~8s | **Output:** New workflow JSON file created
+
+---
+
+### 4️⃣ Batch Screenshots
+```bash
+./build/pepebot agent -m "buat dan eksekusi workflow yang mengambil 3 screenshot dengan nama screen_1.png, screen_2.png, screen_3.png dari device 001a6de80412"
+```
+**Time:** ~15s | **Output:** 3 PNG files (4 MB each)
+
+---
+
+### 5️⃣ Monitoring & Reporting
+```bash
+./build/pepebot agent -m "buat workflow 'device_monitor' yang: 1) ambil battery level, 2) ambil memory usage, 3) ambil top 5 running processes, 4) simpan semua info ke file device_report.txt, 5) ambil screenshot sebagai bukti. Lalu execute workflow tersebut untuk device 001a6de80412"
+```
+**Time:** ~12s | **Output:** Text report + screenshot
+
+---
 
 ## 🔒 Security Notes
 
