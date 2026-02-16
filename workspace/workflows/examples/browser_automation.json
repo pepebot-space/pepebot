@@ -1,0 +1,33 @@
+{
+  "name": "Browser Research Workflow",
+  "description": "Example workflow demonstrating non-ADB automation using web search and file operations",
+  "variables": {
+    "search_topic": "Android ADB debugging tips",
+    "output_file": "research_results.txt"
+  },
+  "steps": [
+    {
+      "name": "search_web",
+      "tool": "web_search",
+      "args": {
+        "query": "{{search_topic}}"
+      }
+    },
+    {
+      "name": "analyze_results",
+      "goal": "Review the search results and identify the top 3 most relevant links. Format them as a summary."
+    },
+    {
+      "name": "save_summary",
+      "tool": "write_file",
+      "args": {
+        "path": "{{output_file}}",
+        "content": "Research Topic: {{search_topic}}\n\n{{analyze_results_goal}}\n\nCompleted at: {{timestamp}}"
+      }
+    },
+    {
+      "name": "confirm",
+      "goal": "Read the saved file and confirm the research summary was saved successfully."
+    }
+  ]
+}
