@@ -19,11 +19,20 @@ type SkillInstaller struct {
 }
 
 type AvailableSkill struct {
-	Name        string   `json:"name"`
-	Repository  string   `json:"repository"`
-	Description string   `json:"description"`
-	Author      string   `json:"author"`
-	Tags        []string `json:"tags"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Path        string                 `json:"path"`
+	Repository  string                 `json:"repository,omitempty"`
+	Author      string                 `json:"author,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type SkillsRegistry struct {
+	Version     int              `json:"version"`
+	UpdatedAt   string           `json:"updated_at"`
+	SkillsCount int              `json:"skills_count"`
+	Skills      []AvailableSkill `json:"skills"`
 }
 
 type BuiltinSkill struct {
@@ -95,7 +104,7 @@ func (si *SkillInstaller) Uninstall(skillName string) error {
 }
 
 func (si *SkillInstaller) ListAvailableSkills(ctx context.Context) ([]AvailableSkill, error) {
-	url := "https://raw.githubusercontent.com/anak10thn/pepebot-skills/main/skills.json"
+	url := "https://raw.githubusercontent.com/pepebot-space/skills/refs/heads/main/skills.json"
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -118,12 +127,12 @@ func (si *SkillInstaller) ListAvailableSkills(ctx context.Context) ([]AvailableS
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var skills []AvailableSkill
-	if err := json.Unmarshal(body, &skills); err != nil {
+	var registry SkillsRegistry
+	if err := json.Unmarshal(body, &registry); err != nil {
 		return nil, fmt.Errorf("failed to parse skills list: %w", err)
 	}
 
-	return skills, nil
+	return registry.Skills, nil
 }
 
 func (si *SkillInstaller) InstallBuiltinSkills(ctx context.Context) error {

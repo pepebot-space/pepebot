@@ -1460,13 +1460,7 @@ func skillsSearchCmd(installer *skills.SkillInstaller) {
 	for _, skill := range availableSkills {
 		fmt.Printf("  📦 %s\n", skill.Name)
 		fmt.Printf("     %s\n", skill.Description)
-		fmt.Printf("     Repo: %s\n", skill.Repository)
-		if skill.Author != "" {
-			fmt.Printf("     Author: %s\n", skill.Author)
-		}
-		if len(skill.Tags) > 0 {
-			fmt.Printf("     Tags: %v\n", skill.Tags)
-		}
+		fmt.Printf("     Install: pepebot skills install pepebot-space/skills/%s\n", skill.Path)
 		fmt.Println()
 	}
 }
