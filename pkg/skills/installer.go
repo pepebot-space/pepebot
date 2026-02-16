@@ -1,6 +1,8 @@
 package skills
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -122,6 +124,143 @@ func (si *SkillInstaller) ListAvailableSkills(ctx context.Context) ([]AvailableS
 	}
 
 	return skills, nil
+}
+
+func (si *SkillInstaller) InstallBuiltinSkills(ctx context.Context) error {
+	// Download ZIP file from GitHub
+	zipURL := "https://github.com/pepebot-space/skills-builtin/archive/refs/heads/main.zip"
+
+	fmt.Println("  Downloading skills archive...")
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "GET", zipURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download archive: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to download archive: HTTP %d", resp.StatusCode)
+	}
+
+	// Read ZIP data into memory
+	zipData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read archive: %w", err)
+	}
+
+	fmt.Println("  Extracting skills...")
+	// Open ZIP archive
+	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return fmt.Errorf("failed to open archive: %w", err)
+	}
+
+	skillsDir := filepath.Join(si.workspace, "skills")
+	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create skills directory: %w", err)
+	}
+
+	installedCount := 0
+	installedSkills := make(map[string]bool)
+
+	// Extract files from ZIP
+	for _, file := range zipReader.File {
+		// Skip the root directory (skills-builtin-main/)
+		parts := strings.Split(file.Name, "/")
+		if len(parts) < 2 {
+			continue
+		}
+
+		// Extract skill name (second part of path)
+		skillName := parts[1]
+		if skillName == "" || strings.HasPrefix(skillName, ".") {
+			continue
+		}
+
+		// Build destination path without the root directory
+		relPath := strings.Join(parts[1:], "/")
+		dstPath := filepath.Join(skillsDir, relPath)
+
+		if file.FileInfo().IsDir() {
+			os.MkdirAll(dstPath, 0755)
+			continue
+		}
+
+		// Create parent directory
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
+		}
+
+		// Extract file
+		srcFile, err := file.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open file in archive: %w", err)
+		}
+
+		dstFile, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+		if err != nil {
+			srcFile.Close()
+			return fmt.Errorf("failed to create file: %w", err)
+		}
+
+		_, err = io.Copy(dstFile, srcFile)
+		srcFile.Close()
+		dstFile.Close()
+
+		if err != nil {
+			return fmt.Errorf("failed to write file: %w", err)
+		}
+
+		// Track installed skills
+		if filepath.Base(dstPath) == "SKILL.md" && !installedSkills[skillName] {
+			installedSkills[skillName] = true
+			fmt.Printf("  ✓ Installed: %s\n", skillName)
+			installedCount++
+		}
+	}
+
+	if installedCount == 0 {
+		return fmt.Errorf("no skills found in repository")
+	}
+
+	return nil
+}
+
+func copyDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			data, err := os.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(dstPath, data, 0644); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (si *SkillInstaller) ListBuiltinSkills() []BuiltinSkill {
