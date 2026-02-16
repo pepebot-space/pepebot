@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -44,6 +45,21 @@ func NewWorkflowHelper(workspace string, registry *ToolRegistry) *WorkflowHelper
 // workflowsDir returns the workflows directory path
 func (h *WorkflowHelper) workflowsDir() string {
 	return filepath.Join(h.workspace, "workflows")
+}
+
+// listWorkflowNames returns names of all available workflow files
+func (h *WorkflowHelper) listWorkflowNames() []string {
+	entries, err := os.ReadDir(h.workflowsDir())
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			names = append(names, strings.TrimSuffix(e.Name(), ".json"))
+		}
+	}
+	return names
 }
 
 // loadWorkflow loads a workflow definition from file
@@ -110,6 +126,60 @@ func interpolateArgs(args map[string]interface{}, variables map[string]string) m
 	return result
 }
 
+// coerceArgsForTool converts string values to the types expected by the tool's parameter schema.
+// This fixes the issue where variable interpolation produces strings like "540"
+// but tools like adb_tap expect float64.
+func coerceArgsForTool(tool Tool, args map[string]interface{}) map[string]interface{} {
+	params := tool.Parameters()
+	properties, ok := params["properties"].(map[string]interface{})
+	if !ok {
+		return args
+	}
+
+	result := make(map[string]interface{})
+	for k, v := range args {
+		result[k] = v
+	}
+
+	for key, schema := range properties {
+		val, exists := result[key]
+		if !exists {
+			continue
+		}
+
+		propSchema, ok := schema.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		expectedType, _ := propSchema["type"].(string)
+		strVal, isString := val.(string)
+
+		// Convert string to number if tool expects number
+		if isString && expectedType == "number" {
+			if f, err := strconv.ParseFloat(strVal, 64); err == nil {
+				result[key] = f
+			}
+		}
+
+		// Convert string "true"/"false" to bool if tool expects boolean
+		if isString && expectedType == "boolean" {
+			if b, err := strconv.ParseBool(strVal); err == nil {
+				result[key] = b
+			}
+		}
+
+		// Convert string to integer if tool expects integer
+		if isString && expectedType == "integer" {
+			if i, err := strconv.ParseInt(strVal, 10, 64); err == nil {
+				result[key] = i
+			}
+		}
+	}
+
+	return result
+}
+
 // executeWorkflow executes a workflow with given variables
 func (h *WorkflowHelper) executeWorkflow(ctx context.Context, workflow *WorkflowDefinition, overrideVars map[string]string) (string, error) {
 	// Merge variables: workflow defaults + overrides
@@ -134,6 +204,11 @@ func (h *WorkflowHelper) executeWorkflow(ctx context.Context, workflow *Workflow
 		if step.Tool != "" {
 			// Interpolate variables in args
 			interpolatedArgs := interpolateArgs(step.Args, variables)
+
+			// Auto-coerce types (string "540" → float64 540.0) based on tool schema
+			if tool, ok := h.toolRegistry.Get(step.Tool); ok {
+				interpolatedArgs = coerceArgsForTool(tool, interpolatedArgs)
+			}
 
 			// Execute tool
 			output, err := h.toolRegistry.Execute(ctx, step.Tool, interpolatedArgs)
@@ -173,39 +248,95 @@ func (h *WorkflowHelper) executeWorkflow(ctx context.Context, workflow *Workflow
 	return strings.Join(results, "\n"), nil
 }
 
-// validateWorkflow validates workflow structure and checks for common errors
-func validateWorkflow(workflow *WorkflowDefinition) error {
+// validateWorkflow validates workflow structure and checks for common errors.
+// If registry is provided, also validates tool existence and required parameters.
+func validateWorkflow(workflow *WorkflowDefinition, registry ...*ToolRegistry) error {
 	if workflow.Name == "" {
-		return fmt.Errorf("workflow must have a name")
+		return fmt.Errorf("workflow must have a 'name' field")
 	}
 
 	if len(workflow.Steps) == 0 {
 		return fmt.Errorf("workflow must have at least one step")
 	}
 
-	// Validate each step
+	var reg *ToolRegistry
+	if len(registry) > 0 {
+		reg = registry[0]
+	}
+
+	// Collect variable names for interpolation checking
+	definedVars := make(map[string]bool)
+	for k := range workflow.Variables {
+		definedVars[k] = true
+	}
+
 	for i, step := range workflow.Steps {
 		if step.Name == "" {
-			return fmt.Errorf("step %d is missing a name", i+1)
-		}
-
-		// Tool steps must have a tool name
-		if step.Tool != "" {
-			// CRITICAL: Tool steps MUST have args field
-			if step.Args == nil {
-				return fmt.Errorf("step %d (%s) is missing required 'args' field. Tool steps MUST have 'args' field (use empty object {} if no parameters needed)", i+1, step.Name)
-			}
-		}
-
-		// Goal steps must have a goal
-		if step.Goal != "" && step.Tool != "" {
-			return fmt.Errorf("step %d (%s) has both 'tool' and 'goal' fields. Use only one per step", i+1, step.Name)
+			return fmt.Errorf("step %d: missing 'name' field", i+1)
 		}
 
 		// Step must have either tool or goal
 		if step.Tool == "" && step.Goal == "" {
-			return fmt.Errorf("step %d (%s) must have either 'tool' or 'goal' field", i+1, step.Name)
+			return fmt.Errorf("step %d (%s): must have either 'tool' or 'goal' field", i+1, step.Name)
 		}
+
+		// Can't have both tool and goal
+		if step.Goal != "" && step.Tool != "" {
+			return fmt.Errorf("step %d (%s): has both 'tool' and 'goal'. Use only one per step", i+1, step.Name)
+		}
+
+		// Tool step validation
+		if step.Tool != "" {
+			// CRITICAL: Tool steps MUST have args field
+			if step.Args == nil {
+				return fmt.Errorf("step %d (%s): missing 'args' field. Every tool step MUST include \"args\": {} (even if empty)", i+1, step.Name)
+			}
+
+			// Validate tool exists in registry
+			if reg != nil {
+				tool, exists := reg.Get(step.Tool)
+				if !exists {
+					return fmt.Errorf("step %d (%s): tool '%s' not found. Check tool name spelling", i+1, step.Name, step.Tool)
+				}
+
+				// Validate required parameters
+				params := tool.Parameters()
+				if required, ok := params["required"].([]string); ok {
+					for _, reqParam := range required {
+						if _, hasArg := step.Args[reqParam]; !hasArg {
+							// Check if arg uses variable interpolation (allow {{var}})
+							found := false
+							for _, v := range step.Args {
+								if strV, ok := v.(string); ok && strings.Contains(strV, "{{") {
+									found = true
+									break
+								}
+							}
+							if !found {
+								return fmt.Errorf("step %d (%s): tool '%s' requires parameter '%s' in args", i+1, step.Name, step.Tool, reqParam)
+							}
+						}
+					}
+				}
+
+				// Also handle required as []interface{} (JSON unmarshal default)
+				if required, ok := params["required"].([]interface{}); ok {
+					for _, r := range required {
+						reqParam, _ := r.(string)
+						if reqParam == "" {
+							continue
+						}
+						if _, hasArg := step.Args[reqParam]; !hasArg {
+							return fmt.Errorf("step %d (%s): tool '%s' requires parameter '%s' in args", i+1, step.Name, step.Tool, reqParam)
+						}
+					}
+				}
+			}
+		}
+
+		// Track step output as available variable for subsequent steps
+		definedVars[step.Name+"_output"] = true
+		definedVars[step.Name+"_goal"] = true
 	}
 
 	return nil
@@ -255,6 +386,11 @@ func (t *WorkflowExecuteTool) Execute(ctx context.Context, args map[string]inter
 	// Load workflow
 	workflow, err := t.helper.loadWorkflow(workflowName)
 	if err != nil {
+		// List available workflows to help the user
+		available := t.helper.listWorkflowNames()
+		if len(available) > 0 {
+			return "", fmt.Errorf("%w. Available workflows: %s", err, strings.Join(available, ", "))
+		}
 		return "", err
 	}
 
@@ -289,7 +425,7 @@ func (t *WorkflowSaveTool) Name() string {
 }
 
 func (t *WorkflowSaveTool) Description() string {
-	return "Create and save a workflow definition to a JSON file. CRITICAL: Every tool step MUST have an 'args' field (use empty object {} if no parameters). Workflows enable multi-step automation with any tools. Supports variable interpolation and goal-based steps."
+	return `Save a workflow JSON file. Structure: {"name":"...", "description":"...", "variables":{"key":"default"}, "steps":[{"name":"step_id", "tool":"tool_name", "args":{"param":"value"}}]}. RULES: (1) Every tool step MUST have "args" field, even if empty {}. (2) Use {{variable}} for interpolation. (3) Use "goal" instead of "tool" for LLM decision steps.`
 }
 
 func (t *WorkflowSaveTool) Parameters() map[string]interface{} {
@@ -328,12 +464,12 @@ func (t *WorkflowSaveTool) Execute(ctx context.Context, args map[string]interfac
 	// Parse workflow JSON to validate structure
 	var workflow WorkflowDefinition
 	if err := json.Unmarshal([]byte(workflowContent), &workflow); err != nil {
-		return "", fmt.Errorf("invalid workflow JSON: %w", err)
+		return "", fmt.Errorf("invalid workflow JSON: %w. Check for missing commas, brackets, or quotes", err)
 	}
 
-	// Validate workflow structure
-	if err := validateWorkflow(&workflow); err != nil {
-		return "", fmt.Errorf("workflow validation failed: %w", err)
+	// Validate workflow structure (with registry for tool/param checking)
+	if err := validateWorkflow(&workflow, t.helper.toolRegistry); err != nil {
+		return "", fmt.Errorf("validation error: %w", err)
 	}
 
 	// Save workflow
