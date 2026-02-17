@@ -34,8 +34,8 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # Copy binary
 COPY --from=builder /build/pepebot /usr/local/bin/pepebot
 
-# Copy built-in skills
-COPY skills /pepebot/skills
+# Note: Built-in skills are now fetched from GitHub during onboarding
+# Users can install them with: pepebot skills install-builtin
 
 # Set up workspace directory
 VOLUME ["/root/.pepebot"]

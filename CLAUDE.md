@@ -64,3 +64,33 @@ JSON-based multi-step automation with variable interpolation (`{{variable}}`). T
 ## Module
 
 `github.com/pepebot-space/pepebot` — Go 1.24.0, pure Go with no CGO requirements (uses `modernc.org/sqlite`).
+
+## Documentation
+
+Project documentation is organized in the following locations:
+
+- **`docs/`** - Technical documentation for features and systems
+  - `docs/workflows.md` - Complete workflow system documentation
+  - `docs/android.md` - Android-specific setup and Termux instructions
+  - Add new documentation files here for major features
+- **`CHANGELOG.md`** - Version history and release notes
+  - **IMPORTANT**: Update CHANGELOG.md when adding or removing features
+  - Follow format: `## [Version] - Date` with sections: Added, Changed, Removed, Fixed
+  - Include technical details and use cases for significant changes
+- **`README.md`** - User-facing quick start and overview
+- **`BUILD.md`** - Build instructions and CI/CD documentation
+
+### When to Update Documentation
+
+**Always update CHANGELOG.md when:**
+- Adding new features (tools, commands, integrations)
+- Removing features or deprecating functionality
+- Making breaking changes to APIs or configuration
+- Fixing significant bugs
+- Changing system behavior
+
+**Add to `docs/` when:**
+- Creating new major features that need detailed explanation
+- Writing technical guides for complex systems
+- Documenting APIs, workflows, or architecture patterns
+- Content is too detailed for README but important for developers
