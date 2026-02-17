@@ -73,19 +73,54 @@ type MaixCamConfig struct {
 }
 
 type ProvidersConfig struct {
-	MAIARouter ProviderConfig `json:"maiarouter"`
-	Anthropic  ProviderConfig `json:"anthropic"`
-	OpenAI     ProviderConfig `json:"openai"`
-	OpenRouter ProviderConfig `json:"openrouter"`
-	Groq       ProviderConfig `json:"groq"`
-	Zhipu      ProviderConfig `json:"zhipu"`
-	VLLM       ProviderConfig `json:"vllm"`
-	Gemini     ProviderConfig `json:"gemini"`
+	MAIARouter MAIARouterConfig `json:"maiarouter"`
+	Anthropic  AnthropicConfig  `json:"anthropic"`
+	OpenAI     OpenAIConfig     `json:"openai"`
+	OpenRouter OpenRouterConfig `json:"openrouter"`
+	Groq       GroqConfig       `json:"groq"`
+	Zhipu      ZhipuConfig      `json:"zhipu"`
+	VLLM       VLLMConfig       `json:"vllm"`
+	Gemini     GeminiConfig     `json:"gemini"`
 }
 
-type ProviderConfig struct {
-	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_{{.Name}}_API_KEY"`
-	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_{{.Name}}_API_BASE"`
+type MAIARouterConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_MAIAROUTER_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_MAIAROUTER_API_BASE"`
+}
+
+type AnthropicConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_ANTHROPIC_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_ANTHROPIC_API_BASE"`
+}
+
+type OpenAIConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_OPENAI_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_OPENAI_API_BASE"`
+}
+
+type OpenRouterConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_OPENROUTER_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_OPENROUTER_API_BASE"`
+}
+
+type GroqConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_GROQ_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_GROQ_API_BASE"`
+}
+
+type ZhipuConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_ZHIPU_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_ZHIPU_API_BASE"`
+}
+
+type VLLMConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_VLLM_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_VLLM_API_BASE"`
+}
+
+type GeminiConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_GEMINI_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_GEMINI_API_BASE"`
 }
 
 type GatewayConfig struct {
@@ -149,14 +184,14 @@ func DefaultConfig() *Config {
 			},
 		},
 		Providers: ProvidersConfig{
-			MAIARouter: ProviderConfig{},
-			Anthropic:  ProviderConfig{},
-			OpenAI:     ProviderConfig{},
-			OpenRouter: ProviderConfig{},
-			Groq:       ProviderConfig{},
-			Zhipu:      ProviderConfig{},
-			VLLM:       ProviderConfig{},
-			Gemini:     ProviderConfig{},
+			MAIARouter: MAIARouterConfig{},
+			Anthropic:  AnthropicConfig{},
+			OpenAI:     OpenAIConfig{},
+			OpenRouter: OpenRouterConfig{},
+			Groq:       GroqConfig{},
+			Zhipu:      ZhipuConfig{},
+			VLLM:       VLLMConfig{},
+			Gemini:     GeminiConfig{},
 		},
 		Gateway: GatewayConfig{
 			Host: "0.0.0.0",
@@ -188,11 +223,97 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// Parse PEPEBOT_* prefixed environment variables
 	if err := env.Parse(cfg); err != nil {
 		return nil, err
 	}
 
+	// Overlay native provider environment variables (higher priority)
+	overlayNativeEnvVars(cfg)
+
 	return cfg, nil
+}
+
+// overlayNativeEnvVars checks for native provider env vars and overlays them on config
+// Native vars like ANTHROPIC_API_KEY take precedence over PEPEBOT_PROVIDERS_ANTHROPIC_API_KEY
+func overlayNativeEnvVars(cfg *Config) {
+	// MAIARouter
+	if val := os.Getenv("MAIAROUTER_API_KEY"); val != "" {
+		cfg.Providers.MAIARouter.APIKey = val
+	}
+	if val := os.Getenv("MAIAROUTER_API_BASE"); val != "" {
+		cfg.Providers.MAIARouter.APIBase = val
+	}
+
+	// Anthropic
+	if val := os.Getenv("ANTHROPIC_API_KEY"); val != "" {
+		cfg.Providers.Anthropic.APIKey = val
+	}
+	if val := os.Getenv("ANTHROPIC_API_BASE"); val != "" {
+		cfg.Providers.Anthropic.APIBase = val
+	}
+
+	// OpenAI
+	if val := os.Getenv("OPENAI_API_KEY"); val != "" {
+		cfg.Providers.OpenAI.APIKey = val
+	}
+	if val := os.Getenv("OPENAI_API_BASE"); val != "" {
+		cfg.Providers.OpenAI.APIBase = val
+	}
+
+	// OpenRouter
+	if val := os.Getenv("OPENROUTER_API_KEY"); val != "" {
+		cfg.Providers.OpenRouter.APIKey = val
+	}
+	if val := os.Getenv("OPENROUTER_API_BASE"); val != "" {
+		cfg.Providers.OpenRouter.APIBase = val
+	}
+
+	// Groq
+	if val := os.Getenv("GROQ_API_KEY"); val != "" {
+		cfg.Providers.Groq.APIKey = val
+	}
+	if val := os.Getenv("GROQ_API_BASE"); val != "" {
+		cfg.Providers.Groq.APIBase = val
+	}
+
+	// Zhipu
+	if val := os.Getenv("ZHIPU_API_KEY"); val != "" {
+		cfg.Providers.Zhipu.APIKey = val
+	}
+	if val := os.Getenv("ZHIPU_API_BASE"); val != "" {
+		cfg.Providers.Zhipu.APIBase = val
+	}
+
+	// VLLM
+	if val := os.Getenv("VLLM_API_KEY"); val != "" {
+		cfg.Providers.VLLM.APIKey = val
+	}
+	if val := os.Getenv("VLLM_API_BASE"); val != "" {
+		cfg.Providers.VLLM.APIBase = val
+	}
+
+	// Gemini (check multiple names)
+	if val := os.Getenv("GEMINI_API_KEY"); val != "" {
+		cfg.Providers.Gemini.APIKey = val
+	} else if val := os.Getenv("GOOGLE_API_KEY"); val != "" {
+		cfg.Providers.Gemini.APIKey = val
+	}
+	if val := os.Getenv("GEMINI_API_BASE"); val != "" {
+		cfg.Providers.Gemini.APIBase = val
+	}
+
+	// Channels - Telegram
+	if val := os.Getenv("TELEGRAM_BOT_TOKEN"); val != "" {
+		cfg.Channels.Telegram.Token = val
+	}
+
+	// Channels - Discord
+	if val := os.Getenv("DISCORD_BOT_TOKEN"); val != "" {
+		cfg.Channels.Discord.Token = val
+	} else if val := os.Getenv("DISCORD_TOKEN"); val != "" {
+		cfg.Channels.Discord.Token = val
+	}
 }
 
 func SaveConfig(path string, cfg *Config) error {
@@ -284,4 +405,95 @@ func expandHome(path string) string {
 		return home
 	}
 	return path
+}
+
+// GetProviderEnvKey checks for existing provider API key in environment
+// Returns the key value and the env var name that was found
+func GetProviderEnvKey(provider string) (string, string) {
+	var envVars []string
+
+	switch provider {
+	case "maiarouter":
+		envVars = []string{"PEPEBOT_PROVIDERS_MAIAROUTER_API_KEY", "MAIAROUTER_API_KEY"}
+	case "anthropic":
+		envVars = []string{"PEPEBOT_PROVIDERS_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"}
+	case "openai":
+		envVars = []string{"PEPEBOT_PROVIDERS_OPENAI_API_KEY", "OPENAI_API_KEY"}
+	case "openrouter":
+		envVars = []string{"PEPEBOT_PROVIDERS_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"}
+	case "groq":
+		envVars = []string{"PEPEBOT_PROVIDERS_GROQ_API_KEY", "GROQ_API_KEY"}
+	case "zhipu":
+		envVars = []string{"PEPEBOT_PROVIDERS_ZHIPU_API_KEY", "ZHIPU_API_KEY"}
+	case "gemini":
+		envVars = []string{"PEPEBOT_PROVIDERS_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"}
+	case "vllm":
+		envVars = []string{"PEPEBOT_PROVIDERS_VLLM_API_KEY", "VLLM_API_KEY"}
+	default:
+		return "", ""
+	}
+
+	for _, envVar := range envVars {
+		if val := os.Getenv(envVar); val != "" {
+			return val, envVar
+		}
+	}
+
+	return "", ""
+}
+
+// GetProviderEnvBase checks for existing provider API base URL in environment
+func GetProviderEnvBase(provider string) (string, string) {
+	var envVars []string
+
+	switch provider {
+	case "maiarouter":
+		envVars = []string{"PEPEBOT_PROVIDERS_MAIAROUTER_API_BASE", "MAIAROUTER_API_BASE"}
+	case "anthropic":
+		envVars = []string{"PEPEBOT_PROVIDERS_ANTHROPIC_API_BASE", "ANTHROPIC_API_BASE"}
+	case "openai":
+		envVars = []string{"PEPEBOT_PROVIDERS_OPENAI_API_BASE", "OPENAI_API_BASE"}
+	case "openrouter":
+		envVars = []string{"PEPEBOT_PROVIDERS_OPENROUTER_API_BASE", "OPENROUTER_API_BASE"}
+	case "groq":
+		envVars = []string{"PEPEBOT_PROVIDERS_GROQ_API_BASE", "GROQ_API_BASE"}
+	case "zhipu":
+		envVars = []string{"PEPEBOT_PROVIDERS_ZHIPU_API_BASE", "ZHIPU_API_BASE"}
+	case "gemini":
+		envVars = []string{"PEPEBOT_PROVIDERS_GEMINI_API_BASE", "GEMINI_API_BASE"}
+	case "vllm":
+		envVars = []string{"PEPEBOT_PROVIDERS_VLLM_API_BASE", "VLLM_API_BASE"}
+	default:
+		return "", ""
+	}
+
+	for _, envVar := range envVars {
+		if val := os.Getenv(envVar); val != "" {
+			return val, envVar
+		}
+	}
+
+	return "", ""
+}
+
+// GetChannelEnvToken checks for existing channel token in environment
+func GetChannelEnvToken(channel string) (string, string) {
+	var envVars []string
+
+	switch channel {
+	case "telegram":
+		envVars = []string{"PEPEBOT_CHANNELS_TELEGRAM_TOKEN", "TELEGRAM_BOT_TOKEN"}
+	case "discord":
+		envVars = []string{"PEPEBOT_CHANNELS_DISCORD_TOKEN", "DISCORD_BOT_TOKEN", "DISCORD_TOKEN"}
+	default:
+		return "", ""
+	}
+
+	for _, envVar := range envVars {
+		if val := os.Getenv(envVar); val != "" {
+			return val, envVar
+		}
+	}
+
+	return "", ""
 }

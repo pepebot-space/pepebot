@@ -154,7 +154,7 @@ Supported platforms:
 - Linux (x86_64, ARM64, RISC-V)
 - macOS (x86_64, ARM64)
 - Windows (x86_64)
-- **Android (ARM64)** 📱 - See [ANDROID.md](ANDROID.md) for Termux setup
+- **Android (ARM64)** 📱 - See [Android Setup Guide](./docs/android.md) for Termux setup
 
 ### Build for Android
 
@@ -163,7 +163,7 @@ Supported platforms:
 make build-android
 ```
 
-For detailed Android setup instructions, see **[ANDROID.md](ANDROID.md)**.
+For detailed Android setup instructions, see **[Android Setup Guide](./docs/android.md)**.
 
 ## ⚙️ Configuration
 
@@ -419,16 +419,57 @@ sudo systemctl start pepebot
 
 ### Environment Variables
 
+Pepebot supports configuration via environment variables. You can use either `PEPEBOT_*` prefixed variables or native provider-specific variables.
+
+#### Agent Configuration
 ```bash
-# Set model manually
-export PEPEBOT_MODEL="claude-3-5-sonnet-20241022"
-
-# Set workspace directory
-export PEPEBOT_WORKSPACE="~/my-workspace"
-
-# Set config path
-export PEPEBOT_CONFIG="~/my-config.json"
+export PEPEBOT_AGENTS_DEFAULTS_MODEL="claude-3-5-sonnet-20241022"
+export PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS=8192
+export PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE=0.7
+export PEPEBOT_AGENTS_DEFAULTS_WORKSPACE="~/my-workspace"
 ```
+
+#### Provider API Keys (Multiple Formats Supported)
+```bash
+# Option 1: PEPEBOT_* prefix (recommended for Docker)
+export PEPEBOT_PROVIDERS_ANTHROPIC_API_KEY="sk-ant-xxx"
+export PEPEBOT_PROVIDERS_OPENAI_API_KEY="sk-xxx"
+export PEPEBOT_PROVIDERS_GROQ_API_KEY="gsk_xxx"
+export PEPEBOT_PROVIDERS_GEMINI_API_KEY="xxx"
+
+# Option 2: Native provider variables (detected automatically)
+export ANTHROPIC_API_KEY="sk-ant-xxx"
+export OPENAI_API_KEY="sk-xxx"
+export GROQ_API_KEY="gsk_xxx"
+export GEMINI_API_KEY="xxx"
+export GOOGLE_API_KEY="xxx"  # Alternative for Gemini
+```
+
+#### Channel Tokens
+```bash
+# Option 1: PEPEBOT_* prefix
+export PEPEBOT_CHANNELS_TELEGRAM_ENABLED=true
+export PEPEBOT_CHANNELS_TELEGRAM_TOKEN="123456:ABC-DEF..."
+
+# Option 2: Native bot token variables
+export TELEGRAM_BOT_TOKEN="123456:ABC-DEF..."
+export DISCORD_BOT_TOKEN="MTk4NjIy..."
+```
+
+#### Tools Configuration
+```bash
+export PEPEBOT_TOOLS_WEB_SEARCH_API_KEY="your-brave-api-key"
+```
+
+#### Gateway Configuration
+```bash
+export PEPEBOT_GATEWAY_HOST="0.0.0.0"
+export PEPEBOT_GATEWAY_PORT=18790
+```
+
+**Note:** During onboarding, Pepebot automatically detects existing environment variables and asks if you want to use them. This makes it easy to integrate with existing CI/CD pipelines or development environments.
+
+For a complete list of all supported environment variables, see [`.env.example`](./.env.example).
 
 ## 🎯 Skills
 
@@ -604,6 +645,16 @@ Create multi-step automation workflows combining ADB, web, file, and shell tools
 - `workflow_execute` - Run saved workflows
 - `workflow_save` - Create new workflows
 - `workflow_list` - List available workflows
+
+## 📚 Documentation
+
+For comprehensive guides and technical documentation, visit our [documentation hub](./docs/README.md):
+
+- **[Installation Guide](./docs/install.md)** - Complete installation instructions for all platforms
+- **[Workflow System](./docs/workflows.md)** - Multi-step automation framework documentation
+- **[API Documentation](./docs/api.md)** - REST API and integration interfaces
+- **[Android Setup](./docs/android.md)** - Android-specific setup and Termux instructions
+- **[Build Guide](./BUILD.md)** - Build instructions and CI/CD documentation
 
 ## ⚡ 5 Test Commands (Copy & Paste Ready)
 

@@ -787,7 +787,7 @@ For more information:
 - [README](../README.md) - Overview and features
 - [Configuration Guide](../README.md#configuration) - Detailed configuration
 - [Workflow Documentation](./workflows.md) - Automation workflows
-- [Android Setup](../ANDROID.md) - Android/Termux installation
+- [Android Setup](./android.md) - Android/Termux installation
 
 ---
 

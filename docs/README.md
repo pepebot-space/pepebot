@@ -45,6 +45,50 @@ Complete guide to creating and using workflows for task automation:
 
 ---
 
+### [API Documentation](./api.md)
+**REST API and integration interfaces**
+
+Complete API reference for integrating with Pepebot:
+- Gateway REST API endpoints
+- Tool API for custom tools
+- Provider API for LLM integrations
+- Channel API for chat platforms
+- Message Bus and Session API
+- Code examples in Python, JavaScript, Go, and cURL
+
+**Topics covered:**
+- Gateway endpoints (/health, /message, /workflow, /sessions)
+- Tool development interface with examples
+- Provider integration for custom LLMs
+- Channel integration for messaging platforms
+- Internal message bus pub/sub system
+- Session management API
+- Authentication and security
+- Configuration via environment variables
+
+---
+
+### [Android Setup Guide](./android.md)
+**Android-specific installation and Termux instructions**
+
+Complete guide for running Pepebot on Android devices:
+- Termux installation and setup
+- Android-specific configuration
+- Termux:API integration
+- Mobile optimization tips
+- Troubleshooting Android issues
+
+**Topics covered:**
+- Termux app installation
+- Package installation (Go, ADB tools)
+- Building Pepebot on Android
+- Running as background service
+- Device automation setup
+- Performance considerations
+- Common Android-specific issues
+
+---
+
 ## 📖 Additional Resources
 
 ### Root Directory Documentation
@@ -54,7 +98,7 @@ These important documents are located in the project root:
 - **[README.md](../README.md)** - Project overview, quick start, and basic usage
 - **[CHANGELOG.md](../CHANGELOG.md)** - Version history and release notes
 - **[BUILD.md](../BUILD.md)** - Build instructions and CI/CD documentation
-- **[ANDROID.md](../ANDROID.md)** - Android-specific setup and Termux instructions
+- **[android.md](./android.md)** - Android-specific setup and Termux instructions
 - **[CLAUDE.md](../CLAUDE.md)** - Guidelines for AI assistants working with this codebase
 
 ### Configuration
@@ -82,7 +126,7 @@ These important documents are located in the project root:
 1. [Create Workflows](./workflows.md#workflow-structure)
 2. [Install Skills](../README.md#skills-management)
 3. [Setup Multi-Agent](../README.md#multi-agent-system)
-4. [Android Automation](../ANDROID.md)
+4. [Android Automation](./android.md)
 
 ### Development
 1. [Build from Source](./install.md#build-from-source)
@@ -130,7 +174,7 @@ We welcome contributions to improve our documentation!
   - README.md - Overview and quick start
   - CHANGELOG.md - Version history
   - BUILD.md - Build and deployment
-  - ANDROID.md - Platform-specific guides
+  - android.md - Platform-specific guides
 
 ### When to Add New Documentation
 

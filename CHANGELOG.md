@@ -43,10 +43,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Displays skill name, description, and install command
   - Shows 4+ community skills: browser-use, claude-code, home-assistant, opencode
 
-- **Documentation**: Comprehensive workflow guide
-  - `workspace/workflows/README.md`: Complete workflow documentation
-  - Usage examples, best practices, troubleshooting guide
-  - Common patterns and workflow design guidelines
+- **Environment Variable Configuration**: Native provider env var support
+  - Support for both PEPEBOT_* prefixed and native provider variables
+  - Auto-detect existing environment variables during onboarding
+  - Provider API keys: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `OPENROUTER_API_KEY`, etc.
+  - Channel tokens: `TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, `DISCORD_TOKEN`
+  - Onboarding wizard now checks for existing env vars and asks user to confirm usage
+  - Masked display of API keys for security (shows first 8 + last 4 chars)
+  - Comprehensive `.env.example` with all supported variables and documentation
+  - Docker Compose integration with `env_file` support
+  - Helper functions: `GetProviderEnvKey()`, `GetProviderEnvBase()`, `GetChannelEnvToken()`
+
+- **Documentation**: Comprehensive documentation system
+  - `docs/workflows.md`: Complete workflow system documentation (~500 lines)
+    - Tool reference for all 20+ workflow tools
+    - Real-world examples (UI automation, device health, browser research)
+    - Best practices, advanced patterns, and troubleshooting
+  - `docs/install.md`: Complete installation guide (~400 lines)
+    - Package managers (Homebrew, Nix, Docker)
+    - Manual installation and build from source
+    - Service setup (systemd, launchd, rc.d)
+    - Platform-specific instructions and troubleshooting
+  - `docs/api.md`: REST API and integration reference (~600 lines)
+    - Gateway API endpoints (/health, /message, /workflow, /sessions)
+    - Tool API for custom tool development
+    - Provider API for LLM integrations
+    - Channel API for messaging platform integrations
+    - Message Bus and Session API documentation
+    - Code examples in Python, JavaScript, Go, and cURL
+  - `docs/README.md`: Documentation hub with navigation
+  - `docs/HOMEBREW_SETUP_GUIDE.md`: Complete Homebrew tap setup guide
+  - `install.sh`: Automated installer with service setup
+    - Auto-detect OS and architecture (9 architectures supported)
+    - Optional systemd (Linux) or launchd (macOS) setup
+    - PATH configuration and verification
+  - `default.nix`: Nix package definition
+  - `pepebot.rb`: Homebrew formula with multi-platform support
   - `CLAUDE.md`: Project architecture guide for AI assistants
 
 ### Changed
@@ -56,6 +88,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Default choice is Yes (user just presses Enter)
   - Skip message shows command to install later
   - Quick Start section conditionally shows install command only if skipped
+  - Step 2: Now checks for existing provider environment variables
+  - Step 3: Now checks for existing channel token environment variables
+  - Interactive confirmation for using detected env vars with masked display
 - **Skills Commands**: Streamlined skill management
   - Removed `pepebot skills list-builtin` command (redundant)
   - `install-builtin` now fetches from GitHub instead of local copy
@@ -81,12 +116,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Refactored `skillsInstallBuiltinCmd()` to use GitHub ZIP download
   - Removed `skillsListBuiltinCmd()` and related case statement
   - Updated `skillsHelp()` to remove list-builtin references
+  - Enhanced Step 2 (API Key) to check and use existing provider env vars
+  - Enhanced Step 3 (Channels) to check and use existing channel token env vars
+  - Added masked display for sensitive values (API keys, tokens)
 - Modified `pkg/skills/installer.go`:
   - Added `InstallBuiltinSkills()` method with ZIP download and extraction
   - Updated registry URL to `pepebot-space/skills`
   - Added `SkillsRegistry` struct for new JSON format
   - Added `copyDir()` helper function for recursive directory copying
   - Removed git clone dependency
+- Modified `pkg/config/config.go`:
+  - Split `ProviderConfig` into provider-specific types (8 types)
+  - Each provider config now has explicit env tags supporting multiple formats
+  - Added support for both `PEPEBOT_*` and native provider env vars
+  - Added `GetProviderEnvKey()` to check for existing provider API keys
+  - Added `GetProviderEnvBase()` to check for existing provider API base URLs
+  - Added `GetChannelEnvToken()` to check for existing channel tokens
+- Updated `.env.example`: Comprehensive environment variable documentation
+- Updated `docker-compose.yml`: Added `env_file` support and all provider/channel variables
 - Workflow tools always registered (no dependencies)
 - ADB tools conditionally registered (only if ADB binary found)
 - Follows existing pepebot patterns: command execution timeouts, path resolution, error handling
@@ -246,7 +293,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated documentation to reflect ARM64-only support
 
 ### Changed
-- **Documentation**: Updated README.md and ANDROID.md
+- **Documentation**: Updated README.md and docs/android.md
   - Simplified installation instructions for Android
   - Removed x86_64 download sections
   - Streamlined architecture detection steps
@@ -293,7 +340,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARM64 binary for modern Android devices (Android 5.0+)
   - x86_64 binary for Android emulators and x86 tablets
   - Automated GitHub Actions builds for Android
-  - Comprehensive Android setup documentation (ANDROID.md)
+  - Comprehensive Android setup documentation (docs/android.md)
   - Performance optimizations for mobile devices
 - **Termux API Skill**: Complete Android device control integration
   - 30+ Termux API commands for hardware and system access

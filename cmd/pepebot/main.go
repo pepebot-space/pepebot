@@ -310,32 +310,95 @@ func onboard() {
 	if selectedProvider != "" {
 		fmt.Println("\nStep 2/5: API Key")
 		fmt.Println("──────────────────────────────────")
-		fmt.Print("Enter your API key (or press Enter to skip): ")
-		apiKey, _ := reader.ReadString('\n')
-		apiKey = strings.TrimSpace(apiKey)
+
+		// Check for existing environment variable
+		envKey, envVarName := config.GetProviderEnvKey(selectedProvider)
+		envBase, envBaseName := config.GetProviderEnvBase(selectedProvider)
+
+		var apiKey string
+		var apiBase string
+
+		if envKey != "" {
+			// Mask the key for display (show first 8 chars)
+			maskedKey := envKey
+			if len(envKey) > 8 {
+				maskedKey = envKey[:8] + "..." + envKey[len(envKey)-4:]
+			}
+			fmt.Printf("✓ Found API key in environment: %s=%s\n", envVarName, maskedKey)
+			fmt.Print("Use this API key? (Y/n): ")
+			useEnvKey, _ := reader.ReadString('\n')
+			useEnvKey = strings.ToLower(strings.TrimSpace(useEnvKey))
+
+			if useEnvKey != "n" && useEnvKey != "no" {
+				apiKey = envKey
+				fmt.Println("✓ Using environment variable for API key")
+			} else {
+				fmt.Print("Enter your API key: ")
+				apiKey, _ = reader.ReadString('\n')
+				apiKey = strings.TrimSpace(apiKey)
+			}
+
+			// Check for API base URL
+			if envBase != "" {
+				fmt.Printf("✓ Found API base in environment: %s=%s\n", envBaseName, envBase)
+				fmt.Print("Use this API base? (Y/n): ")
+				useEnvBase, _ := reader.ReadString('\n')
+				useEnvBase = strings.ToLower(strings.TrimSpace(useEnvBase))
+
+				if useEnvBase != "n" && useEnvBase != "no" {
+					apiBase = envBase
+				}
+			}
+		} else {
+			fmt.Print("Enter your API key (or press Enter to skip): ")
+			apiKey, _ = reader.ReadString('\n')
+			apiKey = strings.TrimSpace(apiKey)
+		}
 
 		if apiKey != "" {
 			switch selectedProvider {
 			case "maiarouter":
 				cfg.Providers.MAIARouter.APIKey = apiKey
-				cfg.Providers.MAIARouter.APIBase = "https://api.maiarouter.ai/v1"
+				if apiBase != "" {
+					cfg.Providers.MAIARouter.APIBase = apiBase
+				} else {
+					cfg.Providers.MAIARouter.APIBase = "https://api.maiarouter.ai/v1"
+				}
 			case "anthropic":
 				cfg.Providers.Anthropic.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Anthropic.APIBase = apiBase
+				}
 			case "openai":
 				cfg.Providers.OpenAI.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.OpenAI.APIBase = apiBase
+				}
 			case "openrouter":
 				cfg.Providers.OpenRouter.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.OpenRouter.APIBase = apiBase
+				}
 			case "gemini":
 				cfg.Providers.Gemini.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Gemini.APIBase = apiBase
+				}
 			case "groq":
 				cfg.Providers.Groq.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Groq.APIBase = apiBase
+				}
 			case "zhipu":
 				cfg.Providers.Zhipu.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Zhipu.APIBase = apiBase
+				}
 			}
 			cfg.Agents.Defaults.Model = defaultModel
 			fmt.Println("✓ API key configured")
 		} else {
-			fmt.Println("⊙ Skipped API key (you can add it later in config.json)")
+			fmt.Println("⊙ Skipped API key (you can add it later in config.json or environment)")
 		}
 	} else {
 		fmt.Println("\nStep 2/5: API Key")
@@ -353,9 +416,34 @@ func onboard() {
 	channelChoice = strings.ToLower(strings.TrimSpace(channelChoice))
 
 	if channelChoice == "t" {
-		fmt.Print("\nTelegram Bot Token: ")
-		token, _ := reader.ReadString('\n')
-		token = strings.TrimSpace(token)
+		// Check for existing Telegram token in environment
+		envToken, envVarName := config.GetChannelEnvToken("telegram")
+		var token string
+
+		if envToken != "" {
+			maskedToken := envToken
+			if len(envToken) > 12 {
+				maskedToken = envToken[:8] + "..." + envToken[len(envToken)-4:]
+			}
+			fmt.Printf("\n✓ Found Telegram token in environment: %s=%s\n", envVarName, maskedToken)
+			fmt.Print("Use this token? (Y/n): ")
+			useEnvToken, _ := reader.ReadString('\n')
+			useEnvToken = strings.ToLower(strings.TrimSpace(useEnvToken))
+
+			if useEnvToken != "n" && useEnvToken != "no" {
+				token = envToken
+				fmt.Println("✓ Using environment variable for token")
+			} else {
+				fmt.Print("Enter Telegram Bot Token: ")
+				token, _ = reader.ReadString('\n')
+				token = strings.TrimSpace(token)
+			}
+		} else {
+			fmt.Print("\nTelegram Bot Token: ")
+			token, _ = reader.ReadString('\n')
+			token = strings.TrimSpace(token)
+		}
+
 		if token != "" {
 			cfg.Channels.Telegram.Enabled = true
 			cfg.Channels.Telegram.Token = token
@@ -363,9 +451,34 @@ func onboard() {
 			fmt.Println("  Note: Use /status in Telegram to check bot status")
 		}
 	} else if channelChoice == "d" {
-		fmt.Print("\nDiscord Bot Token: ")
-		token, _ := reader.ReadString('\n')
-		token = strings.TrimSpace(token)
+		// Check for existing Discord token in environment
+		envToken, envVarName := config.GetChannelEnvToken("discord")
+		var token string
+
+		if envToken != "" {
+			maskedToken := envToken
+			if len(envToken) > 12 {
+				maskedToken = envToken[:8] + "..." + envToken[len(envToken)-4:]
+			}
+			fmt.Printf("\n✓ Found Discord token in environment: %s=%s\n", envVarName, maskedToken)
+			fmt.Print("Use this token? (Y/n): ")
+			useEnvToken, _ := reader.ReadString('\n')
+			useEnvToken = strings.ToLower(strings.TrimSpace(useEnvToken))
+
+			if useEnvToken != "n" && useEnvToken != "no" {
+				token = envToken
+				fmt.Println("✓ Using environment variable for token")
+			} else {
+				fmt.Print("Enter Discord Bot Token: ")
+				token, _ = reader.ReadString('\n')
+				token = strings.TrimSpace(token)
+			}
+		} else {
+			fmt.Print("\nDiscord Bot Token: ")
+			token, _ = reader.ReadString('\n')
+			token = strings.TrimSpace(token)
+		}
+
 		if token != "" {
 			cfg.Channels.Discord.Enabled = true
 			cfg.Channels.Discord.Token = token
