@@ -89,8 +89,11 @@ check_dependencies() {
 }
 
 get_latest_version() {
-    print_info "Fetching latest release version..."
-    local version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    # Print to stderr so it doesn't pollute command substitution output
+    print_info "Fetching latest release version..." >&2
+    local version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+        | grep '"tag_name"' \
+        | sed -E 's/.*"([^"]+)".*/\1/')
 
     if [ -z "$version" ]; then
         print_error "Failed to fetch latest version"
