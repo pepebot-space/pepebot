@@ -93,6 +93,8 @@ environment.systemPackages = with pkgs; [
 
 #### Docker
 
+Production-ready Docker image with **cron daemon**, **tmux**, and **systemctl replacement** for service management.
+
 ```bash
 # Pull image
 docker pull ghcr.io/pepebot-space/pepebot:latest
@@ -102,56 +104,55 @@ docker run -it --rm \
   -v ~/.pepebot:/root/.pepebot \
   ghcr.io/pepebot-space/pepebot:latest onboard
 
-# Run as daemon (gateway mode)
+# Run as daemon (gateway mode with cron)
 docker run -d \
   --name pepebot \
   -v ~/.pepebot:/root/.pepebot \
   -p 18790:18790 \
   ghcr.io/pepebot-space/pepebot:latest gateway
 
-# Using Docker Compose
+# Using Docker Compose (Recommended)
 curl -O https://raw.githubusercontent.com/pepebot-space/pepebot/main/docker-compose.yml
 docker-compose up -d
 ```
 
+**What's included:**
+- ⏰ Cron daemon (auto-started with gateway)
+- 🖥️ Tmux for session management
+- 🔧 Systemctl replacement for service control
+- 🐧 Ubuntu 24.04 LTS base
+
+For detailed Docker/Podman deployment with cron jobs and tmux, see **[Docker Deployment Guide](./docker/README.md)**.
+
 #### Podman (with Persistent Storage)
 
-Create a persistent volume:
+Same production features as Docker (cron, tmux, systemctl). Perfect for rootless containers!
 
 ```bash
+# Create volume
 podman volume create pepebot-data
-```
 
-Run interactively:
-
-```bash
+# Run interactively
 podman run -it --name pepebot \
   -v pepebot-data:/root/.pepebot \
   ghcr.io/pepebot-space/pepebot:latest onboard
-```
 
-Run as background gateway service:
-
-```bash
+# Run as background service (with cron)
 podman run -d --name pepebot \
   --restart=always \
   -v pepebot-data:/root/.pepebot \
   -p 18790:18790 \
   ghcr.io/pepebot-space/pepebot:latest gateway
-```
 
-Alternatively, use a bind mount:
-
-```bash
+# Or use bind mount
 mkdir -p ./pepebot-data
-
 podman run -d --name pepebot \
   -v $(pwd)/pepebot-data:/root/.pepebot \
   -p 18790:18790 \
   ghcr.io/pepebot-space/pepebot:latest gateway
 ```
 
-All configuration, sessions, skills, and workflows are stored in `/root/.pepebot` and will persist across restarts.
+All configuration, sessions, skills, and workflows persist in `/root/.pepebot`. See **[Docker Deployment Guide](./docker/README.md)** for cron setup.
 
 ### Manual Installation
 
