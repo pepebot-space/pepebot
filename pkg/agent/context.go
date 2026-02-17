@@ -1,11 +1,14 @@
 package agent
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/skills"
 )
@@ -45,8 +48,8 @@ You are pepebot, a helpful AI assistant. You have access to tools that allow you
 - Execute shell commands
 - Search the web and fetch web pages
 - Send messages to users on chat channels
-- Send images to chat channels (Discord, Telegram, etc.)
-- View and analyze images sent by users
+- Send files to chat channels (images, PDFs, documents, audio, video) - use send_file or send_image tools
+- View and analyze files sent by users (images, documents, PDFs, audio, video)
 - Spawn subagents for complex background tasks
 
 ## Current Time
@@ -209,7 +212,43 @@ func (cb *ContextBuilder) loadSkills() string {
 	return "# Skill Definitions\n\n" + content
 }
 
-// buildUserMessage creates a user message with optional media attachments for vision support
+// convertFileToDataURL converts a local file path to a base64 data URL
+// Returns the original URL if it's already an HTTP/HTTPS URL
+func convertFileToDataURL(filePath string) string {
+	// If it's already a URL, return as-is
+	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+		return filePath
+	}
+
+	// Read the file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		logger.ErrorCF("agent", "Failed to read media file for base64 encoding", map[string]interface{}{
+			"path":  filePath,
+			"error": err.Error(),
+		})
+		return filePath // Return original path as fallback
+	}
+
+	// Detect MIME type
+	_, mimeType := providers.DetectFileType(filePath)
+
+	// Encode to base64
+	base64Data := base64.StdEncoding.EncodeToString(data)
+
+	// Create data URL
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Data)
+
+	logger.DebugCF("agent", "Converted local file to base64 data URL", map[string]interface{}{
+		"path":      filePath,
+		"mime_type": mimeType,
+		"size":      len(data),
+	})
+
+	return dataURL
+}
+
+// buildUserMessage creates a user message with optional media attachments for multimodal support
 func (cb *ContextBuilder) buildUserMessage(text string, media []string) providers.Message {
 	// If no media, return simple text message
 	if len(media) == 0 {
@@ -219,7 +258,7 @@ func (cb *ContextBuilder) buildUserMessage(text string, media []string) provider
 		}
 	}
 
-	// Build multimodal content with text and images
+	// Build multimodal content with text and files (images, documents, audio, video)
 	content := []providers.ContentBlock{}
 
 	// Add text if present
@@ -230,15 +269,34 @@ func (cb *ContextBuilder) buildUserMessage(text string, media []string) provider
 		})
 	}
 
-	// Add images
+	// Add media files with automatic type detection
 	for _, mediaURL := range media {
-		content = append(content, providers.ContentBlock{
-			Type: "image_url",
-			ImageURL: &providers.ImageURL{
-				URL:    mediaURL,
-				Detail: "auto", // Let the model decide the detail level
-			},
-		})
+		// Convert local file paths to base64 data URLs for LLM providers
+		processedURL := convertFileToDataURL(mediaURL)
+
+		fileType, _ := providers.DetectFileType(mediaURL)
+
+		switch fileType {
+		case providers.FileTypeImage:
+			// Images use image_url format
+			content = append(content, providers.ContentBlock{
+				Type: "image_url",
+				ImageURL: &providers.ImageURL{
+					URL:    processedURL,
+					Detail: "auto", // Let the model decide the detail level
+				},
+			})
+		default:
+			// All other file types (documents, audio, video) use file format
+			// Format: { "type": "file", "file": { "file_data": "data:mime/type;base64,..." } }
+			// Reference: https://developers.openai.com/api/docs/guides/pdf-files
+			content = append(content, providers.ContentBlock{
+				Type: "file",
+				File: &providers.FileData{
+					FileData: processedURL, // Already in data URL format from convertFileToDataURL
+				},
+			})
+		}
 	}
 
 	return providers.Message{

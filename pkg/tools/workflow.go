@@ -12,10 +12,10 @@ import (
 
 // WorkflowDefinition represents a workflow JSON structure
 type WorkflowDefinition struct {
-	Name        string                   `json:"name"`
-	Description string                   `json:"description"`
-	Variables   map[string]string        `json:"variables,omitempty"`
-	Steps       []WorkflowStep           `json:"steps"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Variables   map[string]string `json:"variables,omitempty"`
+	Steps       []WorkflowStep    `json:"steps"`
 }
 
 // WorkflowStep represents a single step in a workflow

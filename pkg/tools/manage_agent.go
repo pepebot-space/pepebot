@@ -16,8 +16,8 @@ type ManageAgentTool struct {
 }
 
 type agentRegistry struct {
-	Version string                        `json:"version"`
-	Agents  map[string]*agentDefinition   `json:"agents"`
+	Version string                      `json:"version"`
+	Agents  map[string]*agentDefinition `json:"agents"`
 }
 
 type agentDefinition struct {

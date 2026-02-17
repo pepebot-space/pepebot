@@ -78,17 +78,32 @@ Project documentation is organized in the following locations:
   - **IMPORTANT**: Update CHANGELOG.md when adding or removing features
   - Follow format: `## [Version] - Date` with sections: Added, Changed, Removed, Fixed
   - Include technical details and use cases for significant changes
+  - **CRITICAL**: When updating CHANGELOG.md, also update RELEASE.md (see below)
+- **`RELEASE.md`** - GitHub release notes (user-facing)
+  - **IMPORTANT**: Update RELEASE.md whenever CHANGELOG.md is updated
+  - Used by GitHub Actions to generate release notes when tags are pushed
+  - Format: Marketing-friendly summary of changes with emojis and highlights
+  - Include: What's New, Installation, Quick Start, Links
+  - Target audience: End users, not developers
 - **`README.md`** - User-facing quick start and overview
 - **`BUILD.md`** - Build instructions and CI/CD documentation
 
 ### When to Update Documentation
 
-**Always update CHANGELOG.md when:**
+**Always update CHANGELOG.md AND RELEASE.md when:**
 - Adding new features (tools, commands, integrations)
 - Removing features or deprecating functionality
 - Making breaking changes to APIs or configuration
 - Fixing significant bugs
 - Changing system behavior
+- Preparing a new release version
+
+**Workflow for Release Documentation:**
+1. Update CHANGELOG.md with technical details (developer-focused)
+2. Update RELEASE.md with user-friendly highlights (user-focused)
+3. Ensure both files have the same version number and date
+4. RELEASE.md should be more concise and marketing-oriented
+5. CHANGELOG.md should be comprehensive and technical
 
 **Add to `docs/` when:**
 - Creating new major features that need detailed explanation
