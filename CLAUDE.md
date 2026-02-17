@@ -70,8 +70,9 @@ JSON-based multi-step automation with variable interpolation (`{{variable}}`). T
 Project documentation is organized in the following locations:
 
 - **`docs/`** - Technical documentation for features and systems
+  - `docs/README.md` - Documentation index with navigation guide
+  - `docs/install.md` - Complete installation guide for all platforms
   - `docs/workflows.md` - Complete workflow system documentation
-  - `docs/android.md` - Android-specific setup and Termux instructions
   - Add new documentation files here for major features
 - **`CHANGELOG.md`** - Version history and release notes
   - **IMPORTANT**: Update CHANGELOG.md when adding or removing features

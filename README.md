@@ -31,12 +31,50 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 
 ## 📦 Installation
 
-### Prerequisites
+### Quick Install (Recommended)
 
-- Go 1.21 or higher
-- Git
+Install the latest release with our automated installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.sh | bash
+```
+
+Or download and inspect first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
+
+**What it does:**
+- Detects your OS and architecture automatically
+- Downloads the latest release binary
+- Installs to `~/.local/bin/pepebot`
+- Optionally sets up systemd (Linux) or launchd (macOS) service
+- Adds pepebot to your PATH
+
+**Supported systems:**
+- Linux (x86_64, ARM64, ARMv7, ARMv6, RISC-V, MIPS variants)
+- macOS (Intel, Apple Silicon)
+- FreeBSD (x86_64, ARM64)
+
+### Manual Installation
+
+Download pre-built binaries from [GitHub Releases](https://github.com/pepebot-space/pepebot/releases):
+
+```bash
+# Example for Linux x86_64
+wget https://github.com/pepebot-space/pepebot/releases/latest/download/pepebot-linux-amd64.tar.gz
+tar xzf pepebot-linux-amd64.tar.gz
+sudo mv pepebot-linux-amd64 /usr/local/bin/pepebot
+```
 
 ### Build from Source
+
+Prerequisites:
+- Go 1.21 or higher
+- Git
 
 ```bash
 # Clone repository
