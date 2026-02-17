@@ -225,21 +225,17 @@ jobs:
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate release notes
+      - name: Prepare release notes from RELEASE.md
         run: |
-          cat > RELEASE_NOTES.md << 'EOF'
-          # Pepebot ${{ steps.version.outputs.VERSION }}
+          # Use RELEASE.md as the base for release notes
+          if [ -f RELEASE.md ]; then
+            # Copy RELEASE.md and append platform-specific download info
+            cat RELEASE.md > RELEASE_NOTES.md
 
-          🐸 Ultra-lightweight Personal AI Assistant
+            # Append platform download information
+            cat >> RELEASE_NOTES.md << 'EOF'
 
-          ## 🎉 What's New
-
-          - Multi-architecture support (x86_64, ARM64, RISC-V, MIPS)
-          - MAIA Router integration (recommended for Indonesian users)
-          - Interactive setup wizard
-          - Multiple LLM provider support
-
-          ## 📦 Downloads
+          ## 📦 Platform-Specific Downloads
 
           Choose the appropriate binary for your system:
 
@@ -266,7 +262,27 @@ jobs:
 
           ### Android
           - **ARM64**: `pepebot-android-arm64.tar.gz` (Most devices, Android 5.0+)
-          - **x86_64**: `pepebot-android-x86_64.tar.gz` (Emulators, x86 tablets)
+
+          ## 🔐 Verification
+
+          All binaries include SHA256 checksums. Verify your download:
+
+          ```bash
+          sha256sum -c pepebot-*.tar.gz.sha256
+          ```
+
+          ---
+
+          Built with ❤️ using Go
+          EOF
+          else
+            echo "Warning: RELEASE.md not found, using fallback release notes"
+            cat > RELEASE_NOTES.md << 'EOF'
+          # Pepebot ${{ steps.version.outputs.VERSION }}
+
+          🐸 Ultra-lightweight Personal AI Assistant
+
+          See [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md) for details.
 
           ## 🚀 Quick Start
 
@@ -280,30 +296,8 @@ jobs:
           # Start chatting
           ./pepebot-* agent
           ```
-
-          ## 📚 Documentation
-
-          - [README](https://github.com/pepebot-space/pepebot#readme)
-          - [Setup Guide](https://github.com/pepebot-space/pepebot#installation)
-          - [Configuration](https://github.com/pepebot-space/pepebot#configuration)
-
-          ## 🔐 Verification
-
-          All binaries include SHA256 checksums. Verify your download:
-
-          ```bash
-          sha256sum -c pepebot-*.tar.gz.sha256
-          ```
-
-          ## 💬 Support
-
-          - [Issues](https://github.com/pepebot-space/pepebot/issues)
-          - [Discussions](https://github.com/pepebot-space/pepebot/discussions)
-
-          ---
-
-          Built with ❤️ using Go
           EOF
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
