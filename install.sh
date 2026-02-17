@@ -251,6 +251,14 @@ add_to_path() {
 prompt_service_setup() {
     local os=$1
 
+    # Skip interactive prompts when stdin is not a terminal (e.g. curl | bash)
+    if [ ! -t 0 ]; then
+        echo "" >&2
+        print_info "Non-interactive mode detected, skipping service setup."
+        print_info "You can run pepebot manually with: pepebot gateway"
+        return
+    fi
+
     echo "" >&2
     print_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -259,7 +267,7 @@ prompt_service_setup() {
         print_info "Would you like to set up systemd service?"
         print_info "This allows pepebot gateway to run automatically on boot."
         echo "" >&2
-        read -p "Setup systemd service? (y/N): " -n 1 -r
+        read -p "Setup systemd service? (y/N): " -n 1 -r </dev/tty
         echo "" >&2
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             setup_systemd
@@ -272,7 +280,7 @@ prompt_service_setup() {
         print_info "Would you like to set up launchd service?"
         print_info "This allows pepebot gateway to run automatically on login."
         echo "" >&2
-        read -p "Setup launchd service? (y/N): " -n 1 -r
+        read -p "Setup launchd service? (y/N): " -n 1 -r </dev/tty
         echo "" >&2
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             setup_launchd
