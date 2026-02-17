@@ -55,6 +55,279 @@ Set `INSTALL_DIR` to change the installation location:
 INSTALL_DIR=/usr/local/bin ./install.sh
 ```
 
+## Package Managers
+
+### Homebrew (macOS and Linux)
+
+Homebrew provides the easiest installation on macOS and Linux systems.
+
+**Prerequisites:**
+- [Homebrew](https://brew.sh/) installed
+
+**Installation:**
+
+```bash
+# Add Pepebot tap (first time only)
+brew tap pepebot-space/tap https://github.com/pepebot-space/homebrew-tap
+
+# Install pepebot
+brew install pepebot
+
+# Verify installation
+pepebot version
+```
+
+**Start as service:**
+
+```bash
+# Start service now and on login
+brew services start pepebot
+
+# Check service status
+brew services list | grep pepebot
+
+# Stop service
+brew services stop pepebot
+
+# View logs
+tail -f /usr/local/var/log/pepebot.log  # Intel Mac
+tail -f /opt/homebrew/var/log/pepebot.log  # Apple Silicon
+```
+
+**Update:**
+
+```bash
+brew update
+brew upgrade pepebot
+```
+
+**Uninstall:**
+
+```bash
+brew uninstall pepebot
+brew untap pepebot-space/tap
+```
+
+### Nix (NixOS, Linux, macOS)
+
+Nix provides reproducible builds and easy package management.
+
+**Prerequisites:**
+- [Nix](https://nixos.org/download.html) installed
+
+**Installation:**
+
+**Option 1: Direct install from GitHub**
+
+```bash
+# Install to user profile
+nix-env -if https://github.com/pepebot-space/pepebot/archive/main.tar.gz
+
+# Verify installation
+pepebot version
+```
+
+**Option 2: Add to NixOS configuration**
+
+Edit `/etc/nixos/configuration.nix`:
+
+```nix
+{ config, pkgs, ... }:
+
+let
+  pepebot = pkgs.callPackage (pkgs.fetchFromGitHub {
+    owner = "pepebot-space";
+    repo = "pepebot";
+    rev = "v0.4.0";  # Use specific version
+    sha256 = "...";  # Fill with correct hash
+  }) {};
+in
+{
+  environment.systemPackages = with pkgs; [
+    pepebot
+  ];
+}
+```
+
+Then rebuild:
+
+```bash
+sudo nixos-rebuild switch
+```
+
+**Option 3: Add to home-manager**
+
+Edit `~/.config/nixpkgs/home.nix`:
+
+```nix
+{ config, pkgs, ... }:
+
+let
+  pepebot = pkgs.callPackage (fetchGit {
+    url = "https://github.com/pepebot-space/pepebot";
+    ref = "main";
+  }) {};
+in
+{
+  home.packages = [ pepebot ];
+}
+```
+
+Then apply:
+
+```bash
+home-manager switch
+```
+
+**Update:**
+
+```bash
+# Update user profile installation
+nix-env -u pepebot
+
+# Or for NixOS/home-manager, update the rev/sha256 and rebuild
+```
+
+**Uninstall:**
+
+```bash
+nix-env -e pepebot
+```
+
+### Docker
+
+Docker provides isolated containerized installation.
+
+**Prerequisites:**
+- [Docker](https://docs.docker.com/get-docker/) installed
+
+**Installation:**
+
+**Pull the image:**
+
+```bash
+# Pull latest version
+docker pull ghcr.io/pepebot-space/pepebot:latest
+
+# Or pull specific version
+docker pull ghcr.io/pepebot-space/pepebot:0.4.0
+
+# Verify image
+docker images | grep pepebot
+```
+
+**Run interactively:**
+
+```bash
+# Run setup wizard
+docker run -it --rm \
+  -v ~/.pepebot:/root/.pepebot \
+  ghcr.io/pepebot-space/pepebot:latest onboard
+
+# Interactive chat mode
+docker run -it --rm \
+  -v ~/.pepebot:/root/.pepebot \
+  ghcr.io/pepebot-space/pepebot:latest agent
+
+# One-off command
+docker run --rm \
+  -v ~/.pepebot:/root/.pepebot \
+  ghcr.io/pepebot-space/pepebot:latest status
+```
+
+**Run as daemon (gateway mode):**
+
+```bash
+# Start gateway
+docker run -d \
+  --name pepebot \
+  --restart unless-stopped \
+  -v ~/.pepebot:/root/.pepebot \
+  -p 18790:18790 \
+  ghcr.io/pepebot-space/pepebot:latest gateway
+
+# Check logs
+docker logs -f pepebot
+
+# Stop container
+docker stop pepebot
+
+# Remove container
+docker rm pepebot
+```
+
+**Using Docker Compose:**
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  pepebot:
+    image: ghcr.io/pepebot-space/pepebot:latest
+    container_name: pepebot
+    restart: unless-stopped
+    volumes:
+      - ~/.pepebot:/root/.pepebot
+    ports:
+      - "18790:18790"
+    command: gateway
+    environment:
+      - TZ=Asia/Jakarta
+    healthcheck:
+      test: ["CMD", "pepebot", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+Or download the official compose file:
+
+```bash
+curl -O https://raw.githubusercontent.com/pepebot-space/pepebot/main/docker-compose.yml
+```
+
+Run with Docker Compose:
+
+```bash
+# Start service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop service
+docker-compose down
+
+# Update to latest version
+docker-compose pull
+docker-compose up -d
+```
+
+**Custom Docker build:**
+
+```bash
+# Clone repository
+git clone https://github.com/pepebot-space/pepebot.git
+cd pepebot
+
+# Build image
+docker build -t pepebot:local .
+
+# Run local build
+docker run -it --rm pepebot:local version
+```
+
+**Available tags:**
+- `latest` - Latest stable release
+- `0.4.0`, `0.4`, `0` - Semantic version tags
+- `main` - Latest main branch build (may be unstable)
+
+**Supported platforms:**
+- `linux/amd64` - x86_64 Linux
+- `linux/arm64` - ARM64 Linux (Raspberry Pi 4, etc.)
+
 ## Manual Installation
 
 ### Step 1: Download Binary

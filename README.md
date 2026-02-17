@@ -59,6 +59,61 @@ chmod +x install.sh
 - macOS (Intel, Apple Silicon)
 - FreeBSD (x86_64, ARM64)
 
+### Package Managers
+
+#### Homebrew (macOS/Linux)
+
+```bash
+# Add tap (first time only)
+brew tap pepebot-space/tap https://github.com/pepebot-space/homebrew-tap
+
+# Install
+brew install pepebot
+
+# Start as service (optional)
+brew services start pepebot
+```
+
+#### Nix (NixOS/Linux/macOS)
+
+```bash
+# Install from GitHub
+nix-env -if https://github.com/pepebot-space/pepebot/archive/main.tar.gz
+
+# Or add to your configuration.nix
+environment.systemPackages = with pkgs; [
+  (callPackage (fetchFromGitHub {
+    owner = "pepebot-space";
+    repo = "pepebot";
+    rev = "v0.4.0";
+    sha256 = "...";
+  }) {})
+];
+```
+
+#### Docker
+
+```bash
+# Pull image
+docker pull ghcr.io/pepebot-space/pepebot:latest
+
+# Run interactively
+docker run -it --rm \
+  -v ~/.pepebot:/root/.pepebot \
+  ghcr.io/pepebot-space/pepebot:latest onboard
+
+# Run as daemon (gateway mode)
+docker run -d \
+  --name pepebot \
+  -v ~/.pepebot:/root/.pepebot \
+  -p 18790:18790 \
+  ghcr.io/pepebot-space/pepebot:latest gateway
+
+# Using Docker Compose
+curl -O https://raw.githubusercontent.com/pepebot-space/pepebot/main/docker-compose.yml
+docker-compose up -d
+```
+
 ### Manual Installation
 
 Download pre-built binaries from [GitHub Releases](https://github.com/pepebot-space/pepebot/releases):

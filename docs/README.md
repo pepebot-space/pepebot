@@ -9,6 +9,7 @@ Welcome to the Pepebot documentation directory. Here you'll find comprehensive g
 
 Learn how to install Pepebot on Linux, macOS, or FreeBSD using various methods:
 - Quick automated installation with `install.sh`
+- Package managers (Homebrew, Nix, Docker)
 - Manual installation from pre-built binaries
 - Building from source
 - Setting up systemd or launchd services

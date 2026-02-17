@@ -2,13 +2,16 @@ version: '3.8'
 
 services:
   pepebot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VERSION: ${VERSION:-dev}
-        BUILD_TIME: ${BUILD_TIME:-unknown}
-    image: pepebot:latest
+    # Use pre-built image from GitHub Container Registry
+    image: ghcr.io/pepebot-space/pepebot:${PEPEBOT_VERSION:-latest}
+
+    # Or build locally (comment out image above and uncomment below)
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   args:
+    #     VERSION: ${VERSION:-dev}
+    #     BUILD_TIME: ${BUILD_TIME:-unknown}
     container_name: pepebot
     restart: unless-stopped
 
