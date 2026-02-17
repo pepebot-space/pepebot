@@ -3,7 +3,7 @@
 # Automatically detects system architecture and installs the latest release
 # Supports Linux, macOS, FreeBSD with optional systemd/launchd setup
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -102,26 +102,22 @@ download_release() {
     local filename="pepebot-${os}-${arch}.tar.gz"
     local url="https://github.com/${REPO}/releases/download/${version}/${filename}"
     local tmp_dir=$(mktemp -d)
-
-    print_info "Downloading ${filename}..."
-
     if ! curl -fsSL "$url" -o "${tmp_dir}/${filename}"; then
-        print_error "Failed to download ${filename}"
-        print_error "URL: $url"
         rm -rf "$tmp_dir"
-        exit 1
+        return 1
     fi
 
-    print_info "Extracting archive..."
-    tar -xzf "${tmp_dir}/${filename}" -C "$tmp_dir"
+    if ! tar -xzf "${tmp_dir}/${filename}" -C "$tmp_dir"; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
 
-    # Find the binary (it should be the only executable file)
-    local binary=$(find "$tmp_dir" -type f -name "pepebot-*" ! -name "*.tar.gz" ! -name "*.sha256" ! -name "*.txt")
+    local binary
+    binary=$(find "$tmp_dir" -type f -name "pepebot-*" ! -name "*.tar.gz" ! -name "*.sha256" ! -name "*.txt" | head -n 1)
 
     if [ -z "$binary" ]; then
-        print_error "Binary not found in archive"
         rm -rf "$tmp_dir"
-        exit 1
+        return 1
     fi
 
     echo "$binary"
@@ -316,7 +312,17 @@ main() {
     print_success "Latest version: $version"
 
     # Download and install
-    local binary=$(download_release "$version" "$os" "$arch")
+    local filename="pepebot-${os}-${arch}.tar.gz"
+    print_info "Downloading ${filename}..."
+
+    local binary
+    if ! binary=$(download_release "$version" "$os" "$arch"); then
+        print_error "Failed to download ${filename}"
+        print_error "URL: https://github.com/${REPO}/releases/download/${version}/${filename}"
+        exit 1
+    fi
+
+    print_info "Extracting archive..."
     install_binary "$binary"
 
     # Cleanup
