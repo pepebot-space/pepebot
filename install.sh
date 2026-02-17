@@ -19,32 +19,32 @@ PEPEBOT_HOME="${PEPEBOT_HOME:-$HOME/.pepebot}"
 
 # Functions
 print_info() {
-    echo -e "${BLUE}ℹ ${NC}$1"
+    echo -e "${BLUE}ℹ ${NC}$1" >&2
 }
 
 print_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}✓${NC} $1" >&2
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo -e "${YELLOW}⚠${NC} $1" >&2
 }
 
 print_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}✗${NC} $1" >&2
 }
 
 print_header() {
-    echo ""
-    echo "     ___"
-    echo "    (o o)"
-    echo "   (  >  )"
-    echo "   /|   |\\"
-    echo "  (_|   |_)"
-    echo ""
-    echo "  🐸 PEPEBOT INSTALLER"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+    echo "" >&2
+    echo "     ___" >&2
+    echo "    (o o)" >&2
+    echo "   (  >  )" >&2
+    echo "   /|   |\\" >&2
+    echo "  (_|   |_)" >&2
+    echo "" >&2
+    echo "  🐸 PEPEBOT INSTALLER" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "" >&2
 }
 
 detect_os() {
@@ -160,12 +160,12 @@ EOF
 
     print_success "Systemd service created at $service_file"
     print_info "To enable and start the service:"
-    echo "  systemctl --user daemon-reload"
-    echo "  systemctl --user enable pepebot"
-    echo "  systemctl --user start pepebot"
-    echo ""
+    echo "  systemctl --user daemon-reload" >&2
+    echo "  systemctl --user enable pepebot" >&2
+    echo "  systemctl --user start pepebot" >&2
+    echo "" >&2
     print_info "To view logs:"
-    echo "  journalctl --user -u pepebot -f"
+    echo "  journalctl --user -u pepebot -f" >&2
 }
 
 setup_launchd() {
@@ -217,12 +217,12 @@ EOF
 
     print_success "Launchd service created at $plist_file"
     print_info "To load and start the service:"
-    echo "  launchctl load $plist_file"
-    echo "  launchctl start com.pepebot.agent"
-    echo ""
+    echo "  launchctl load $plist_file" >&2
+    echo "  launchctl start com.pepebot.agent" >&2
+    echo "" >&2
     print_info "To view logs:"
-    echo "  tail -f ${PEPEBOT_HOME}/pepebot.log"
-    echo "  tail -f ${PEPEBOT_HOME}/pepebot.error.log"
+    echo "  tail -f ${PEPEBOT_HOME}/pepebot.log" >&2
+    echo "  tail -f ${PEPEBOT_HOME}/pepebot.error.log" >&2
 }
 
 add_to_path() {
@@ -238,9 +238,9 @@ add_to_path() {
 
     if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
         print_info "Adding ${INSTALL_DIR} to PATH in $shell_rc"
-        echo "" >> "$shell_rc"
-        echo "# Pepebot" >> "$shell_rc"
-        echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >> "$shell_rc"
+        echo "" >>"$shell_rc"
+        echo "# Pepebot" >>"$shell_rc"
+        echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >>"$shell_rc"
         print_success "PATH updated in $shell_rc"
         print_warning "Please run: source $shell_rc"
     else
@@ -251,16 +251,16 @@ add_to_path() {
 prompt_service_setup() {
     local os=$1
 
-    echo ""
+    echo "" >&2
     print_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     if [ "$os" = "linux" ]; then
-        echo ""
+        echo "" >&2
         print_info "Would you like to set up systemd service?"
         print_info "This allows pepebot gateway to run automatically on boot."
-        echo ""
+        echo "" >&2
         read -p "Setup systemd service? (y/N): " -n 1 -r
-        echo ""
+        echo "" >&2
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             setup_systemd
         else
@@ -268,12 +268,12 @@ prompt_service_setup() {
             print_info "You can run pepebot manually with: pepebot gateway"
         fi
     elif [ "$os" = "darwin" ]; then
-        echo ""
+        echo "" >&2
         print_info "Would you like to set up launchd service?"
         print_info "This allows pepebot gateway to run automatically on login."
-        echo ""
+        echo "" >&2
         read -p "Setup launchd service? (y/N): " -n 1 -r
-        echo ""
+        echo "" >&2
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             setup_launchd
         else
@@ -335,33 +335,33 @@ main() {
     prompt_service_setup "$os"
 
     # Print success message
-    echo ""
+    echo "" >&2
     print_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "     ___"
-    echo "    (^ ^)"
-    echo "   (  v  )   🎉 INSTALLATION COMPLETE!"
-    echo "   /|   |\\"
-    echo "  (_|   |_)"
-    echo ""
+    echo "" >&2
+    echo "     ___" >&2
+    echo "    (^ ^)" >&2
+    echo "   (  v  )   🎉 INSTALLATION COMPLETE!" >&2
+    echo "   /|   |\\" >&2
+    echo "  (_|   |_)" >&2
+    echo "" >&2
     print_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+    echo "" >&2
     print_info "Next steps:"
-    echo ""
-    echo "  1. Run setup wizard:"
-    echo "     pepebot onboard"
-    echo ""
-    echo "  2. Start chatting:"
-    echo "     pepebot agent"
-    echo ""
-    echo "  3. Or start gateway:"
-    echo "     pepebot gateway"
-    echo ""
-    echo "  4. Check status:"
-    echo "     pepebot status"
-    echo ""
+    echo "" >&2
+    echo "  1. Run setup wizard:" >&2
+    echo "     pepebot onboard" >&2
+    echo "" >&2
+    echo "  2. Start chatting:" >&2
+    echo "     pepebot agent" >&2
+    echo "" >&2
+    echo "  3. Or start gateway:" >&2
+    echo "     pepebot gateway" >&2
+    echo "" >&2
+    echo "  4. Check status:" >&2
+    echo "     pepebot status" >&2
+    echo "" >&2
     print_info "Documentation: https://github.com/${REPO}"
-    echo ""
+    echo "" >&2
 }
 
 # Run main function
