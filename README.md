@@ -114,6 +114,45 @@ curl -O https://raw.githubusercontent.com/pepebot-space/pepebot/main/docker-comp
 docker-compose up -d
 ```
 
+#### Podman (with Persistent Storage)
+
+Create a persistent volume:
+
+```bash
+podman volume create pepebot-data
+```
+
+Run interactively:
+
+```bash
+podman run -it --name pepebot \
+  -v pepebot-data:/root/.pepebot \
+  ghcr.io/pepebot-space/pepebot:latest onboard
+```
+
+Run as background gateway service:
+
+```bash
+podman run -d --name pepebot \
+  --restart=always \
+  -v pepebot-data:/root/.pepebot \
+  -p 18790:18790 \
+  ghcr.io/pepebot-space/pepebot:latest gateway
+```
+
+Alternatively, use a bind mount:
+
+```bash
+mkdir -p ./pepebot-data
+
+podman run -d --name pepebot \
+  -v $(pwd)/pepebot-data:/root/.pepebot \
+  -p 18790:18790 \
+  ghcr.io/pepebot-space/pepebot:latest gateway
+```
+
+All configuration, sessions, skills, and workflows are stored in `/root/.pepebot` and will persist across restarts.
+
 ### Manual Installation
 
 Download pre-built binaries from [GitHub Releases](https://github.com/pepebot-space/pepebot/releases):
