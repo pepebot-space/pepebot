@@ -26,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Auto-download media from WhatsApp to `/tmp/pepebot_whatsapp/`
   - Base64 encoding for local files before sending to LLM providers
 
+- **Enhanced Docker Image**: Production-ready container with utilities
+  - Cron daemon support for scheduled tasks (Ubuntu `cron`)
+  - Tmux for terminal multiplexing and session management
+  - Systemctl replacement for service management ([docker-systemctl-replacement](https://github.com/gdraheim/docker-systemctl-replacement))
+  - Entrypoint script that runs cron daemon alongside pepebot gateway
+  - Example crontab configuration (`docker/crontab.example`)
+  - Comprehensive Docker deployment guide (`docker/README.md`)
+  - Based on Ubuntu 24.04 LTS for stability and compatibility
+  - Common utilities included: vim, nano, htop, curl, ping, net-tools
+  - GitHub Actions workflow fixed with `packages: write` permission for GHCR push
+
 ### Changed
 - **ContentBlock Structure**: Simplified and standardized for API compatibility
   - Removed separate `DocumentURL`, `AudioURL`, `VideoURL` types

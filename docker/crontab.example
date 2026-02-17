@@ -1,0 +1,34 @@
+# Pepebot Crontab Example
+#
+# This file shows example cron jobs for Pepebot
+# Copy to crontab.txt and mount in container
+#
+# Format: minute hour day month weekday command
+# Use https://crontab.guru/ to test cron expressions
+
+# Run pepebot cron command every 15 minutes
+*/15 * * * * /usr/local/bin/pepebot cron >> /var/log/pepebot-cron.log 2>&1
+
+# Run pepebot cron every hour
+# 0 * * * * /usr/local/bin/pepebot cron >> /var/log/pepebot-cron.log 2>&1
+
+# Daily health check at 2 AM
+# 0 2 * * * /usr/local/bin/pepebot status >> /var/log/pepebot-health.log 2>&1
+
+# Clean up old logs weekly (Sunday at 3 AM)
+# 0 3 * * 0 find /var/log -name "*.log" -mtime +7 -delete
+
+# Restart gateway daily at 4 AM (if needed)
+# 0 4 * * * /usr/local/bin/systemctl restart pepebot
+
+# Backup workspace daily at 5 AM
+# 0 5 * * * tar czf /root/.pepebot/backups/backup-$(date +\%Y\%m\%d).tar.gz /root/.pepebot/workspace
+
+# Custom reminder example - every Monday at 9 AM
+# 0 9 * * 1 echo "Weekly reminder: Check pepebot updates" | /usr/local/bin/pepebot agent -m -
+
+# Resource monitoring every 6 hours
+# 0 */6 * * * free -h >> /var/log/memory-usage.log 2>&1
+
+# Note: All times are in container timezone (default: UTC)
+# Set TZ environment variable to change timezone

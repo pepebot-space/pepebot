@@ -38,6 +38,23 @@ All chat channels now fully support media files!
 - ✅ Caption extraction for media messages
 - ✅ Proper handling of media without captions
 
+### 🐳 Enhanced Docker Image
+Production-ready container with built-in utilities!
+
+**What's Included:**
+- ⏰ **Cron daemon** - Schedule periodic tasks (pepebot cron, backups, etc.)
+- 🖥️ **Tmux** - Terminal multiplexer for session management
+- 🔧 **Systemctl** - Service management in containers
+- 🐧 **Ubuntu 24.04 LTS** - Stable and familiar base image
+- 🛠️ **Common utilities** - vim, nano, htop, curl, ping, net-tools
+
+**Features:**
+- ✅ Cron runs alongside pepebot gateway automatically
+- ✅ Example crontab configuration included
+- ✅ Comprehensive deployment guide
+- ✅ Health checks and logging support
+- ✅ Ready for production deployments
+
 ### 🔧 Technical Improvements
 
 **API Compatibility:**
