@@ -35,17 +35,26 @@ type Message struct {
 	ToolCallID string      `json:"tool_call_id,omitempty"`
 }
 
-// ContentBlock represents a piece of content (text or image)
+// ContentBlock represents a piece of content (text, image, or file)
 type ContentBlock struct {
-	Type     string    `json:"type"` // "text" or "image_url"
+	Type     string    `json:"type"` // "text", "image_url", "file"
 	Text     string    `json:"text,omitempty"`
 	ImageURL *ImageURL `json:"image_url,omitempty"`
+	File     *FileData `json:"file,omitempty"`
 }
 
 // ImageURL represents an image URL in vision requests
 type ImageURL struct {
 	URL    string `json:"url"`
 	Detail string `json:"detail,omitempty"` // "low", "high", or "auto"
+}
+
+// FileData represents file data for multimodal requests (documents, audio, video, etc.)
+// Format: { "type": "file", "file": { "file_data": "data:mime/type;base64,..." } }
+// Reference: https://developers.openai.com/api/docs/guides/pdf-files
+type FileData struct {
+	FileData string `json:"file_data,omitempty"` // Base64 data URL (e.g., "data:application/pdf;base64,...")
+	FileID   string `json:"file_id,omitempty"`   // Uploaded file ID (e.g., "file-xxxxx")
 }
 
 type LLMProvider interface {

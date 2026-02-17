@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-02-17
+
+### Added
+- **Multimodal File Support**: Extended LLM multimodal capabilities beyond images
+  - Support for documents (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF, ODT, ODS, ODP)
+  - Support for audio files (MP3, WAV, OGG, M4A, FLAC, AAC, WMA, OPUS)
+  - Support for video files (MP4, AVI, MOV, WMV, FLV, WEBM, MKV, M4V, 3GP)
+  - Automatic file type detection via MIME type analysis (50+ MIME types)
+  - File type detector utility (`pkg/providers/filetype.go`)
+  - New tool: `send_file` - generic tool for sending all file types to chat channels
+  - OpenAI-compatible API format for file attachments (`file_data` field)
+  - Automatic base64 encoding for local file paths
+  - Support for both base64 data URLs and uploaded file IDs
+
+- **Channel Media Support**: All chat channels can now send and receive files
+  - **Telegram**: Send/receive images, videos, audio, documents with auto-type detection
+  - **Discord**: Full media support (already implemented, verified)
+  - **WhatsApp**: Send/receive images, videos, audio, documents with proper download handling
+  - Auto-download media from WhatsApp to `/tmp/pepebot_whatsapp/`
+  - Base64 encoding for local files before sending to LLM providers
+
+### Changed
+- **ContentBlock Structure**: Simplified and standardized for API compatibility
+  - Removed separate `DocumentURL`, `AudioURL`, `VideoURL` types
+  - Unified all non-image files under `file` type with `FileData` struct
+  - Images continue using `image_url` format for vision API compatibility
+  - Added support for `file_id` (uploaded files) and `file_data` (base64) formats
+  - Full compliance with OpenAI API specification for PDF files
+
+- **Context Builder**: Enhanced multimodal message building
+  - Automatic local file path to base64 data URL conversion
+  - Smart file type detection and appropriate content block creation
+  - Support for mixed content (text + images + files in single message)
+  - Logging for media processing and conversion steps
+
+### Fixed
+- **WhatsApp Media Reception**: Fixed issue where images sent to WhatsApp bot were not processed
+  - Added image/video/audio/document message handlers
+  - Proper media download from WhatsApp servers
+  - Caption extraction for media messages
+  - Graceful handling of media without captions
+- **LLM File Processing**: Fixed "Invalid image received" error for local file paths
+  - LLM providers now receive base64-encoded data URLs instead of file paths
+  - Proper MIME type detection and inclusion in data URLs
+  - Compatible with Gemini, OpenAI, and other providers via LiteLLM
+
 ## [0.4.0] - 2026-02-16
 
 ### Added

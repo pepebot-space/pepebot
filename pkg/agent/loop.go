@@ -70,6 +70,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
 	toolsRegistry.Register(tools.NewSendImageTool(bus))
+	toolsRegistry.Register(tools.NewSendFileTool(bus))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
@@ -123,6 +124,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
 	toolsRegistry.Register(tools.NewSendImageTool(bus))
+	toolsRegistry.Register(tools.NewSendFileTool(bus))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
@@ -250,8 +252,8 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		history,
 		summary,
 		msg.Content,
-		msg.Media,    // Pass media for vision support
-		metadata,     // Pass conversation context for send_image tool
+		msg.Media, // Pass media for multimodal support (images, documents, audio, video)
+		metadata,  // Pass conversation context for send tools
 	)
 
 	iteration := 0
@@ -292,8 +294,8 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		}
 
 		logger.DebugCF("agent", "LLM response received", map[string]interface{}{
-			"has_content":   response.Content != "",
-			"tool_calls":    len(response.ToolCalls),
+			"has_content":     response.Content != "",
+			"tool_calls":      len(response.ToolCalls),
 			"content_preview": truncateString(response.Content, 100),
 		})
 
@@ -358,12 +360,12 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 
 	// Context compression logic
 	newHistory := al.sessions.GetHistory(msg.SessionKey)
-	
+
 	// Token Awareness (Dynamic)
 	// Trigger if history > 20 messages OR estimated tokens > 75% of context window
 	tokenEstimate := al.estimateTokens(newHistory)
 	threshold := al.contextWindow * 75 / 100
-	
+
 	if len(newHistory) > 20 || tokenEstimate > threshold {
 		if _, loading := al.summarizing.LoadOrStore(msg.SessionKey, true); !loading {
 			go func() {
@@ -425,7 +427,7 @@ func (al *AgentLoop) summarizeSession(sessionKey string) {
 
 		s1, _ := al.summarizeBatch(ctx, part1, "")
 		s2, _ := al.summarizeBatch(ctx, part2, "")
-		
+
 		// Merge them
 		mergePrompt := fmt.Sprintf("Merge these two conversation summaries into one cohesive summary:\n\n1: %s\n\n2: %s", s1, s2)
 		resp, err := al.provider.Chat(ctx, []providers.Message{{Role: "user", Content: mergePrompt}}, nil, al.model, map[string]interface{}{

@@ -140,11 +140,153 @@ func (c *WhatsAppChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 		return fmt.Errorf("failed to parse JID %q: %w", msg.ChatID, err)
 	}
 
+	// If there are media attachments, send with media
+	if len(msg.Media) > 0 {
+		return c.sendWithMedia(ctx, jid, msg.Content, msg.Media)
+	}
+
+	// Send text-only message
 	_, err = c.client.SendMessage(ctx, jid, &waE2E.Message{
 		Conversation: proto.String(msg.Content),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
+	}
+
+	return nil
+}
+
+// sendWithMedia sends a message with media attachments (images, documents, audio, video)
+func (c *WhatsAppChannel) sendWithMedia(ctx context.Context, jid types.JID, caption string, mediaURLs []string) error {
+	for _, mediaURL := range mediaURLs {
+		// Read file content
+		var fileData []byte
+		var fileName string
+		var err error
+
+		if strings.HasPrefix(mediaURL, "http://") || strings.HasPrefix(mediaURL, "https://") {
+			// Download from URL
+			logger.WarnCF("whatsapp", "HTTP URL media not yet supported for sending", map[string]interface{}{
+				"url": mediaURL,
+			})
+			continue
+		} else {
+			// Read local file
+			fileData, err = os.ReadFile(mediaURL)
+			if err != nil {
+				logger.ErrorCF("whatsapp", "Failed to read media file", map[string]interface{}{
+					"path":  mediaURL,
+					"error": err.Error(),
+				})
+				continue
+			}
+			fileName = filepath.Base(mediaURL)
+		}
+
+		// Detect MIME type from extension
+		ext := strings.ToLower(filepath.Ext(mediaURL))
+		var mimeType string
+
+		// Upload file to WhatsApp
+		uploaded, err := c.client.Upload(ctx, fileData, whatsmeow.MediaDocument)
+		if err != nil {
+			logger.ErrorCF("whatsapp", "Failed to upload media", map[string]interface{}{
+				"file":  fileName,
+				"error": err.Error(),
+			})
+			continue
+		}
+
+		// Create message based on file type
+		var waMsg *waE2E.Message
+
+		switch ext {
+		case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+			mimeType = "image/jpeg"
+			if ext == ".png" {
+				mimeType = "image/png"
+			} else if ext == ".gif" {
+				mimeType = "image/gif"
+			} else if ext == ".webp" {
+				mimeType = "image/webp"
+			}
+			waMsg = &waE2E.Message{
+				ImageMessage: &waE2E.ImageMessage{
+					URL:           proto.String(uploaded.URL),
+					DirectPath:    proto.String(uploaded.DirectPath),
+					MediaKey:      uploaded.MediaKey,
+					Mimetype:      proto.String(mimeType),
+					FileEncSHA256: uploaded.FileEncSHA256,
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    proto.Uint64(uint64(len(fileData))),
+					Caption:       proto.String(caption),
+				},
+			}
+		case ".mp4", ".avi", ".mov", ".mkv", ".webm":
+			mimeType = "video/mp4"
+			waMsg = &waE2E.Message{
+				VideoMessage: &waE2E.VideoMessage{
+					URL:           proto.String(uploaded.URL),
+					DirectPath:    proto.String(uploaded.DirectPath),
+					MediaKey:      uploaded.MediaKey,
+					Mimetype:      proto.String(mimeType),
+					FileEncSHA256: uploaded.FileEncSHA256,
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    proto.Uint64(uint64(len(fileData))),
+					Caption:       proto.String(caption),
+				},
+			}
+		case ".mp3", ".wav", ".ogg", ".m4a", ".flac", ".opus":
+			mimeType = "audio/mpeg"
+			if ext == ".ogg" || ext == ".opus" {
+				mimeType = "audio/ogg; codecs=opus"
+			}
+			waMsg = &waE2E.Message{
+				AudioMessage: &waE2E.AudioMessage{
+					URL:           proto.String(uploaded.URL),
+					DirectPath:    proto.String(uploaded.DirectPath),
+					MediaKey:      uploaded.MediaKey,
+					Mimetype:      proto.String(mimeType),
+					FileEncSHA256: uploaded.FileEncSHA256,
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    proto.Uint64(uint64(len(fileData))),
+				},
+			}
+		default:
+			// Send as document for all other file types
+			mimeType = "application/octet-stream"
+			if ext == ".pdf" {
+				mimeType = "application/pdf"
+			}
+			waMsg = &waE2E.Message{
+				DocumentMessage: &waE2E.DocumentMessage{
+					URL:           proto.String(uploaded.URL),
+					DirectPath:    proto.String(uploaded.DirectPath),
+					MediaKey:      uploaded.MediaKey,
+					Mimetype:      proto.String(mimeType),
+					FileEncSHA256: uploaded.FileEncSHA256,
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    proto.Uint64(uint64(len(fileData))),
+					FileName:      proto.String(fileName),
+					Caption:       proto.String(caption),
+				},
+			}
+		}
+
+		// Send the message
+		_, err = c.client.SendMessage(ctx, jid, waMsg)
+		if err != nil {
+			logger.ErrorCF("whatsapp", "Failed to send media message", map[string]interface{}{
+				"file":  fileName,
+				"error": err.Error(),
+			})
+			return fmt.Errorf("failed to send media %s: %w", fileName, err)
+		}
+
+		logger.InfoCF("whatsapp", "Media sent successfully", map[string]interface{}{
+			"file": fileName,
+			"type": mimeType,
+		})
 	}
 
 	return nil
@@ -172,7 +314,80 @@ func (c *WhatsAppChannel) handleIncomingMessage(evt *events.Message) {
 	chatID := evt.Info.Chat.String()
 
 	content := extractTextContent(evt.Message)
-	if content == "" {
+	mediaPaths := []string{}
+
+	// Handle image messages
+	if imgMsg := evt.Message.GetImageMessage(); imgMsg != nil {
+		logger.DebugCF("whatsapp", "Downloading image", map[string]interface{}{
+			"sender": senderID,
+		})
+
+		mediaPath := c.downloadWhatsAppMedia(evt)
+		if mediaPath != "" {
+			mediaPaths = append(mediaPaths, mediaPath)
+			if imgMsg.GetCaption() != "" {
+				content = imgMsg.GetCaption()
+			}
+			if content == "" {
+				content = "[image received]"
+			}
+		}
+	}
+
+	// Handle video messages
+	if vidMsg := evt.Message.GetVideoMessage(); vidMsg != nil {
+		logger.DebugCF("whatsapp", "Downloading video", map[string]interface{}{
+			"sender": senderID,
+		})
+
+		mediaPath := c.downloadWhatsAppMedia(evt)
+		if mediaPath != "" {
+			mediaPaths = append(mediaPaths, mediaPath)
+			if vidMsg.GetCaption() != "" {
+				content = vidMsg.GetCaption()
+			}
+			if content == "" {
+				content = "[video received]"
+			}
+		}
+	}
+
+	// Handle audio messages
+	if audMsg := evt.Message.GetAudioMessage(); audMsg != nil {
+		logger.DebugCF("whatsapp", "Downloading audio", map[string]interface{}{
+			"sender": senderID,
+		})
+
+		mediaPath := c.downloadWhatsAppMedia(evt)
+		if mediaPath != "" {
+			mediaPaths = append(mediaPaths, mediaPath)
+			if content == "" {
+				content = "[audio received]"
+			}
+		}
+	}
+
+	// Handle document messages
+	if docMsg := evt.Message.GetDocumentMessage(); docMsg != nil {
+		logger.DebugCF("whatsapp", "Downloading document", map[string]interface{}{
+			"sender":   senderID,
+			"filename": docMsg.GetFileName(),
+		})
+
+		mediaPath := c.downloadWhatsAppMedia(evt)
+		if mediaPath != "" {
+			mediaPaths = append(mediaPaths, mediaPath)
+			if docMsg.GetCaption() != "" {
+				content = docMsg.GetCaption()
+			}
+			if content == "" {
+				content = fmt.Sprintf("[document received: %s]", docMsg.GetFileName())
+			}
+		}
+	}
+
+	// If no content and no media, ignore message
+	if content == "" && len(mediaPaths) == 0 {
 		return
 	}
 
@@ -182,12 +397,95 @@ func (c *WhatsAppChannel) handleIncomingMessage(evt *events.Message) {
 	}
 
 	logger.DebugCF("whatsapp", "Message received", map[string]interface{}{
-		"sender": senderID,
-		"chat":   chatID,
-		"text":   truncateString(content, 50),
+		"sender":      senderID,
+		"chat":        chatID,
+		"text":        truncateString(content, 50),
+		"has_media":   len(mediaPaths) > 0,
+		"media_count": len(mediaPaths),
 	})
 
-	c.HandleMessage(senderID, chatID, content, nil, metadata)
+	c.HandleMessage(senderID, chatID, content, mediaPaths, metadata)
+}
+
+// downloadWhatsAppMedia downloads media from WhatsApp message
+func (c *WhatsAppChannel) downloadWhatsAppMedia(evt *events.Message) string {
+	// Create temp directory for WhatsApp media
+	tempDir := "/tmp/pepebot_whatsapp"
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		logger.ErrorCF("whatsapp", "Failed to create temp dir", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return ""
+	}
+
+	// Determine filename and get downloadable message
+	var filename string
+	var ext string
+	var downloadable whatsmeow.DownloadableMessage
+
+	if imgMsg := evt.Message.GetImageMessage(); imgMsg != nil {
+		downloadable = imgMsg
+		ext = ".jpg"
+		if imgMsg.GetMimetype() == "image/png" {
+			ext = ".png"
+		} else if imgMsg.GetMimetype() == "image/gif" {
+			ext = ".gif"
+		} else if imgMsg.GetMimetype() == "image/webp" {
+			ext = ".webp"
+		}
+		filename = fmt.Sprintf("image_%s%s", evt.Info.ID, ext)
+	} else if vidMsg := evt.Message.GetVideoMessage(); vidMsg != nil {
+		downloadable = vidMsg
+		ext = ".mp4"
+		filename = fmt.Sprintf("video_%s%s", evt.Info.ID, ext)
+	} else if audMsg := evt.Message.GetAudioMessage(); audMsg != nil {
+		downloadable = audMsg
+		ext = ".ogg"
+		if strings.Contains(audMsg.GetMimetype(), "mpeg") {
+			ext = ".mp3"
+		}
+		filename = fmt.Sprintf("audio_%s%s", evt.Info.ID, ext)
+	} else if docMsg := evt.Message.GetDocumentMessage(); docMsg != nil {
+		downloadable = docMsg
+		docFilename := docMsg.GetFileName()
+		if docFilename != "" {
+			filename = docFilename
+		} else {
+			ext = ".pdf"
+			filename = fmt.Sprintf("document_%s%s", evt.Info.ID, ext)
+		}
+	} else {
+		logger.ErrorC("whatsapp", "Unknown media type")
+		return ""
+	}
+
+	// Download the media with context
+	ctx := context.Background()
+	data, err := c.client.Download(ctx, downloadable)
+	if err != nil {
+		logger.ErrorCF("whatsapp", "Failed to download media", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return ""
+	}
+
+	// Save to file
+	filePath := filepath.Join(tempDir, filename)
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		logger.ErrorCF("whatsapp", "Failed to save media file", map[string]interface{}{
+			"error": err.Error(),
+			"path":  filePath,
+		})
+		return ""
+	}
+
+	logger.InfoCF("whatsapp", "Media downloaded successfully", map[string]interface{}{
+		"filename": filename,
+		"size":     len(data),
+		"path":     filePath,
+	})
+
+	return filePath
 }
 
 func extractTextContent(msg *waE2E.Message) string {

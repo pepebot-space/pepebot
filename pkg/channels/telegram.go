@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -117,6 +118,11 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 
 	htmlContent := markdownToTelegramHTML(msg.Content)
 
+	// If there are media attachments, send with media
+	if len(msg.Media) > 0 {
+		return c.sendWithMedia(chatID, htmlContent, msg.Content, msg.Media)
+	}
+
 	// Try to edit placeholder
 	if pID, ok := c.placeholders.Load(msg.ChatID); ok {
 		c.placeholders.Delete(msg.ChatID)
@@ -138,6 +144,120 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 		tgMsg.ParseMode = ""
 		_, err = c.bot.Send(tgMsg)
 		return err
+	}
+
+	return nil
+}
+
+// sendWithMedia sends a message with media attachments (images, documents, audio, video, files)
+func (c *TelegramChannel) sendWithMedia(chatID int64, htmlContent, plainContent string, mediaURLs []string) error {
+	// Delete placeholder if exists (can't edit with media)
+	if pID, ok := c.placeholders.Load(fmt.Sprintf("%d", chatID)); ok {
+		c.placeholders.Delete(fmt.Sprintf("%d", chatID))
+		deleteMsg := tgbotapi.NewDeleteMessage(chatID, pID.(int))
+		c.bot.Send(deleteMsg)
+	}
+
+	// Use HTML content if available, otherwise plain
+	caption := htmlContent
+	if caption == "" {
+		caption = plainContent
+	}
+
+	// Send each media file (Telegram API limitation: one media per message for bot API)
+	for i, mediaURL := range mediaURLs {
+		// Detect file type
+		var chattable tgbotapi.Chattable
+		var err error
+
+		// Detect file type from extension
+		ext := strings.ToLower(filepath.Ext(mediaURL))
+
+		// Check if it's a URL or local file
+		isURL := strings.HasPrefix(mediaURL, "http://") || strings.HasPrefix(mediaURL, "https://")
+
+		// Images
+		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp" {
+			var photoMsg tgbotapi.PhotoConfig
+			if isURL {
+				photoMsg = tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(mediaURL))
+			} else {
+				photoMsg = tgbotapi.NewPhoto(chatID, tgbotapi.FilePath(mediaURL))
+			}
+			if i == 0 && caption != "" {
+				photoMsg.Caption = caption
+				photoMsg.ParseMode = tgbotapi.ModeHTML
+			}
+			chattable = photoMsg
+		} else if ext == ".mp4" || ext == ".avi" || ext == ".mov" || ext == ".mkv" || ext == ".webm" {
+			// Videos
+			var videoMsg tgbotapi.VideoConfig
+			if isURL {
+				videoMsg = tgbotapi.NewVideo(chatID, tgbotapi.FileURL(mediaURL))
+			} else {
+				videoMsg = tgbotapi.NewVideo(chatID, tgbotapi.FilePath(mediaURL))
+			}
+			if i == 0 && caption != "" {
+				videoMsg.Caption = caption
+				videoMsg.ParseMode = tgbotapi.ModeHTML
+			}
+			chattable = videoMsg
+		} else if ext == ".mp3" || ext == ".wav" || ext == ".ogg" || ext == ".m4a" || ext == ".flac" {
+			// Audio
+			var audioMsg tgbotapi.AudioConfig
+			if isURL {
+				audioMsg = tgbotapi.NewAudio(chatID, tgbotapi.FileURL(mediaURL))
+			} else {
+				audioMsg = tgbotapi.NewAudio(chatID, tgbotapi.FilePath(mediaURL))
+			}
+			if i == 0 && caption != "" {
+				audioMsg.Caption = caption
+				audioMsg.ParseMode = tgbotapi.ModeHTML
+			}
+			chattable = audioMsg
+		} else {
+			// All other files (documents, PDFs, etc.)
+			var docMsg tgbotapi.DocumentConfig
+			if isURL {
+				docMsg = tgbotapi.NewDocument(chatID, tgbotapi.FileURL(mediaURL))
+			} else {
+				docMsg = tgbotapi.NewDocument(chatID, tgbotapi.FilePath(mediaURL))
+			}
+			if i == 0 && caption != "" {
+				docMsg.Caption = caption
+				docMsg.ParseMode = tgbotapi.ModeHTML
+			}
+			chattable = docMsg
+		}
+
+		// Send the message
+		if _, err = c.bot.Send(chattable); err != nil {
+			log.Printf("Failed to send media %s: %v", mediaURL, err)
+			// Try with plain caption if HTML failed
+			if caption != "" {
+				switch v := chattable.(type) {
+				case tgbotapi.PhotoConfig:
+					v.ParseMode = ""
+					v.Caption = plainContent
+					_, err = c.bot.Send(v)
+				case tgbotapi.VideoConfig:
+					v.ParseMode = ""
+					v.Caption = plainContent
+					_, err = c.bot.Send(v)
+				case tgbotapi.AudioConfig:
+					v.ParseMode = ""
+					v.Caption = plainContent
+					_, err = c.bot.Send(v)
+				case tgbotapi.DocumentConfig:
+					v.ParseMode = ""
+					v.Caption = plainContent
+					_, err = c.bot.Send(v)
+				}
+			}
+			if err != nil {
+				return fmt.Errorf("failed to send media %s: %w", mediaURL, err)
+			}
+		}
 	}
 
 	return nil
