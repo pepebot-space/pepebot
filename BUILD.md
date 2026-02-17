@@ -98,12 +98,20 @@ docker build \
 # Set up buildx
 docker buildx create --use
 
-# Build for multiple architectures
+# Build for Linux amd64 and arm64 (recommended for production)
 docker buildx build \
-  --platform linux/amd64,linux/arm64,linux/arm/v7,linux/riscv64 \
+  --platform linux/amd64,linux/arm64 \
   -t pepebot:latest \
   --push .
+
+# Or build without pushing (for testing)
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t pepebot:latest \
+  --load .
 ```
+
+**Note:** GitHub Actions automatically builds Docker images for `linux/amd64` and `linux/arm64` on release.
 
 ### Using Docker Compose
 

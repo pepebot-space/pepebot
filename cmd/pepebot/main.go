@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/pepebot-space/pepebot/pkg/agent"
 	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/channels"
@@ -27,10 +28,9 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/skills"
 	"github.com/pepebot-space/pepebot/pkg/voice"
-	"github.com/chzyer/readline"
 )
 
-const version = "0.3.1"
+const version = "0.4.0"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -144,9 +144,7 @@ func main() {
 			}
 			skillsRemoveCmd(installer, os.Args[3])
 		case "install-builtin":
-			skillsInstallBuiltinCmd(workspace)
-		case "list-builtin":
-			skillsListBuiltinCmd()
+			skillsInstallBuiltinCmd(installer)
 		case "search":
 			skillsSearchCmd(installer)
 		case "show":
@@ -233,7 +231,7 @@ func onboard() {
 	cfg := config.DefaultConfig()
 
 	// Step 1: Choose Provider
-	fmt.Println("Step 1/4: Choose your AI Provider")
+	fmt.Println("Step 1/5: Choose your AI Provider")
 	fmt.Println("──────────────────────────────────")
 	fmt.Println("1. MAIA Router (Recommended) - 200+ models, Indonesian-friendly")
 	fmt.Println("2. Anthropic Claude")
@@ -310,43 +308,106 @@ func onboard() {
 
 	// Step 2: API Key
 	if selectedProvider != "" {
-		fmt.Println("\nStep 2/4: API Key")
+		fmt.Println("\nStep 2/5: API Key")
 		fmt.Println("──────────────────────────────────")
-		fmt.Print("Enter your API key (or press Enter to skip): ")
-		apiKey, _ := reader.ReadString('\n')
-		apiKey = strings.TrimSpace(apiKey)
+
+		// Check for existing environment variable
+		envKey, envVarName := config.GetProviderEnvKey(selectedProvider)
+		envBase, envBaseName := config.GetProviderEnvBase(selectedProvider)
+
+		var apiKey string
+		var apiBase string
+
+		if envKey != "" {
+			// Mask the key for display (show first 8 chars)
+			maskedKey := envKey
+			if len(envKey) > 8 {
+				maskedKey = envKey[:8] + "..." + envKey[len(envKey)-4:]
+			}
+			fmt.Printf("✓ Found API key in environment: %s=%s\n", envVarName, maskedKey)
+			fmt.Print("Use this API key? (Y/n): ")
+			useEnvKey, _ := reader.ReadString('\n')
+			useEnvKey = strings.ToLower(strings.TrimSpace(useEnvKey))
+
+			if useEnvKey != "n" && useEnvKey != "no" {
+				apiKey = envKey
+				fmt.Println("✓ Using environment variable for API key")
+			} else {
+				fmt.Print("Enter your API key: ")
+				apiKey, _ = reader.ReadString('\n')
+				apiKey = strings.TrimSpace(apiKey)
+			}
+
+			// Check for API base URL
+			if envBase != "" {
+				fmt.Printf("✓ Found API base in environment: %s=%s\n", envBaseName, envBase)
+				fmt.Print("Use this API base? (Y/n): ")
+				useEnvBase, _ := reader.ReadString('\n')
+				useEnvBase = strings.ToLower(strings.TrimSpace(useEnvBase))
+
+				if useEnvBase != "n" && useEnvBase != "no" {
+					apiBase = envBase
+				}
+			}
+		} else {
+			fmt.Print("Enter your API key (or press Enter to skip): ")
+			apiKey, _ = reader.ReadString('\n')
+			apiKey = strings.TrimSpace(apiKey)
+		}
 
 		if apiKey != "" {
 			switch selectedProvider {
 			case "maiarouter":
 				cfg.Providers.MAIARouter.APIKey = apiKey
-				cfg.Providers.MAIARouter.APIBase = "https://api.maiarouter.ai/v1"
+				if apiBase != "" {
+					cfg.Providers.MAIARouter.APIBase = apiBase
+				} else {
+					cfg.Providers.MAIARouter.APIBase = "https://api.maiarouter.ai/v1"
+				}
 			case "anthropic":
 				cfg.Providers.Anthropic.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Anthropic.APIBase = apiBase
+				}
 			case "openai":
 				cfg.Providers.OpenAI.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.OpenAI.APIBase = apiBase
+				}
 			case "openrouter":
 				cfg.Providers.OpenRouter.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.OpenRouter.APIBase = apiBase
+				}
 			case "gemini":
 				cfg.Providers.Gemini.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Gemini.APIBase = apiBase
+				}
 			case "groq":
 				cfg.Providers.Groq.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Groq.APIBase = apiBase
+				}
 			case "zhipu":
 				cfg.Providers.Zhipu.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.Zhipu.APIBase = apiBase
+				}
 			}
 			cfg.Agents.Defaults.Model = defaultModel
 			fmt.Println("✓ API key configured")
 		} else {
-			fmt.Println("⊙ Skipped API key (you can add it later in config.json)")
+			fmt.Println("⊙ Skipped API key (you can add it later in config.json or environment)")
 		}
 	} else {
-		fmt.Println("\nStep 2/4: API Key")
+		fmt.Println("\nStep 2/5: API Key")
 		fmt.Println("──────────────────────────────────")
 		fmt.Println("⊙ Skipped (no provider selected)")
 	}
 
 	// Step 3: Channels
-	fmt.Println("\nStep 3/4: Enable Chat Channels (optional)")
+	fmt.Println("\nStep 3/5: Enable Chat Channels (optional)")
 	fmt.Println("──────────────────────────────────")
 	fmt.Println("Would you like to enable any chat channels?")
 	fmt.Print("(T)elegram, (D)iscord, (W)hatsApp, or (N)one [T/D/W/N] (default: N): ")
@@ -355,9 +416,34 @@ func onboard() {
 	channelChoice = strings.ToLower(strings.TrimSpace(channelChoice))
 
 	if channelChoice == "t" {
-		fmt.Print("\nTelegram Bot Token: ")
-		token, _ := reader.ReadString('\n')
-		token = strings.TrimSpace(token)
+		// Check for existing Telegram token in environment
+		envToken, envVarName := config.GetChannelEnvToken("telegram")
+		var token string
+
+		if envToken != "" {
+			maskedToken := envToken
+			if len(envToken) > 12 {
+				maskedToken = envToken[:8] + "..." + envToken[len(envToken)-4:]
+			}
+			fmt.Printf("\n✓ Found Telegram token in environment: %s=%s\n", envVarName, maskedToken)
+			fmt.Print("Use this token? (Y/n): ")
+			useEnvToken, _ := reader.ReadString('\n')
+			useEnvToken = strings.ToLower(strings.TrimSpace(useEnvToken))
+
+			if useEnvToken != "n" && useEnvToken != "no" {
+				token = envToken
+				fmt.Println("✓ Using environment variable for token")
+			} else {
+				fmt.Print("Enter Telegram Bot Token: ")
+				token, _ = reader.ReadString('\n')
+				token = strings.TrimSpace(token)
+			}
+		} else {
+			fmt.Print("\nTelegram Bot Token: ")
+			token, _ = reader.ReadString('\n')
+			token = strings.TrimSpace(token)
+		}
+
 		if token != "" {
 			cfg.Channels.Telegram.Enabled = true
 			cfg.Channels.Telegram.Token = token
@@ -365,9 +451,34 @@ func onboard() {
 			fmt.Println("  Note: Use /status in Telegram to check bot status")
 		}
 	} else if channelChoice == "d" {
-		fmt.Print("\nDiscord Bot Token: ")
-		token, _ := reader.ReadString('\n')
-		token = strings.TrimSpace(token)
+		// Check for existing Discord token in environment
+		envToken, envVarName := config.GetChannelEnvToken("discord")
+		var token string
+
+		if envToken != "" {
+			maskedToken := envToken
+			if len(envToken) > 12 {
+				maskedToken = envToken[:8] + "..." + envToken[len(envToken)-4:]
+			}
+			fmt.Printf("\n✓ Found Discord token in environment: %s=%s\n", envVarName, maskedToken)
+			fmt.Print("Use this token? (Y/n): ")
+			useEnvToken, _ := reader.ReadString('\n')
+			useEnvToken = strings.ToLower(strings.TrimSpace(useEnvToken))
+
+			if useEnvToken != "n" && useEnvToken != "no" {
+				token = envToken
+				fmt.Println("✓ Using environment variable for token")
+			} else {
+				fmt.Print("Enter Discord Bot Token: ")
+				token, _ = reader.ReadString('\n')
+				token = strings.TrimSpace(token)
+			}
+		} else {
+			fmt.Print("\nDiscord Bot Token: ")
+			token, _ = reader.ReadString('\n')
+			token = strings.TrimSpace(token)
+		}
+
 		if token != "" {
 			cfg.Channels.Discord.Enabled = true
 			cfg.Channels.Discord.Token = token
@@ -381,7 +492,7 @@ func onboard() {
 	}
 
 	// Step 4: Workspace
-	fmt.Println("\nStep 4/4: Workspace Setup")
+	fmt.Println("\nStep 4/5: Workspace Setup")
 	fmt.Println("──────────────────────────────────")
 	fmt.Printf("Default workspace: %s\n", cfg.WorkspacePath())
 	fmt.Print("Use default? (Y/n): ")
@@ -418,6 +529,26 @@ func onboard() {
 	// Create workspace templates
 	createWorkspaceTemplates(workspace)
 
+	// Step 5: Install builtin skills
+	fmt.Println("\nStep 5/5: Install Builtin Skills")
+	fmt.Println("──────────────────────────────────")
+	fmt.Println("This will download skills from: https://github.com/pepebot-space/skills-builtin")
+	fmt.Print("Install builtin skills? (Y/n): ")
+
+	builtinChoice, _ := reader.ReadString('\n')
+	builtinChoice = strings.ToLower(strings.TrimSpace(builtinChoice))
+
+	builtinInstalled := false
+	if builtinChoice != "n" && builtinChoice != "no" {
+		fmt.Println("")
+		installer := skills.NewSkillInstaller(workspace)
+		skillsInstallBuiltinCmd(installer)
+		builtinInstalled = true
+	} else {
+		fmt.Println("⊙ Skipped builtin skills installation")
+		fmt.Println("  You can install them later with: pepebot skills install-builtin")
+	}
+
 	// Success message
 	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println("     ___")
@@ -434,7 +565,9 @@ func onboard() {
 		fmt.Println("  • Start gateway:   pepebot gateway")
 	}
 	fmt.Println("  • View status:     pepebot status")
-	fmt.Println("  • Install skills:  pepebot skills install-builtin")
+	if !builtinInstalled {
+		fmt.Println("  • Install skills:  pepebot skills install-builtin")
+	}
 
 	if selectedProvider != "" && (selectedProvider == "maiarouter" || selectedProvider == "anthropic" || selectedProvider == "openai") {
 		fmt.Println("\n💡 Tips:")
@@ -1326,8 +1459,7 @@ func skillsHelp() {
 	fmt.Println("\nSkills commands:")
 	fmt.Println("  list                    List installed skills")
 	fmt.Println("  install <repo>          Install skill from GitHub")
-	fmt.Println("  install-builtin          Install all builtin skills to workspace")
-	fmt.Println("  list-builtin             List available builtin skills")
+	fmt.Println("  install-builtin         Install all builtin skills from pepebot-space/skills-builtin")
 	fmt.Println("  remove <name>           Remove installed skill")
 	fmt.Println("  search                  Search available skills")
 	fmt.Println("  show <name>             Show skill details")
@@ -1336,7 +1468,6 @@ func skillsHelp() {
 	fmt.Println("  pepebot skills list")
 	fmt.Println("  pepebot skills install pepebot/skills/weather")
 	fmt.Println("  pepebot skills install-builtin")
-	fmt.Println("  pepebot skills list-builtin")
 	fmt.Println("  pepebot skills remove weather")
 }
 
@@ -1397,92 +1528,27 @@ func skillsRemoveCmd(installer *skills.SkillInstaller, skillName string) {
 	fmt.Printf("✓ Skill '%s' removed successfully!\n", skillName)
 }
 
-func skillsInstallBuiltinCmd(workspace string) {
-	builtinSkillsDir := "./pepebot/skills"
-	workspaceSkillsDir := filepath.Join(workspace, "skills")
+func skillsInstallBuiltinCmd(installer *skills.SkillInstaller) {
+	fmt.Println("Installing builtin skills from https://github.com/pepebot-space/skills-builtin")
 
-	fmt.Printf("Copying builtin skills to workspace...\n")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-	skillsToInstall := []string{
-		"weather",
-		"news",
-		"stock",
-		"calculator",
-	}
-
-	for _, skillName := range skillsToInstall {
-		builtinPath := filepath.Join(builtinSkillsDir, skillName)
-		workspacePath := filepath.Join(workspaceSkillsDir, skillName)
-
-		if _, err := os.Stat(builtinPath); err != nil {
-			fmt.Printf("⊘ Builtin skill '%s' not found: %v\n", skillName, err)
-			continue
+	if err := installer.InstallBuiltinSkills(ctx); err != nil {
+		fmt.Printf("✗ Failed to install builtin skills: %v\n", err)
+		if strings.Contains(err.Error(), "HTTP 404") {
+			fmt.Println("\n  ℹ Note: The builtin skills repository might not be available yet.")
+			fmt.Println("  Please check: https://github.com/pepebot-space/skills-builtin")
+			fmt.Println("  Or install skills manually from other sources:")
+			fmt.Println("    pepebot skills install <github-repo>")
+		} else {
+			fmt.Println("  You can try again later with: pepebot skills install-builtin")
 		}
-
-		if err := os.MkdirAll(workspacePath, 0755); err != nil {
-			fmt.Printf("✗ Failed to create directory for %s: %v\n", skillName, err)
-			continue
-		}
-
-		if err := copyDirectory(builtinPath, workspacePath); err != nil {
-			fmt.Printf("✗ Failed to copy %s: %v\n", skillName, err)
-		}
-	}
-
-	fmt.Println("\n✓ All builtin skills installed!")
-	fmt.Println("Now you can use them in your workspace.")
-}
-
-func skillsListBuiltinCmd() {
-	cfg, err := loadConfig()
-	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
-		return
-	}
-	builtinSkillsDir := filepath.Join(filepath.Dir(cfg.WorkspacePath()), "pepebot", "skills")
-
-	fmt.Println("\nAvailable Builtin Skills:")
-	fmt.Println("-----------------------")
-
-	entries, err := os.ReadDir(builtinSkillsDir)
-	if err != nil {
-		fmt.Printf("Error reading builtin skills: %v\n", err)
 		return
 	}
 
-	if len(entries) == 0 {
-		fmt.Println("No builtin skills available.")
-		return
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			skillName := entry.Name()
-			skillFile := filepath.Join(builtinSkillsDir, skillName, "SKILL.md")
-
-			description := "No description"
-			if _, err := os.Stat(skillFile); err == nil {
-				data, err := os.ReadFile(skillFile)
-				if err == nil {
-					content := string(data)
-					if idx := strings.Index(content, "\n"); idx > 0 {
-						firstLine := content[:idx]
-						if strings.Contains(firstLine, "description:") {
-							descLine := strings.Index(content[idx:], "\n")
-							if descLine > 0 {
-								description = strings.TrimSpace(content[idx+descLine : idx+descLine])
-							}
-						}
-					}
-				}
-			}
-			status := "✓"
-			fmt.Printf("  %s  %s\n", status, entry.Name())
-			if description != "" {
-				fmt.Printf("     %s\n", description)
-			}
-		}
-	}
+	fmt.Println("\n✓ Builtin skills installed successfully!")
+	fmt.Println("  Use 'pepebot skills list' to see installed skills")
 }
 
 func skillsSearchCmd(installer *skills.SkillInstaller) {
@@ -1507,13 +1573,7 @@ func skillsSearchCmd(installer *skills.SkillInstaller) {
 	for _, skill := range availableSkills {
 		fmt.Printf("  📦 %s\n", skill.Name)
 		fmt.Printf("     %s\n", skill.Description)
-		fmt.Printf("     Repo: %s\n", skill.Repository)
-		if skill.Author != "" {
-			fmt.Printf("     Author: %s\n", skill.Author)
-		}
-		if len(skill.Tags) > 0 {
-			fmt.Printf("     Tags: %v\n", skill.Tags)
-		}
+		fmt.Printf("     Install: pepebot skills install pepebot-space/skills/%s\n", skill.Path)
 		fmt.Println()
 	}
 }

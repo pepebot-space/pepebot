@@ -18,10 +18,11 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 
 ## ✨ Key Features
 
-- 🤖 **Multi-Provider LLM**: Support for various AI providers including [MAIA Router](https://maiarouter.ai) (recommended), Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, and vLLM
-- 🌏 **Indonesian-Friendly**: MAIA Router integration with QRIS payment support and 52+ free models
+- 🤖 **Multi-Provider LLM**: Support for various AI providers including Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, MAIA Router and vLLM
 - 💬 **Multi-Channel**: Integration with Telegram, Discord, WhatsApp, MaixCam, and Feishu
 - 🛠️ **Tools System**: Filesystem operations, shell execution, web search, and more
+- 📱 **Android Automation**: 7 ADB tools for device control and UI automation
+- 🔄 **Workflow System**: Multi-step automation with variable interpolation and LLM-driven goals
 - 🎯 **Skills System**: Customizable and extensible skill system
 - 🚀 **Lightweight & Fast**: Small binary size with high performance
 - 🔧 **Gateway Server**: HTTP server for custom integrations
@@ -30,12 +31,105 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 
 ## 📦 Installation
 
-### Prerequisites
+### Quick Install (Recommended)
 
-- Go 1.21 or higher
-- Git
+Install the latest release with our automated installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.sh | bash
+```
+
+Or download and inspect first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
+
+**What it does:**
+- Detects your OS and architecture automatically
+- Downloads the latest release binary
+- Installs to `~/.local/bin/pepebot`
+- Optionally sets up systemd (Linux) or launchd (macOS) service
+- Adds pepebot to your PATH
+
+**Supported systems:**
+- Linux (x86_64, ARM64, ARMv7, ARMv6, RISC-V, MIPS variants)
+- macOS (Intel, Apple Silicon)
+- FreeBSD (x86_64, ARM64)
+
+### Package Managers
+
+#### Homebrew (macOS/Linux)
+
+```bash
+# Add tap (first time only)
+brew tap pepebot-space/tap https://github.com/pepebot-space/homebrew-tap
+
+# Install
+brew install pepebot
+
+# Start as service (optional)
+brew services start pepebot
+```
+
+#### Nix (NixOS/Linux/macOS)
+
+```bash
+# Install from GitHub
+nix-env -if https://github.com/pepebot-space/pepebot/archive/main.tar.gz
+
+# Or add to your configuration.nix
+environment.systemPackages = with pkgs; [
+  (callPackage (fetchFromGitHub {
+    owner = "pepebot-space";
+    repo = "pepebot";
+    rev = "v0.4.0";
+    sha256 = "...";
+  }) {})
+];
+```
+
+#### Docker
+
+```bash
+# Pull image
+docker pull ghcr.io/pepebot-space/pepebot:latest
+
+# Run interactively
+docker run -it --rm \
+  -v ~/.pepebot:/root/.pepebot \
+  ghcr.io/pepebot-space/pepebot:latest onboard
+
+# Run as daemon (gateway mode)
+docker run -d \
+  --name pepebot \
+  -v ~/.pepebot:/root/.pepebot \
+  -p 18790:18790 \
+  ghcr.io/pepebot-space/pepebot:latest gateway
+
+# Using Docker Compose
+curl -O https://raw.githubusercontent.com/pepebot-space/pepebot/main/docker-compose.yml
+docker-compose up -d
+```
+
+### Manual Installation
+
+Download pre-built binaries from [GitHub Releases](https://github.com/pepebot-space/pepebot/releases):
+
+```bash
+# Example for Linux x86_64
+wget https://github.com/pepebot-space/pepebot/releases/latest/download/pepebot-linux-amd64.tar.gz
+tar xzf pepebot-linux-amd64.tar.gz
+sudo mv pepebot-linux-amd64 /usr/local/bin/pepebot
+```
 
 ### Build from Source
+
+Prerequisites:
+- Go 1.21 or higher
+- Git
 
 ```bash
 # Clone repository
@@ -60,7 +154,7 @@ Supported platforms:
 - Linux (x86_64, ARM64, RISC-V)
 - macOS (x86_64, ARM64)
 - Windows (x86_64)
-- **Android (ARM64)** 📱 - See [ANDROID.md](ANDROID.md) for Termux setup
+- **Android (ARM64)** 📱 - See [Android Setup Guide](./docs/android.md) for Termux setup
 
 ### Build for Android
 
@@ -69,7 +163,7 @@ Supported platforms:
 make build-android
 ```
 
-For detailed Android setup instructions, see **[ANDROID.md](ANDROID.md)**.
+For detailed Android setup instructions, see **[Android Setup Guide](./docs/android.md)**.
 
 ## ⚙️ Configuration
 
@@ -325,16 +419,57 @@ sudo systemctl start pepebot
 
 ### Environment Variables
 
+Pepebot supports configuration via environment variables. You can use either `PEPEBOT_*` prefixed variables or native provider-specific variables.
+
+#### Agent Configuration
 ```bash
-# Set model manually
-export PEPEBOT_MODEL="claude-3-5-sonnet-20241022"
-
-# Set workspace directory
-export PEPEBOT_WORKSPACE="~/my-workspace"
-
-# Set config path
-export PEPEBOT_CONFIG="~/my-config.json"
+export PEPEBOT_AGENTS_DEFAULTS_MODEL="claude-3-5-sonnet-20241022"
+export PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS=8192
+export PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE=0.7
+export PEPEBOT_AGENTS_DEFAULTS_WORKSPACE="~/my-workspace"
 ```
+
+#### Provider API Keys (Multiple Formats Supported)
+```bash
+# Option 1: PEPEBOT_* prefix (recommended for Docker)
+export PEPEBOT_PROVIDERS_ANTHROPIC_API_KEY="sk-ant-xxx"
+export PEPEBOT_PROVIDERS_OPENAI_API_KEY="sk-xxx"
+export PEPEBOT_PROVIDERS_GROQ_API_KEY="gsk_xxx"
+export PEPEBOT_PROVIDERS_GEMINI_API_KEY="xxx"
+
+# Option 2: Native provider variables (detected automatically)
+export ANTHROPIC_API_KEY="sk-ant-xxx"
+export OPENAI_API_KEY="sk-xxx"
+export GROQ_API_KEY="gsk_xxx"
+export GEMINI_API_KEY="xxx"
+export GOOGLE_API_KEY="xxx"  # Alternative for Gemini
+```
+
+#### Channel Tokens
+```bash
+# Option 1: PEPEBOT_* prefix
+export PEPEBOT_CHANNELS_TELEGRAM_ENABLED=true
+export PEPEBOT_CHANNELS_TELEGRAM_TOKEN="123456:ABC-DEF..."
+
+# Option 2: Native bot token variables
+export TELEGRAM_BOT_TOKEN="123456:ABC-DEF..."
+export DISCORD_BOT_TOKEN="MTk4NjIy..."
+```
+
+#### Tools Configuration
+```bash
+export PEPEBOT_TOOLS_WEB_SEARCH_API_KEY="your-brave-api-key"
+```
+
+#### Gateway Configuration
+```bash
+export PEPEBOT_GATEWAY_HOST="0.0.0.0"
+export PEPEBOT_GATEWAY_PORT=18790
+```
+
+**Note:** During onboarding, Pepebot automatically detects existing environment variables and asks if you want to use them. This makes it easy to integrate with existing CI/CD pipelines or development environments.
+
+For a complete list of all supported environment variables, see [`.env.example`](./.env.example).
 
 ## 🎯 Skills
 
@@ -476,6 +611,92 @@ go test -v ./...
 🐸 > Run command: ls -la
 🐸 > Check the status of this git repository
 ```
+
+### Android Device Automation (ADB)
+
+Pepebot includes powerful Android automation capabilities via ADB tools and workflows.
+
+#### Prerequisites
+```bash
+# Install ADB (Android Platform Tools)
+# macOS
+brew install android-platform-tools
+
+# Linux (Debian/Ubuntu)
+sudo apt install adb
+
+# Connect device and enable USB debugging
+adb devices
+```
+
+#### Available ADB Tools
+- `adb_devices` - List connected Android devices
+- `adb_shell` - Execute shell commands on device
+- `adb_tap` - Tap screen coordinates
+- `adb_input_text` - Input text to focused field
+- `adb_screenshot` - Capture device screenshots
+- `adb_ui_dump` - Get UI hierarchy (XML)
+- `adb_swipe` - Perform swipe gestures
+
+#### Workflow System
+Create multi-step automation workflows combining ADB, web, file, and shell tools.
+
+**Available Workflow Tools:**
+- `workflow_execute` - Run saved workflows
+- `workflow_save` - Create new workflows
+- `workflow_list` - List available workflows
+
+## 📚 Documentation
+
+For comprehensive guides and technical documentation, visit our [documentation hub](./docs/README.md):
+
+- **[Installation Guide](./docs/install.md)** - Complete installation instructions for all platforms
+- **[Workflow System](./docs/workflows.md)** - Multi-step automation framework documentation
+- **[API Documentation](./docs/api.md)** - REST API and integration interfaces
+- **[Android Setup](./docs/android.md)** - Android-specific setup and Termux instructions
+- **[Build Guide](./BUILD.md)** - Build instructions and CI/CD documentation
+
+## ⚡ 5 Test Commands (Copy & Paste Ready)
+
+### 1️⃣ Basic Device Info
+```bash
+./build/pepebot agent -m "execute quick_check workflow dengan device 001a6de80412"
+```
+**Time:** ~5s | **Output:** Device list, Android version, screenshot
+
+---
+
+### 2️⃣ Health Check
+```bash
+./build/pepebot agent -m "jalankan device_control workflow untuk device 001a6de80412 dan berikan analisis lengkap tentang kesehatan device"
+```
+**Time:** ~10s | **Output:** Battery, memory, storage, network report
+
+---
+
+### 3️⃣ Create Custom Workflow
+```bash
+./build/pepebot agent -m "buatkan workflow bernama 'app_launcher' yang: 1) cek device connected, 2) launch aplikasi chrome dengan command 'am start -n com.android.chrome/com.google.android.apps.chrome.Main', 3) tunggu 2 detik, 4) ambil screenshot. Simpan dengan workflow_save"
+```
+**Time:** ~8s | **Output:** New workflow JSON file created
+
+---
+
+### 4️⃣ Batch Screenshots
+```bash
+./build/pepebot agent -m "buat dan eksekusi workflow yang mengambil 3 screenshot dengan nama screen_1.png, screen_2.png, screen_3.png dari device 001a6de80412"
+```
+**Time:** ~15s | **Output:** 3 PNG files (4 MB each)
+
+---
+
+### 5️⃣ Monitoring & Reporting
+```bash
+./build/pepebot agent -m "buat workflow 'device_monitor' yang: 1) ambil battery level, 2) ambil memory usage, 3) ambil top 5 running processes, 4) simpan semua info ke file device_report.txt, 5) ambil screenshot sebagai bukti. Lalu execute workflow tersebut untuk device 001a6de80412"
+```
+**Time:** ~12s | **Output:** Text report + screenshot
+
+---
 
 ## 🔒 Security Notes
 

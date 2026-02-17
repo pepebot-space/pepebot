@@ -1,0 +1,50 @@
+{
+  "name": "Device Health Check",
+  "description": "Check battery, memory, storage, and network status of Android device",
+  "variables": {
+    "device": "emulator-5554"
+  },
+  "steps": [
+    {
+      "name": "check_devices",
+      "tool": "adb_devices",
+      "args": {}
+    },
+    {
+      "name": "battery",
+      "tool": "adb_shell",
+      "args": {
+        "command": "dumpsys battery",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "memory",
+      "tool": "adb_shell",
+      "args": {
+        "command": "free -h",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "storage",
+      "tool": "adb_shell",
+      "args": {
+        "command": "df -h",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "network",
+      "tool": "adb_shell",
+      "args": {
+        "command": "ip addr show",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "report",
+      "goal": "Analyze the health data from previous steps (battery, memory, storage, network) and generate a concise summary report with key metrics and any warnings."
+    }
+  ]
+}

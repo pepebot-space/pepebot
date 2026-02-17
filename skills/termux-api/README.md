@@ -183,7 +183,7 @@ pkg install termux-api
 - [Termux Wiki](https://wiki.termux.com/wiki/Termux:API)
 - [Termux API GitHub](https://github.com/termux/termux-api)
 - [Pepebot Docs](../../README.md)
-- [Android Setup Guide](../../ANDROID.md)
+- [Android Setup Guide](../../docs/android.md)
 
 ## 📝 License
 

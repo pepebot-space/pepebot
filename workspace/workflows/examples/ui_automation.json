@@ -1,0 +1,68 @@
+{
+  "name": "Login Automation",
+  "description": "Automate app login with username/password",
+  "variables": {
+    "device": "emulator-5554",
+    "username": "demo@example.com",
+    "password": "demo123"
+  },
+  "steps": [
+    {
+      "name": "get_ui",
+      "tool": "adb_ui_dump",
+      "args": {
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "analyze_ui",
+      "goal": "Find username field coordinates in UI dump from step 'get_ui'. Store the coordinates as variables 'username_x' and 'username_y'."
+    },
+    {
+      "name": "tap_username",
+      "tool": "adb_tap",
+      "args": {
+        "x": "{{username_x}}",
+        "y": "{{username_y}}",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "input_username",
+      "tool": "adb_input_text",
+      "args": {
+        "text": "{{username}}",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "find_password_field",
+      "goal": "Find password field coordinates in the UI. Store as 'password_x' and 'password_y'."
+    },
+    {
+      "name": "tap_password",
+      "tool": "adb_tap",
+      "args": {
+        "x": "{{password_x}}",
+        "y": "{{password_y}}",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "input_password",
+      "tool": "adb_input_text",
+      "args": {
+        "text": "{{password}}",
+        "device": "{{device}}"
+      }
+    },
+    {
+      "name": "verify",
+      "tool": "adb_screenshot",
+      "args": {
+        "filename": "login_result.png",
+        "device": "{{device}}"
+      }
+    }
+  ]
+}

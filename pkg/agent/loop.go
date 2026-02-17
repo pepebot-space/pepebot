@@ -49,6 +49,23 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewListDirTool(workspace))
 	toolsRegistry.Register(tools.NewExecTool(workspace))
 
+	// Register workflow tools (always available, no dependencies)
+	workflowHelper := tools.NewWorkflowHelper(workspace, toolsRegistry)
+	toolsRegistry.Register(tools.NewWorkflowExecuteTool(workflowHelper))
+	toolsRegistry.Register(tools.NewWorkflowSaveTool(workflowHelper))
+	toolsRegistry.Register(tools.NewWorkflowListTool(workflowHelper))
+
+	// Register ADB tools (conditional on ADB binary availability)
+	if adbHelper, err := tools.NewAdbHelper(workspace); err == nil {
+		toolsRegistry.Register(tools.NewAdbDevicesTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbShellTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbTapTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbInputTextTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbScreenshotTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbUIDumpTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbSwipeTool(adbHelper))
+	}
+
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
@@ -84,6 +101,23 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	toolsRegistry.Register(tools.NewWriteFileTool(workspace))
 	toolsRegistry.Register(tools.NewListDirTool(workspace))
 	toolsRegistry.Register(tools.NewExecTool(workspace))
+
+	// Register workflow tools (always available, no dependencies)
+	workflowHelper := tools.NewWorkflowHelper(workspace, toolsRegistry)
+	toolsRegistry.Register(tools.NewWorkflowExecuteTool(workflowHelper))
+	toolsRegistry.Register(tools.NewWorkflowSaveTool(workflowHelper))
+	toolsRegistry.Register(tools.NewWorkflowListTool(workflowHelper))
+
+	// Register ADB tools (conditional on ADB binary availability)
+	if adbHelper, err := tools.NewAdbHelper(workspace); err == nil {
+		toolsRegistry.Register(tools.NewAdbDevicesTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbShellTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbTapTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbInputTextTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbScreenshotTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbUIDumpTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbSwipeTool(adbHelper))
+	}
 
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
