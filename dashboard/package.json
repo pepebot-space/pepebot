@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "start": "node index.js",
+    "build": "cd client && npm install && npm run build",
+    "client:dev": "cd client && npm run dev",
+    "dev": "concurrently \"node index.js\" \"npm run client:dev\""
+  },
+  "dependencies": {
+    "@prisma/client": "5.10.0",
+    "axios": "^1.13.5",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "multer": "^2.0.2",
+    "prisma": "5.10.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
