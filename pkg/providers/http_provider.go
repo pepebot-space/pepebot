@@ -7,6 +7,7 @@
 package providers
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -159,6 +160,103 @@ func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 		FinishReason: choice.FinishReason,
 		Usage:        apiResponse.Usage,
 	}, nil
+}
+
+func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model string, options map[string]interface{}, callback StreamCallback) error {
+	if p.apiBase == "" {
+		return fmt.Errorf("API base not configured")
+	}
+
+	requestBody := map[string]interface{}{
+		"model":    model,
+		"messages": messages,
+		"stream":   true,
+	}
+
+	if maxTokens, ok := options["max_tokens"].(int); ok {
+		requestBody["max_tokens"] = maxTokens
+	}
+
+	if temperature, ok := options["temperature"].(float64); ok {
+		requestBody["temperature"] = temperature
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", p.apiBase+"/chat/completions", bytes.NewReader(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if p.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error: %s", string(body))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if line == "" {
+			continue
+		}
+
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+
+		if data == "[DONE]" {
+			callback(StreamChunk{Done: true})
+			return nil
+		}
+
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+				FinishReason *string `json:"finish_reason"`
+			} `json:"choices"`
+		}
+
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+
+		if len(chunk.Choices) > 0 {
+			delta := chunk.Choices[0].Delta
+			if delta.Content != "" {
+				callback(StreamChunk{Content: delta.Content})
+			}
+			if chunk.Choices[0].FinishReason != nil && *chunk.Choices[0].FinishReason == "stop" {
+				callback(StreamChunk{Done: true})
+				return nil
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading stream: %w", err)
+	}
+
+	callback(StreamChunk{Done: true})
+	return nil
 }
 
 func (p *HTTPProvider) GetDefaultModel() string {

@@ -57,8 +57,18 @@ type FileData struct {
 	FileID   string `json:"file_id,omitempty"`   // Uploaded file ID (e.g., "file-xxxxx")
 }
 
+// StreamChunk represents a single chunk of streamed LLM output
+type StreamChunk struct {
+	Content string `json:"content"`
+	Done    bool   `json:"done"`
+}
+
+// StreamCallback is called for each chunk during streaming
+type StreamCallback func(chunk StreamChunk)
+
 type LLMProvider interface {
 	Chat(ctx context.Context, messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) (*LLMResponse, error)
+	ChatStream(ctx context.Context, messages []Message, model string, options map[string]interface{}, callback StreamCallback) error
 	GetDefaultModel() string
 }
 

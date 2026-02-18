@@ -1,64 +1,51 @@
-# 🐸 Pepebot v0.4.2 - ADB Tools Overhaul
+# 🐸 Pepebot v0.4.3 - OpenAI-Compatible Gateway API
 
 **Release Date:** 2026-02-18
 
 ## 🎉 What's New
 
-### 📱 ADB Tools - Completely Rewritten
+### 🌐 OpenAI-Compatible HTTP API with SSE Streaming
 
-All ADB tools have been overhauled for reliability, inspired by the [phone-use skill](https://github.com/pepebot-space/skills/tree/main/phone-use) approach. If you've been experiencing errors with Android automation — this release fixes them.
+Pepebot gateway now includes a full HTTP API server that speaks the OpenAI Chat Completions protocol. Connect any OpenAI-compatible client, dashboard, or tool — it just works.
 
-### 🆕 New Tools
-
-**`adb_open_app`** - Launch apps by package name
+**Chat with streaming:**
+```bash
+curl -N -X POST http://localhost:18790/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-Agent: default" \
+  -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
 ```
-adb_open_app(package: "com.android.settings")
+
+**SSE response format (OpenAI-compatible):**
 ```
-- Smart launcher: tries `am start`, falls back to `monkey`
-- No more manual shell commands to open apps!
-
-**`adb_keyevent`** - Send hardware key events
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"content":"Hello"}}]}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"content":"!"}}]}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{},"finish_reason":"stop"}]}
+data: [DONE]
 ```
-adb_keyevent(keycode: 4)  → BACK
-adb_keyevent(keycode: 3)  → HOME
-```
-- Supports all Android keycodes with human-readable names
 
-### 🔧 Major Improvements
+### 📡 API Endpoints
 
-**Screenshot** (`adb_screenshot`):
-- ⚡ **3x faster**: Direct PNG capture via `exec-out` (was: screencap → pull → rm)
-- ✅ PNG signature validation
-- ✅ Returns base64 when no filename given
-- ✅ No more `/sdcard` write permission errors
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/chat/completions` | Chat with agent (streaming + non-streaming) |
+| `GET` | `/v1/models` | List available models |
+| `GET` | `/v1/agents` | List registered agents |
+| `GET` | `/v1/sessions` | List active web sessions |
+| `POST` | `/v1/sessions/{key}/new` | Start new chat session |
+| `POST` | `/v1/sessions/{key}/stop` | Stop in-flight processing |
+| `DELETE` | `/v1/sessions/{key}` | Delete a session |
+| `GET` | `/health` | Health check |
 
-**UI Dump** (`adb_ui_dump`):
-- ✅ Multiple path fallback (`/sdcard/` → `/data/local/tmp/`)
-- ✅ `exec-out cat` with `shell cat` fallback
-- ✅ XML structure validation
-- ✅ Works on more devices and Android versions
+### 🔑 Key Features
 
-**Text Input** (`adb_input_text`):
-- ✅ Proper escaping for 20+ shell metacharacters (`$`, `&`, `|`, quotes, etc.)
-- ✅ Auto-chunking at 80 chars (no more length limit errors)
-- ✅ Multi-line support with automatic Enter keys
-- ✅ New `press_enter` option
-
-**Tap** (`adb_tap`):
-- ✅ New `long_press` mode (hold 550ms)
-- ✅ New `count` for double-tap / multi-tap
-
-**Swipe** (`adb_swipe`):
-- ✅ New `direction` mode: just say `up`, `down`, `left`, `right`
-- ✅ Coordinate-based swipe still works (backward compatible)
-- ✅ More natural default duration (220ms)
-
-### 🐛 Bug Fixes
-
-- Fixed screenshot failures from race conditions in 3-step capture process
-- Fixed UI dump errors on devices where `/sdcard` is read-only
-- Fixed special characters breaking text input (`$`, `&`, `|`, `;`, quotes)
-- Fixed long text input failures from ADB command length limits
+- **OpenAI protocol**: Works with any OpenAI-compatible client SDK
+- **SSE streaming**: Real-time token-by-token responses
+- **Multi-agent**: Select agent via `X-Agent` header
+- **Session management**: Create, list, clear, and stop sessions via API
+- **CORS enabled**: Ready for browser dashboards
+- **Tool calls internal**: Agent handles tools server-side, API returns clean content
+- **No new dependencies**: Pure `net/http` stdlib
 
 ## 📦 Installation
 
@@ -80,33 +67,37 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.4.2).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.4.3).
 
 ## 🚀 Quick Start
 
-1. **Initialize configuration:**
+1. **Start the gateway:**
    ```bash
-   pepebot onboard
+   pepebot gateway -v
    ```
 
-2. **Start the gateway:**
+2. **Check health:**
    ```bash
-   pepebot gateway
+   curl http://localhost:18790/health
    ```
 
-3. **Try Android automation:**
+3. **Chat with the agent:**
+   ```bash
+   curl -X POST http://localhost:18790/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":false}'
    ```
-   "Open Settings on my phone"
-   "Take a screenshot"
-   "Tap the Wi-Fi option"
-   "Scroll down"
+
+4. **List agents:**
+   ```bash
+   curl http://localhost:18790/v1/agents
    ```
 
 ## 📚 Documentation
 
 - [Installation Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/install.md)
-- [Workflow Documentation](https://github.com/pepebot-space/pepebot/blob/main/docs/workflows.md)
 - [API Reference](https://github.com/pepebot-space/pepebot/blob/main/docs/api.md)
+- [Workflow Documentation](https://github.com/pepebot-space/pepebot/blob/main/docs/workflows.md)
 - [Full Changelog](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md)
 
 ## 🔗 Links
@@ -118,8 +109,8 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 📝 Full Changelog
 
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#042---2026-02-18).
+For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#043---2026-02-18).
 
 ---
 
-**Note:** When upgrading from v0.4.1, all existing configurations and data are preserved. No migration needed. New tools (`adb_open_app`, `adb_keyevent`) are automatically registered when ADB is available.
+**Note:** When upgrading from v0.4.2, all existing configurations and data are preserved. No migration needed. The HTTP API server starts automatically alongside existing chat channels when running `pepebot gateway`.
