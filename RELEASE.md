@@ -1,84 +1,64 @@
-# 🐸 Pepebot v0.4.1 - Multimodal File Support
+# 🐸 Pepebot v0.4.2 - ADB Tools Overhaul
 
-**Release Date:** 2026-02-17
+**Release Date:** 2026-02-18
 
 ## 🎉 What's New
 
-### 📎 Multimodal File Support
-Pepebot can now handle **all file types**, not just images! Send PDFs, documents, audio, and video files directly to your AI agent.
+### 📱 ADB Tools - Completely Rewritten
 
-**Supported File Types:**
-- 📄 **Documents**: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF, ODT, ODS, ODP
-- 🎵 **Audio**: MP3, WAV, OGG, M4A, FLAC, AAC, WMA, OPUS
-- 🎬 **Video**: MP4, AVI, MOV, WMV, FLV, WEBM, MKV, M4V, 3GP
-- 🖼️ **Images**: JPG, PNG, GIF, WebP, BMP, SVG (already supported, now improved)
+All ADB tools have been overhauled for reliability, inspired by the [phone-use skill](https://github.com/pepebot-space/skills/tree/main/phone-use) approach. If you've been experiencing errors with Android automation — this release fixes them.
 
-**Key Features:**
-- ✅ Automatic file type detection (50+ MIME types)
-- ✅ Smart base64 encoding for local files
-- ✅ OpenAI-compatible API format
-- ✅ New `send_file` tool for sending any file type
+### 🆕 New Tools
 
-### 📱 Enhanced Channel Support
-All chat channels now fully support media files!
+**`adb_open_app`** - Launch apps by package name
+```
+adb_open_app(package: "com.android.settings")
+```
+- Smart launcher: tries `am start`, falls back to `monkey`
+- No more manual shell commands to open apps!
 
-**Telegram:**
-- ✅ Send/receive images, videos, audio, documents
-- ✅ Automatic file type detection
-- ✅ Caption support with HTML formatting
+**`adb_keyevent`** - Send hardware key events
+```
+adb_keyevent(keycode: 4)  → BACK
+adb_keyevent(keycode: 3)  → HOME
+```
+- Supports all Android keycodes with human-readable names
 
-**Discord:**
-- ✅ Full media support (verified working)
-- ✅ Multi-file attachments
-- ✅ Automatic download for URLs and local files
+### 🔧 Major Improvements
 
-**WhatsApp:**
-- ✅ Send/receive images, videos, audio, documents
-- ✅ Automatic media download from WhatsApp servers
-- ✅ Caption extraction for media messages
-- ✅ Proper handling of media without captions
+**Screenshot** (`adb_screenshot`):
+- ⚡ **3x faster**: Direct PNG capture via `exec-out` (was: screencap → pull → rm)
+- ✅ PNG signature validation
+- ✅ Returns base64 when no filename given
+- ✅ No more `/sdcard` write permission errors
 
-### 🐳 Enhanced Docker Image
-Production-ready container with built-in utilities!
+**UI Dump** (`adb_ui_dump`):
+- ✅ Multiple path fallback (`/sdcard/` → `/data/local/tmp/`)
+- ✅ `exec-out cat` with `shell cat` fallback
+- ✅ XML structure validation
+- ✅ Works on more devices and Android versions
 
-**What's Included:**
-- ⏰ **Cron daemon** - Schedule periodic tasks (pepebot cron, backups, etc.)
-- 🖥️ **Tmux** - Terminal multiplexer for session management
-- 🔧 **Systemctl** - Service management in containers
-- 🐧 **Ubuntu 24.04 LTS** - Stable and familiar base image
-- 🛠️ **Common utilities** - vim, nano, htop, curl, ping, net-tools
+**Text Input** (`adb_input_text`):
+- ✅ Proper escaping for 20+ shell metacharacters (`$`, `&`, `|`, quotes, etc.)
+- ✅ Auto-chunking at 80 chars (no more length limit errors)
+- ✅ Multi-line support with automatic Enter keys
+- ✅ New `press_enter` option
 
-**Features:**
-- ✅ Cron runs alongside pepebot gateway automatically
-- ✅ Example crontab configuration included
-- ✅ Comprehensive deployment guide
-- ✅ Health checks and logging support
-- ✅ Ready for production deployments
+**Tap** (`adb_tap`):
+- ✅ New `long_press` mode (hold 550ms)
+- ✅ New `count` for double-tap / multi-tap
 
-### 🔧 Technical Improvements
-
-**API Compatibility:**
-- OpenAI-compliant file format (`file_data` field)
-- Support for both base64 data URLs and uploaded file IDs
-- Simplified ContentBlock structure for better maintainability
-
-**Context Builder:**
-- Automatic local file path → base64 conversion
-- Smart file type detection
-- Mixed content support (text + images + files)
-- Enhanced logging for debugging
+**Swipe** (`adb_swipe`):
+- ✅ New `direction` mode: just say `up`, `down`, `left`, `right`
+- ✅ Coordinate-based swipe still works (backward compatible)
+- ✅ More natural default duration (220ms)
 
 ### 🐛 Bug Fixes
 
-**WhatsApp Media Reception:**
-- Fixed issue where images sent to WhatsApp bot were not processed
-- Added proper media download handlers
-- Caption extraction now works correctly
-
-**LLM File Processing:**
-- Fixed "Invalid image received" error for local file paths
-- LLM providers now receive base64-encoded data URLs
-- Compatible with Gemini, OpenAI, and other providers via LiteLLM
+- Fixed screenshot failures from race conditions in 3-step capture process
+- Fixed UI dump errors on devices where `/sdcard` is read-only
+- Fixed special characters breaking text input (`$`, `&`, `|`, `;`, quotes)
+- Fixed long text input failures from ADB command length limits
 
 ## 📦 Installation
 
@@ -100,7 +80,7 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.4.1).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.4.2).
 
 ## 🚀 Quick Start
 
@@ -114,10 +94,13 @@ Download the appropriate binary for your platform from the [releases page](https
    pepebot gateway
    ```
 
-3. **Send files to your bot:**
-   - Send images, PDFs, audio, or video files
-   - Bot will automatically process and analyze them
-   - Works across Telegram, Discord, and WhatsApp!
+3. **Try Android automation:**
+   ```
+   "Open Settings on my phone"
+   "Take a screenshot"
+   "Tap the Wi-Fi option"
+   "Scroll down"
+   ```
 
 ## 📚 Documentation
 
@@ -133,14 +116,10 @@ Download the appropriate binary for your platform from the [releases page](https
 - **Issues**: https://github.com/pepebot-space/pepebot/issues
 - **Discussions**: https://github.com/pepebot-space/pepebot/discussions
 
-## 🙏 Contributors
-
-Thank you to everyone who contributed to this release!
-
 ## 📝 Full Changelog
 
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#041---2026-02-17).
+For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#042---2026-02-18).
 
 ---
 
-**Note:** When upgrading from v0.4.0, all existing configurations and data are preserved. No migration needed!
+**Note:** When upgrading from v0.4.1, all existing configurations and data are preserved. No migration needed. New tools (`adb_open_app`, `adb_keyevent`) are automatically registered when ADB is available.
