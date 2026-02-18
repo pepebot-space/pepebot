@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -159,6 +160,25 @@ func (sm *SessionManager) Save(session *Session) error {
 	}
 
 	return os.WriteFile(sessionPath, data, 0644)
+}
+
+// ListSessions returns all sessions matching an optional prefix filter
+func (sm *SessionManager) ListSessions(prefix string) []*Session {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	var result []*Session
+	for key, session := range sm.sessions {
+		if prefix == "" || strings.HasPrefix(key, prefix) {
+			result = append(result, session)
+		}
+	}
+	return result
+}
+
+// DeleteSession deletes a session completely
+func (sm *SessionManager) DeleteSession(key string) {
+	sm.ClearSession(key)
 }
 
 func (sm *SessionManager) loadSessions() error {

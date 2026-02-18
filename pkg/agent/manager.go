@@ -10,6 +10,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
+	"github.com/pepebot-space/pepebot/pkg/session"
 )
 
 // AgentManager manages multiple agent instances
@@ -151,6 +152,77 @@ func (am *AgentManager) ListEnabledAgents() map[string]*AgentDefinition {
 // GetRegistry returns the agent registry
 func (am *AgentManager) GetRegistry() *AgentRegistry {
 	return am.registry
+}
+
+// GetConfig returns the agent manager's config
+func (am *AgentManager) GetConfig() *config.Config {
+	return am.config
+}
+
+// ProcessDirectStream processes a message with streaming using the specified agent
+func (am *AgentManager) ProcessDirectStream(ctx context.Context, content, sessionKey, agentName string, callback providers.StreamCallback) error {
+	if agentName == "" {
+		agentName = am.defaultAgent
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		return err
+	}
+
+	return agentLoop.ProcessDirectStream(ctx, content, sessionKey, callback)
+}
+
+// ProcessDirect processes a message without streaming using the specified agent
+func (am *AgentManager) ProcessDirect(ctx context.Context, content, sessionKey, agentName string) (string, error) {
+	if agentName == "" {
+		agentName = am.defaultAgent
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		return "", err
+	}
+
+	return agentLoop.ProcessDirect(ctx, content, sessionKey)
+}
+
+// ClearSession clears a session on the specified agent
+func (am *AgentManager) ClearSession(sessionKey, agentName string) {
+	if agentName == "" {
+		agentName = am.defaultAgent
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		return
+	}
+
+	agentLoop.ClearSession(sessionKey)
+}
+
+// GetSessions returns the session manager from the default agent
+func (am *AgentManager) GetSessions() *session.SessionManager {
+	agentLoop, err := am.GetDefaultAgent()
+	if err != nil {
+		return nil
+	}
+	return agentLoop.Sessions()
+}
+
+// StopSession stops in-flight processing for a session key (reuses cmdStop logic)
+func (am *AgentManager) StopSession(sessionKey string) string {
+	cancelVal, ok := am.inFlight.Load(sessionKey)
+	if !ok {
+		return "No active processing to stop."
+	}
+
+	if cancel, ok := cancelVal.(context.CancelFunc); ok {
+		cancel()
+		return "Stopping current processing..."
+	}
+
+	return "No active processing to stop."
 }
 
 // Run starts processing messages from the bus

@@ -216,6 +216,10 @@ func (al *AgentLoop) AgentName() string {
 	return al.agentName
 }
 
+func (al *AgentLoop) Sessions() *session.SessionManager {
+	return al.sessions
+}
+
 func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey string) (string, error) {
 	msg := bus.InboundMessage{
 		Channel:    "cli",
@@ -226,6 +230,161 @@ func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey stri
 	}
 
 	return al.processMessage(ctx, msg)
+}
+
+// ProcessDirectStream processes a message with streaming for the final response.
+// Tool iterations use non-streaming Chat(); only the final LLM call streams.
+func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content, sessionKey string, callback providers.StreamCallback) error {
+	msg := bus.InboundMessage{
+		Channel:    "web",
+		SenderID:   "user",
+		ChatID:     "web",
+		Content:    content,
+		SessionKey: sessionKey,
+	}
+
+	logger.DebugCF("agent", "Processing stream message", map[string]interface{}{
+		"session_key": msg.SessionKey,
+	})
+
+	history := al.sessions.GetHistory(msg.SessionKey)
+	summary := al.sessions.GetSummary(msg.SessionKey)
+
+	metadata := map[string]string{
+		"channel":    msg.Channel,
+		"channel_id": msg.ChatID,
+	}
+
+	messages := al.contextBuilder.BuildMessages(
+		history,
+		summary,
+		msg.Content,
+		msg.Media,
+		metadata,
+	)
+
+	iteration := 0
+
+	for iteration < al.maxIterations {
+		iteration++
+
+		toolDefs := al.tools.GetDefinitions()
+		providerToolDefs := make([]providers.ToolDefinition, 0, len(toolDefs))
+		for _, td := range toolDefs {
+			providerToolDefs = append(providerToolDefs, providers.ToolDefinition{
+				Type: td["type"].(string),
+				Function: providers.ToolFunctionDefinition{
+					Name:        td["function"].(map[string]interface{})["name"].(string),
+					Description: td["function"].(map[string]interface{})["description"].(string),
+					Parameters:  td["function"].(map[string]interface{})["parameters"].(map[string]interface{}),
+				},
+			})
+		}
+
+		// Non-streaming call for tool iterations
+		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
+			"max_tokens":  al.contextWindow,
+			"temperature": al.temperature,
+		})
+
+		if err != nil {
+			return fmt.Errorf("LLM call failed: %w", err)
+		}
+
+		if len(response.ToolCalls) == 0 {
+			// No tool calls - this is the final response.
+			// If we already got content from Chat(), stream it character-by-character
+			// (provider already returned full content, so we just emit it)
+			if response.Content != "" {
+				// Use streaming for the final call instead
+				// Re-do the last call with streaming
+				err := al.provider.ChatStream(ctx, messages, al.model, map[string]interface{}{
+					"max_tokens":  al.contextWindow,
+					"temperature": al.temperature,
+				}, callback)
+				if err != nil {
+					// Fallback: emit the non-streamed content
+					callback(providers.StreamChunk{Content: response.Content})
+					callback(providers.StreamChunk{Done: true})
+				}
+			} else {
+				callback(providers.StreamChunk{Content: "I've completed processing but have no response to give."})
+				callback(providers.StreamChunk{Done: true})
+			}
+
+			// Save to session
+			finalContent := response.Content
+			if finalContent == "" {
+				finalContent = "I've completed processing but have no response to give."
+			}
+			al.sessions.AddMessage(msg.SessionKey, "user", msg.Content)
+			al.sessions.AddMessage(msg.SessionKey, "assistant", finalContent)
+
+			newHistory := al.sessions.GetHistory(msg.SessionKey)
+			tokenEstimate := al.estimateTokens(newHistory)
+			threshold := al.contextWindow * 75 / 100
+
+			if len(newHistory) > 20 || tokenEstimate > threshold {
+				if _, loading := al.summarizing.LoadOrStore(msg.SessionKey, true); !loading {
+					go func() {
+						defer al.summarizing.Delete(msg.SessionKey)
+						al.summarizeSession(msg.SessionKey)
+					}()
+				}
+			}
+
+			al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
+			return nil
+		}
+
+		// Handle tool calls (non-streaming)
+		assistantMsg := providers.Message{
+			Role:    "assistant",
+			Content: response.Content,
+		}
+
+		for _, tc := range response.ToolCalls {
+			argumentsJSON, _ := json.Marshal(tc.Arguments)
+			assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, providers.ToolCall{
+				ID:   tc.ID,
+				Type: "function",
+				Function: &providers.FunctionCall{
+					Name:      tc.Name,
+					Arguments: string(argumentsJSON),
+				},
+			})
+		}
+		messages = append(messages, assistantMsg)
+
+		for _, tc := range response.ToolCalls {
+			logger.DebugCF("agent", "Executing tool (stream mode)", map[string]interface{}{
+				"tool_name": tc.Name,
+				"tool_id":   tc.ID,
+			})
+
+			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
+			if err != nil {
+				result = fmt.Sprintf("Error: %v", err)
+			}
+
+			toolResultMsg := providers.Message{
+				Role:       "tool",
+				Content:    result,
+				ToolCallID: tc.ID,
+			}
+			messages = append(messages, toolResultMsg)
+		}
+	}
+
+	// Max iterations reached - stream the final content we have
+	callback(providers.StreamChunk{Content: "I've completed processing but have no response to give."})
+	callback(providers.StreamChunk{Done: true})
+
+	al.sessions.AddMessage(msg.SessionKey, "user", msg.Content)
+	al.sessions.AddMessage(msg.SessionKey, "assistant", "I've completed processing but have no response to give.")
+	al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
+
+	return nil
 }
 
 func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {

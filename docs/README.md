@@ -57,7 +57,8 @@ Complete API reference for integrating with Pepebot:
 - Code examples in Python, JavaScript, Go, and cURL
 
 **Topics covered:**
-- Gateway endpoints (/health, /message, /workflow, /sessions)
+- OpenAI-compatible Chat Completions API with SSE streaming
+- Gateway endpoints (/v1/chat/completions, /v1/models, /v1/agents, /v1/sessions, /health)
 - Tool development interface with examples
 - Provider integration for custom LLMs
 - Channel integration for messaging platforms
@@ -190,8 +191,8 @@ Always update `CHANGELOG.md` when adding or removing features.
 
 This documentation is maintained alongside the codebase and is updated with each release.
 
-**Current Version**: 0.4.0
-**Last Updated**: 2026-02-17
+**Current Version**: 0.4.3
+**Last Updated**: 2026-02-18
 
 For the latest documentation, visit: https://github.com/pepebot-space/pepebot/tree/main/docs
 

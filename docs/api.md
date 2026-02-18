@@ -68,7 +68,20 @@ Configure in `~/.pepebot/config.json`:
 }
 ```
 
-### Endpoints
+### Endpoints Overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/chat/completions` | Chat with agent (OpenAI-compatible, SSE streaming) |
+| `GET` | `/v1/models` | List available models |
+| `GET` | `/v1/agents` | List registered agents |
+| `GET` | `/v1/sessions` | List active web sessions |
+| `POST` | `/v1/sessions/{key}/new` | Clear & start new session |
+| `POST` | `/v1/sessions/{key}/stop` | Stop in-flight processing |
+| `DELETE` | `/v1/sessions/{key}` | Delete a session |
+| `GET` | `/health` | Health check |
+
+---
 
 #### Health Check
 
@@ -79,9 +92,7 @@ Check if the gateway is running.
 **Response:**
 ```json
 {
-  "status": "ok",
-  "version": "0.4.0",
-  "uptime": 3600
+  "status": "ok"
 }
 ```
 
@@ -92,129 +103,206 @@ curl http://localhost:18790/health
 
 ---
 
-#### Send Message
+#### Chat Completions (OpenAI-Compatible)
 
-**POST** `/message`
+**POST** `/v1/chat/completions`
 
-Send a message to the agent and get a response.
+Send messages and get a response from the agent. Supports both streaming (SSE) and non-streaming modes. Compatible with OpenAI client SDKs.
 
 **Request Headers:**
 ```
 Content-Type: application/json
+X-Agent: default          (optional, selects agent, default: "default")
+X-Session-Key: web:default (optional, session routing, default: "web:<agent>")
 ```
 
 **Request Body:**
 ```json
 {
-  "message": "string (required)",
-  "session_key": "string (optional, default: 'gateway:default')",
-  "agent": "string (optional, default: 'default')",
-  "channel": "string (optional, default: 'gateway')",
-  "media": ["string"] (optional, image URLs or file paths)
+  "model": "maia/gemini-3-pro-preview",
+  "messages": [
+    {"role": "user", "content": "Hello!"}
+  ],
+  "stream": true,
+  "temperature": 0.7,
+  "max_tokens": 8192
 }
 ```
 
-**Response:**
+**Non-Streaming Response** (`stream: false`):
 ```json
 {
-  "success": true,
-  "response": "Agent's response text",
-  "session_key": "gateway:default",
-  "timestamp": "2026-02-17T12:00:00Z"
+  "id": "chatcmpl-1708278123456789",
+  "object": "chat.completion",
+  "created": 1708278123,
+  "model": "maia/gemini-3-pro-preview",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello! How can I help you today?"
+      },
+      "finish_reason": "stop"
+    }
+  ]
 }
+```
+
+**Streaming Response** (`stream: true`):
+```
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"}}]}
+
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"!"}}]}
+
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
 ```
 
 **Error Response:**
 ```json
 {
-  "success": false,
-  "error": "Error message"
+  "error": {
+    "message": "invalid request body: ...",
+    "type": "invalid_request_error",
+    "code": "Bad Request"
+  }
 }
 ```
 
-**Example:**
+**Example (non-streaming):**
 ```bash
-curl -X POST http://localhost:18790/message \
+curl -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "What is the weather today?",
-    "session_key": "api:user123"
+    "model": "maia/gemini-3-pro-preview",
+    "messages": [{"role": "user", "content": "What is 2+2?"}],
+    "stream": false
   }'
 ```
 
-**Example with Media:**
+**Example (streaming):**
 ```bash
-curl -X POST http://localhost:18790/message \
+curl -N -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
+  -H "X-Agent: default" \
   -d '{
-    "message": "Analyze this image",
-    "media": ["https://example.com/image.jpg"],
-    "session_key": "api:user123"
+    "model": "maia/gemini-3-pro-preview",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": true
   }'
 ```
+
+**Example (specific agent):**
+```bash
+curl -X POST http://localhost:18790/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-Agent: coder" \
+  -H "X-Session-Key: web:coder" \
+  -d '{
+    "model": "maia/claude-3-5-sonnet",
+    "messages": [{"role": "user", "content": "Write a Python hello world"}],
+    "stream": true
+  }'
+```
+
+> **Note:** Tool calls are handled server-side by the agent loop. The API only returns the final assistant content — tool execution is invisible to the client.
 
 ---
 
-#### Execute Workflow
+#### List Models
 
-**POST** `/workflow`
+**GET** `/v1/models`
 
-Execute a workflow by name.
-
-**Request Body:**
-```json
-{
-  "workflow_name": "string (required)",
-  "variables": {
-    "key": "value"
-  } (optional)
-}
-```
+List available models from enabled agents.
 
 **Response:**
 ```json
 {
-  "success": true,
-  "workflow_name": "device_health",
-  "result": "Workflow execution result",
-  "timestamp": "2026-02-17T12:00:00Z"
+  "object": "list",
+  "data": [
+    {
+      "id": "maia/gemini-3-pro-preview",
+      "object": "model",
+      "created": 1708278123,
+      "owned_by": "pepebot"
+    },
+    {
+      "id": "maia/claude-3-5-sonnet",
+      "object": "model",
+      "created": 1708278123,
+      "owned_by": "pepebot"
+    }
+  ]
 }
 ```
 
 **Example:**
 ```bash
-curl -X POST http://localhost:18790/workflow \
-  -H "Content-Type: application/json" \
-  -d '{
-    "workflow_name": "device_health",
-    "variables": {
-      "device": "emulator-5554"
+curl http://localhost:18790/v1/models
+```
+
+---
+
+#### List Agents
+
+**GET** `/v1/agents`
+
+Returns raw `registry.json` content from `~/.pepebot/workspace/agents/registry.json`.
+
+**Response:**
+```json
+{
+  "version": "1.0",
+  "agents": {
+    "default": {
+      "enabled": true,
+      "model": "maia/gemini-3-pro-preview",
+      "provider": "",
+      "description": "Default general-purpose agent",
+      "temperature": 0.7,
+      "max_tokens": 8192
+    },
+    "coder": {
+      "enabled": true,
+      "model": "maia/claude-3-5-sonnet",
+      "description": "Coding specialist"
     }
-  }'
+  }
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/agents
 ```
 
 ---
 
 #### List Sessions
 
-**GET** `/sessions`
+**GET** `/v1/sessions`
 
-List all active sessions.
+List active web sessions (filtered by `web:` prefix).
 
 **Response:**
 ```json
 {
-  "success": true,
   "sessions": [
     {
-      "key": "gateway:default",
-      "message_count": 15,
-      "last_activity": "2026-02-17T12:00:00Z"
+      "key": "web:default",
+      "created": "2026-02-18T12:00:00Z",
+      "updated": "2026-02-18T12:05:00Z",
+      "message_count": 5
     },
     {
-      "key": "telegram:123456789",
-      "message_count": 42,
-      "last_activity": "2026-02-17T11:55:00Z"
+      "key": "web:coder",
+      "created": "2026-02-18T11:00:00Z",
+      "updated": "2026-02-18T11:30:00Z",
+      "message_count": 12
     }
   ]
 }
@@ -222,103 +310,72 @@ List all active sessions.
 
 **Example:**
 ```bash
-curl http://localhost:18790/sessions
+curl http://localhost:18790/v1/sessions
 ```
 
 ---
 
-#### Clear Session
+#### New Session
 
-**DELETE** `/session/:session_key`
+**POST** `/v1/sessions/{key}/new`
 
-Clear a specific session's history.
+Clear and create a new chat session.
 
 **Response:**
 ```json
 {
-  "success": true,
-  "session_key": "gateway:default",
-  "message": "Session cleared"
+  "status": "ok",
+  "session_key": "web:default",
+  "message": "Session cleared. Starting fresh conversation."
 }
 ```
 
 **Example:**
 ```bash
-curl -X DELETE http://localhost:18790/session/gateway:default
+curl -X POST http://localhost:18790/v1/sessions/web:default/new
 ```
 
 ---
 
-#### Agent Status
+#### Stop Session Processing
 
-**GET** `/status`
+**POST** `/v1/sessions/{key}/stop`
 
-Get agent status and configuration.
+Stop in-flight LLM processing for a session.
 
 **Response:**
 ```json
 {
-  "success": true,
-  "agent": "default",
-  "model": "maia/gemini-3-pro-preview",
-  "channels": {
-    "telegram": true,
-    "discord": false,
-    "whatsapp": true
-  },
-  "tools": [
-    "read_file",
-    "write_file",
-    "web_search",
-    "adb_devices"
-  ],
-  "skills": [
-    "weather",
-    "github",
-    "workflow"
-  ]
+  "status": "ok",
+  "message": "Stopping current processing..."
 }
 ```
 
 **Example:**
 ```bash
-curl http://localhost:18790/status
+curl -X POST http://localhost:18790/v1/sessions/web:default/stop
 ```
 
 ---
 
-#### List Tools
+#### Delete Session
 
-**GET** `/tools`
+**DELETE** `/v1/sessions/{key}`
 
-Get list of available tools.
+Delete a specific session and its history.
 
 **Response:**
 ```json
 {
-  "success": true,
-  "tools": [
-    {
-      "name": "read_file",
-      "description": "Read contents of a file",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "File path to read"
-          }
-        },
-        "required": ["path"]
-      }
-    }
-  ]
+  "status": "ok",
+  "session_key": "web:default",
+  "message": "Session deleted."
 }
 ```
 
 **Example:**
 ```bash
-curl http://localhost:18790/tools
+curl -X DELETE http://localhost:18790/v1/sessions/web:default
 ```
 
 ---
@@ -860,135 +917,143 @@ export PEPEBOT_GATEWAY_PORT=18790
 
 ## Examples
 
-### Python Client
+### Python Client (OpenAI SDK)
 
 ```python
-import requests
+from openai import OpenAI
 
-class PepebotClient:
-    def __init__(self, base_url="http://localhost:18790"):
-        self.base_url = base_url
-
-    def send_message(self, message, session_key="api:python"):
-        response = requests.post(
-            f"{self.base_url}/message",
-            json={
-                "message": message,
-                "session_key": session_key
-            }
-        )
-        return response.json()
-
-    def execute_workflow(self, workflow_name, variables=None):
-        response = requests.post(
-            f"{self.base_url}/workflow",
-            json={
-                "workflow_name": workflow_name,
-                "variables": variables or {}
-            }
-        )
-        return response.json()
-
-    def get_status(self):
-        response = requests.get(f"{self.base_url}/status")
-        return response.json()
-
-# Usage
-client = PepebotClient()
-
-# Send message
-result = client.send_message("What is 2+2?")
-print(result["response"])
-
-# Execute workflow
-workflow_result = client.execute_workflow(
-    "device_health",
-    {"device": "emulator-5554"}
+# Use Pepebot as an OpenAI-compatible API
+client = OpenAI(
+    base_url="http://localhost:18790/v1",
+    api_key="not-needed",  # Pepebot uses its own configured API keys
 )
-print(workflow_result)
+
+# Non-streaming
+response = client.chat.completions.create(
+    model="maia/gemini-3-pro-preview",
+    messages=[{"role": "user", "content": "What is 2+2?"}],
+)
+print(response.choices[0].message.content)
+
+# Streaming
+stream = client.chat.completions.create(
+    model="maia/gemini-3-pro-preview",
+    messages=[{"role": "user", "content": "Tell me a story"}],
+    stream=True,
+    extra_headers={"X-Agent": "default"},
+)
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+print()
 ```
 
-### JavaScript Client
+### JavaScript Client (SSE Streaming)
 
 ```javascript
-class PepebotClient {
-    constructor(baseUrl = 'http://localhost:18790') {
-        this.baseUrl = baseUrl;
-    }
+// Non-streaming
+async function chat(message) {
+    const response = await fetch('http://localhost:18790/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Agent': 'default',
+        },
+        body: JSON.stringify({
+            model: 'maia/gemini-3-pro-preview',
+            messages: [{ role: 'user', content: message }],
+            stream: false,
+        }),
+    });
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
 
-    async sendMessage(message, sessionKey = 'api:js') {
-        const response = await fetch(`${this.baseUrl}/message`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, session_key: sessionKey })
-        });
-        return response.json();
-    }
+// Streaming with SSE
+async function chatStream(message, onChunk) {
+    const response = await fetch('http://localhost:18790/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Agent': 'default',
+        },
+        body: JSON.stringify({
+            model: 'maia/gemini-3-pro-preview',
+            messages: [{ role: 'user', content: message }],
+            stream: true,
+        }),
+    });
 
-    async executeWorkflow(workflowName, variables = {}) {
-        const response = await fetch(`${this.baseUrl}/workflow`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                workflow_name: workflowName,
-                variables
-            })
-        });
-        return response.json();
-    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-    async getStatus() {
-        const response = await fetch(`${this.baseUrl}/status`);
-        return response.json();
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const lines = decoder.decode(value).split('\n');
+        for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                const chunk = JSON.parse(line.slice(6));
+                const content = chunk.choices[0]?.delta?.content;
+                if (content) onChunk(content);
+            }
+        }
     }
 }
 
 // Usage
-const client = new PepebotClient();
+const reply = await chat('Hello!');
+console.log(reply);
 
-// Send message
-const result = await client.sendMessage('Hello!');
-console.log(result.response);
-
-// Execute workflow
-const workflowResult = await client.executeWorkflow('device_health', {
-    device: 'emulator-5554'
-});
-console.log(workflowResult);
+await chatStream('Tell me a story', (text) => process.stdout.write(text));
 ```
 
 ### cURL Examples
 
-**Send message:**
+**Chat (non-streaming):**
 ```bash
-curl -X POST http://localhost:18790/message \
+curl -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"message":"Hello Pepebot!"}'
+  -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":false}'
 ```
 
-**Execute workflow:**
+**Chat (streaming):**
 ```bash
-curl -X POST http://localhost:18790/workflow \
+curl -N -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{
-    "workflow_name":"device_health",
-    "variables":{"device":"emulator-5554"}
-  }'
+  -H "X-Agent: default" \
+  -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
 ```
 
-**Get status:**
+**List models:**
 ```bash
-curl http://localhost:18790/status | jq
+curl http://localhost:18790/v1/models | jq
+```
+
+**List agents:**
+```bash
+curl http://localhost:18790/v1/agents | jq
 ```
 
 **List sessions:**
 ```bash
-curl http://localhost:18790/sessions | jq
+curl http://localhost:18790/v1/sessions | jq
 ```
 
-**Clear session:**
+**New session:**
 ```bash
-curl -X DELETE http://localhost:18790/session/gateway:default
+curl -X POST http://localhost:18790/v1/sessions/web:default/new
+```
+
+**Stop processing:**
+```bash
+curl -X POST http://localhost:18790/v1/sessions/web:default/stop
+```
+
+**Delete session:**
+```bash
+curl -X DELETE http://localhost:18790/v1/sessions/web:default
 ```
 
 ### Go Client
@@ -997,55 +1062,48 @@ curl -X DELETE http://localhost:18790/session/gateway:default
 package main
 
 import (
+    "bufio"
     "bytes"
     "encoding/json"
     "fmt"
     "net/http"
+    "strings"
 )
 
-type PepebotClient struct {
-    BaseURL string
-    Client  *http.Client
-}
-
-func NewPepebotClient(baseURL string) *PepebotClient {
-    return &PepebotClient{
-        BaseURL: baseURL,
-        Client:  &http.Client{},
-    }
-}
-
-func (c *PepebotClient) SendMessage(message, sessionKey string) (map[string]interface{}, error) {
-    payload := map[string]interface{}{
-        "message":     message,
-        "session_key": sessionKey,
-    }
-
-    data, _ := json.Marshal(payload)
-    resp, err := c.Client.Post(
-        c.BaseURL+"/message",
-        "application/json",
-        bytes.NewBuffer(data),
-    )
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
-
-    var result map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&result)
-    return result, nil
-}
-
 func main() {
-    client := NewPepebotClient("http://localhost:18790")
+    payload := map[string]interface{}{
+        "model":    "maia/gemini-3-pro-preview",
+        "messages": []map[string]string{{"role": "user", "content": "Hello!"}},
+        "stream":   true,
+    }
+    data, _ := json.Marshal(payload)
 
-    result, err := client.SendMessage("Hello!", "api:go")
+    req, _ := http.NewRequest("POST", "http://localhost:18790/v1/chat/completions", bytes.NewReader(data))
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("X-Agent", "default")
+
+    resp, err := http.DefaultClient.Do(req)
     if err != nil {
         panic(err)
     }
+    defer resp.Body.Close()
 
-    fmt.Println(result["response"])
+    scanner := bufio.NewScanner(resp.Body)
+    for scanner.Scan() {
+        line := scanner.Text()
+        if strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
+            var chunk map[string]interface{}
+            json.Unmarshal([]byte(line[6:]), &chunk)
+            choices := chunk["choices"].([]interface{})
+            if len(choices) > 0 {
+                delta := choices[0].(map[string]interface{})["delta"].(map[string]interface{})
+                if content, ok := delta["content"].(string); ok {
+                    fmt.Print(content)
+                }
+            }
+        }
+    }
+    fmt.Println()
 }
 ```
 
@@ -1071,17 +1129,6 @@ location /pepebot/ {
 
 ---
 
-## WebSocket Support
-
-WebSocket support is planned for future releases. Current implementation uses HTTP long-polling.
-
-**Roadmap:**
-- WebSocket for real-time streaming
-- Server-sent events (SSE) for updates
-- GraphQL API (optional)
-
----
-
 ## Error Codes
 
 | Code | Meaning |
@@ -1089,8 +1136,8 @@ WebSocket support is planned for future releases. Current implementation uses HT
 | 200 | Success |
 | 400 | Bad Request (invalid JSON, missing required fields) |
 | 404 | Not Found (invalid endpoint, session not found) |
+| 405 | Method Not Allowed (wrong HTTP method) |
 | 500 | Internal Server Error (agent failure, provider error) |
-| 503 | Service Unavailable (agent busy, provider timeout) |
 
 ---
 
@@ -1113,6 +1160,6 @@ WebSocket support is planned for future releases. Current implementation uses HT
 
 ---
 
-**API Version:** 0.4.0
-**Last Updated:** 2026-02-17
+**API Version:** 0.4.3
+**Last Updated:** 2026-02-18
 **Status:** Stable
