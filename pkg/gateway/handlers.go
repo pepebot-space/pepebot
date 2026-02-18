@@ -333,10 +333,10 @@ func (gs *GatewayServer) handleListSessions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	webSessions := sessions.ListSessions("web:")
-	sessionInfos := make([]SessionInfo, 0, len(webSessions))
+	allSessions := sessions.ListSessions("")
+	sessionInfos := make([]SessionInfo, 0, len(allSessions))
 
-	for _, s := range webSessions {
+	for _, s := range allSessions {
 		sessionInfos = append(sessionInfos, SessionInfo{
 			Key:          s.Key,
 			Created:      s.Created.Format(time.RFC3339),
