@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-02-18
+
+### Added
+- **ADB Open App Tool** (`adb_open_app`): Launch Android apps by package name
+  - Uses `am start` with launcher intent, fallback to `monkey` launcher
+  - Common package name reference in tool description
+- **ADB Key Event Tool** (`adb_keyevent`): Send hardware key events to Android device
+  - Supports all Android keycodes (Home, Back, Volume, Power, Enter, etc.)
+  - Human-readable keycode name mapping in output
+
+### Changed
+- **ADB Screenshot Tool** (`adb_screenshot`): Rewritten for reliability
+  - Uses `exec-out screencap -p` for direct PNG binary capture (was: shell screencap → pull → rm, 3 steps reduced to 1)
+  - PNG signature validation to detect corrupt captures
+  - Returns base64-encoded PNG when no filename is provided
+  - Dedicated 15s timeout (was: generic 30s)
+- **ADB UI Dump Tool** (`adb_ui_dump`): Rewritten for reliability
+  - Multiple dump path fallback: `/sdcard/` → `/data/local/tmp/` → default path
+  - Uses `exec-out cat` with fallback to `shell cat` for reading dump file
+  - XML structure validation (`<hierarchy` or `<node` tag check)
+  - Strips garbage content before `<?xml` declaration
+  - 200ms delay after dump to ensure file is fully written
+  - Increased timeout from 12s to 15s for uiautomator dump
+  - Better error messages with debugging hints (screen locked, accessibility unavailable)
+- **ADB Input Text Tool** (`adb_input_text`): Rewritten for reliability
+  - Proper shell metacharacter escaping (20+ characters: `$`, `` ` ``, `"`, `'`, `&`, `|`, `;`, etc.)
+  - Text chunking at 80 characters to avoid ADB input length limits
+  - Multi-line text support with automatic Enter key between lines
+  - New `press_enter` parameter to send Enter after input
+  - Per-chunk timeout of 10s (was: single 30s for entire input)
+- **ADB Tap Tool** (`adb_tap`): Enhanced with new gestures
+  - New `long_press` parameter: simulates long press via swipe-to-same-point (550ms)
+  - New `count` parameter: multi-tap support (e.g., double-tap with count=2)
+  - Dedicated 8s timeout per tap (was: generic 30s)
+- **ADB Swipe Tool** (`adb_swipe`): Enhanced with direction mode
+  - New `direction` parameter: swipe by direction (`up`, `down`, `left`, `right`)
+  - New `distance` parameter: swipe distance in pixels for direction mode (default: 500)
+  - Backward compatible: coordinate-based swipe (x1,y1 → x2,y2) still works
+  - Boundary clamping to prevent negative coordinates
+  - Default duration changed from 300ms to 220ms for more natural feel
+  - Renamed parameters: `x1`/`y1` → `x`/`y` (x2/y2 still available for coordinate mode)
+- **ADB Devices Tool** (`adb_devices`): Enhanced output
+  - Uses `devices -l` for additional device info (model, device name, transport)
+  - Parses and includes key-value metadata in JSON output
+- **ADB Helper**: Per-operation timeouts
+  - `execAdb` now accepts timeout parameter instead of hardcoded 30s
+  - New `execAdbBinary` method for binary output (used by exec-out commands)
+  - Cleaner error messages: stderr-first, no stdout pollution in error output
+
+### Fixed
+- **ADB Screenshot**: Fixed frequent failures caused by 3-step capture process (screencap → pull → rm) which was prone to race conditions and /sdcard write permission issues
+- **ADB UI Dump**: Fixed "failed to dump UI" errors on devices where /sdcard is read-only or uiautomator output goes to stderr
+- **ADB Input Text**: Fixed special characters ($, &, |, ;, quotes, etc.) causing shell injection or broken input
+- **ADB Input Text**: Fixed long text input failures caused by ADB command length limits
+
 ## [0.4.1] - 2026-02-17
 
 ### Added
