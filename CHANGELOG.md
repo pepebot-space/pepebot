@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-02-18
+
+### Added
+- **OpenAI-Compatible Gateway API**: Full HTTP API server with SSE streaming support
+  - `POST /v1/chat/completions` — OpenAI-compatible chat endpoint with streaming (`stream: true`) and non-streaming modes
+  - `GET /v1/models` — List available models from enabled agents
+  - `GET /v1/agents` — List registered agents (raw registry.json)
+  - `GET /v1/sessions` — List active web sessions (filtered by `web:` prefix)
+  - `POST /v1/sessions/{key}/new` — Clear and create new chat session
+  - `POST /v1/sessions/{key}/stop` — Stop in-flight LLM processing for a session
+  - `DELETE /v1/sessions/{key}` — Delete a specific session
+  - `GET /health` — Health check endpoint
+  - CORS support for dashboard and browser-based clients
+  - Custom headers: `X-Agent` (select agent) and `X-Session-Key` (session routing)
+  - SSE streaming follows OpenAI format: `data: {"choices":[{"delta":{"content":"..."}}]}` with `data: [DONE]` termination
+
+- **LLM Provider Streaming**: Added `ChatStream()` method to provider interface
+  - SSE line-by-line parsing with `data:` prefix handling
+  - `[DONE]` sentinel and `finish_reason: "stop"` detection
+  - `StreamChunk` and `StreamCallback` types for streaming pipeline
+
+- **Agent Stream Processing**: Added `ProcessDirectStream()` to agent loop
+  - Tool iterations use non-streaming `Chat()` (tools are server-side, invisible to API client)
+  - Final LLM response streams via `ChatStream()` directly to HTTP client
+  - Session persistence identical to non-streaming `processMessage()`
+
+- **Gateway Server Package**: New `pkg/gateway/` package
+  - `server.go` — HTTP server lifecycle, route registration, CORS middleware
+  - `handlers.go` — All endpoint handlers with OpenAI-compatible request/response types
+
+### Changed
+- **Gateway Command**: `pepebot gateway` now starts HTTP API server alongside chat channels
+  - HTTP server starts on configured `gateway.host:gateway.port` (default: `0.0.0.0:18790`)
+  - Graceful shutdown of HTTP server on SIGINT
+- **AgentManager**: Added public methods for gateway integration
+  - `ProcessDirectStream()`, `ProcessDirect()`, `ClearSession()`, `StopSession()`, `GetSessions()`, `GetConfig()`
+- **SessionManager**: Added `ListSessions(prefix)` for filtered session listing
+- **LLMProvider Interface**: Added `ChatStream()` method (implemented in `HTTPProvider`)
+
+### Technical Details
+- New files: `pkg/gateway/server.go`, `pkg/gateway/handlers.go`
+- Modified: `pkg/providers/types.go` (StreamChunk, StreamCallback, ChatStream interface)
+- Modified: `pkg/providers/http_provider.go` (ChatStream implementation)
+- Modified: `pkg/agent/loop.go` (ProcessDirectStream, Sessions getter)
+- Modified: `pkg/agent/manager.go` (gateway delegation methods)
+- Modified: `pkg/session/manager.go` (ListSessions, DeleteSession)
+- Modified: `cmd/pepebot/main.go` (gateway server integration)
+- No external dependencies added — uses `net/http` stdlib
+
 ## [0.4.2] - 2026-02-18
 
 ### Added

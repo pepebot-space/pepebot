@@ -23,6 +23,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/channels"
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/cron"
+	"github.com/pepebot-space/pepebot/pkg/gateway"
 	"github.com/pepebot-space/pepebot/pkg/heartbeat"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
@@ -30,7 +31,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/voice"
 )
 
-const version = "0.4.2"
+const version = "0.4.3"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -1103,11 +1104,16 @@ func gatewayCmd() {
 		fmt.Println("⚠ Warning: No channels enabled")
 	}
 
-	fmt.Printf("✓ Gateway started on %s:%d\n", cfg.Gateway.Host, cfg.Gateway.Port)
-	fmt.Println("Press Ctrl+C to stop")
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Start HTTP API server
+	gatewayServer := gateway.NewGatewayServer(cfg, agentManager)
+	if err := gatewayServer.Start(ctx); err != nil {
+		fmt.Printf("Error starting HTTP API server: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ HTTP API server started on %s:%d\n", cfg.Gateway.Host, cfg.Gateway.Port)
 
 	if err := cronService.Start(); err != nil {
 		fmt.Printf("Error starting cron service: %v\n", err)
@@ -1125,12 +1131,16 @@ func gatewayCmd() {
 
 	go agentManager.Run(ctx)
 
+	fmt.Printf("✓ Gateway started on %s:%d\n", cfg.Gateway.Host, cfg.Gateway.Port)
+	fmt.Println("Press Ctrl+C to stop")
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 	<-sigChan
 
 	fmt.Println("\nShutting down...")
 	cancel()
+	gatewayServer.Stop(context.Background())
 	heartbeatService.Stop()
 	cronService.Stop()
 	channelManager.StopAll(ctx)
