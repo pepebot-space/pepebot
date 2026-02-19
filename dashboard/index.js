@@ -42,24 +42,77 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
 
-// 2. Proxy to Pepebot Gateway - Send Message
+// 2. Proxy to Pepebot Gateway - Send Message (OpenAI Compatible)
+// 2. Proxy to Pepebot Gateway - Send Message (OpenAI Compatible with SSE)
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, session_key } = req.body;
-        // Build payload for Pepebot
+        const { message, session_key, media, agent_id } = req.body;
+
+        // Construct messages array
+        const messages = [{ role: "user", content: message }];
+        if (media && media.length > 0) {
+            messages[0].content = [
+                { type: "text", text: message },
+                ...media.map(url => ({ type: "image_url", image_url: { url } }))
+            ];
+        }
+
         const payload = {
-            message,
-            session_key: session_key || 'dashboard:default',
-            channel: 'gateway'
+            model: "maia/gemini-3-pro-preview",
+            messages: messages,
+            stream: true // Enable streaming
         };
 
-        const response = await axios.post(`${PEPEBOT_GATEWAY}/message`, payload);
-        res.json(response.data);
+        // Important: Axios needs responseType: 'stream' to handle SSE
+        const response = await axios({
+            method: 'post',
+            url: `${PEPEBOT_GATEWAY}/v1/chat/completions`,
+            data: payload,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Key': session_key || 'web:default',
+                'X-Agent': agent_id || 'default'
+            },
+            responseType: 'stream'
+        });
+
+        // Set headers for SSE
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        // Pipe the stream from the gateway to the client
+        response.data.pipe(res);
+
     } catch (error) {
         console.error('Error Proxying to Pepebot:', error.message);
-        if (error.code) console.error('Error Code:', error.code);
-        if (error.response) console.error('Response Data:', error.response.data);
-        res.status(500).json({ error: 'Failed to communicate with Pepebot Gateway', details: error.message || error.code });
+        // If headers aren't sent, send error JSON
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to communicate with Pepebot Gateway', details: error.message });
+        }
+    }
+});
+
+// 2.1 Get Sessions
+app.get('/api/sessions', async (req, res) => {
+    try {
+        const response = await axios.get(`${PEPEBOT_GATEWAY}/v1/sessions`);
+        res.json(response.data);
+    } catch (error) {
+        res.json({ sessions: [] }); // Valid fallback
+    }
+});
+
+// 2.2 Create New Session
+app.post('/api/sessions/new', async (req, res) => {
+    try {
+        const { key } = req.body;
+        // POST /v1/sessions/{key}/new
+        const response = await axios.post(`${PEPEBOT_GATEWAY}/v1/sessions/${key}/new`);
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error creating session:', error.message);
+        res.status(500).json({ error: 'Failed to create session' });
     }
 });
 
@@ -73,19 +126,17 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
     res.json({ success: true, url: fileUrl, filename: req.file.filename });
 });
 
-// 4. Get Agents (Mock or Real if API exists)
+// 4. Get Agents
 app.get('/api/agents', async (req, res) => {
-    // If Pepebot has an endpoints for agents, fetch it. Otherwise return mock for now.
-    // Based on docs, /status returns agent info.
     try {
-        const response = await axios.get(`${PEPEBOT_GATEWAY}/status`);
+        const response = await axios.get(`${PEPEBOT_GATEWAY}/v1/agents`);
         res.json(response.data);
     } catch (error) {
         // Fallback if gateway is down
         res.json({
-            agents: [
-                { name: 'Pepebot', status: 'offline', version: '0.4.0' }
-            ]
+            agents: {
+                default: { name: 'Pepebot (Offline)', status: 'offline', version: '0.4.0' }
+            }
         });
     }
 });
