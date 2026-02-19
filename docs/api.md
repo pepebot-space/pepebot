@@ -76,9 +76,13 @@ Configure in `~/.pepebot/config.json`:
 | `GET` | `/v1/models` | List available models |
 | `GET` | `/v1/agents` | List registered agents |
 | `GET` | `/v1/sessions` | List active web sessions |
+| `GET` | `/v1/sessions/{key}` | Get session history |
 | `POST` | `/v1/sessions/{key}/new` | Clear & start new session |
 | `POST` | `/v1/sessions/{key}/stop` | Stop in-flight processing |
 | `DELETE` | `/v1/sessions/{key}` | Delete a session |
+| `GET` | `/v1/skills` | List installed skills |
+| `GET` | `/v1/workflows` | List available workflows |
+| `GET` | `/v1/workflows/{name}` | Get workflow definition |
 | `GET` | `/health` | Health check |
 
 ---
@@ -376,6 +380,144 @@ Delete a specific session and its history.
 **Example:**
 ```bash
 curl -X DELETE http://localhost:18790/v1/sessions/web:default
+```
+
+---
+
+#### List Skills
+
+**GET** `/v1/skills`
+
+List all installed skills from workspace and builtin directories.
+
+**Response:**
+```json
+{
+  "skills": [
+    {
+      "name": "weather",
+      "source": "workspace",
+      "description": "Get weather information for any location",
+      "available": true
+    },
+    {
+      "name": "github",
+      "source": "workspace",
+      "description": "GitHub integration and management",
+      "available": true
+    },
+    {
+      "name": "tmux",
+      "source": "builtin",
+      "description": "Terminal multiplexer management",
+      "available": false,
+      "missing": "CLI: tmux"
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Skill directory name |
+| `source` | string | `"workspace"` or `"builtin"` |
+| `description` | string | From SKILL.md frontmatter |
+| `available` | boolean | Whether requirements are met |
+| `missing` | string | Missing requirements (if unavailable) |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/skills
+```
+
+---
+
+#### List Workflows
+
+**GET** `/v1/workflows`
+
+List all available workflow definitions from `~/.pepebot/workspace/workflows/`.
+
+**Response:**
+```json
+{
+  "workflows": [
+    {
+      "name": "deploy-app",
+      "description": "Build and deploy application to production",
+      "step_count": 5,
+      "variables": {
+        "app_name": "myapp",
+        "env": "production"
+      }
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Workflow name (from JSON or filename) |
+| `description` | string | Workflow description |
+| `step_count` | int | Number of steps in the workflow |
+| `variables` | object | Default variable key-value pairs |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/workflows
+```
+
+---
+
+#### Get Workflow Definition
+
+**GET** `/v1/workflows/{name}`
+
+Get the full workflow definition including all steps and variables.
+
+**Response:**
+```json
+{
+  "name": "deploy-app",
+  "description": "Build and deploy application to production",
+  "variables": {
+    "app_name": "myapp",
+    "env": "production"
+  },
+  "steps": [
+    {
+      "name": "Build",
+      "tool": "shell",
+      "args": {
+        "command": "npm run build"
+      }
+    },
+    {
+      "name": "Deploy",
+      "goal": "Deploy {{app_name}} to {{env}}"
+    }
+  ]
+}
+```
+
+**Error (404):**
+```json
+{
+  "error": {
+    "message": "workflow not found",
+    "type": "not_found",
+    "code": "Not Found"
+  }
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/workflows/deploy-app
 ```
 
 ---

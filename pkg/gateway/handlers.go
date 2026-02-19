@@ -16,11 +16,11 @@ import (
 // OpenAI-compatible request/response types
 
 type ChatCompletionRequest struct {
-	Model       string            `json:"model"`
-	Messages    []ChatMessage     `json:"messages"`
-	Stream      bool              `json:"stream"`
-	Temperature *float64          `json:"temperature,omitempty"`
-	MaxTokens   *int              `json:"max_tokens,omitempty"`
+	Model       string        `json:"model"`
+	Messages    []ChatMessage `json:"messages"`
+	Stream      bool          `json:"stream"`
+	Temperature *float64      `json:"temperature,omitempty"`
+	MaxTokens   *int          `json:"max_tokens,omitempty"`
 }
 
 type ChatMessage struct {
@@ -30,10 +30,10 @@ type ChatMessage struct {
 
 // ChatContentBlock represents an OpenAI-compatible content block (text, image_url, file)
 type ChatContentBlock struct {
-	Type     string          `json:"type"`
-	Text     string          `json:"text,omitempty"`
-	ImageURL *ChatImageURL   `json:"image_url,omitempty"`
-	File     *ChatFileData   `json:"file,omitempty"`
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *ChatImageURL `json:"image_url,omitempty"`
+	File     *ChatFileData `json:"file,omitempty"`
 }
 
 type ChatImageURL struct {
@@ -96,12 +96,12 @@ func getContentString(content interface{}) string {
 }
 
 type ChatCompletionResponse struct {
-	ID      string                   `json:"id"`
-	Object  string                   `json:"object"`
-	Created int64                    `json:"created"`
-	Model   string                   `json:"model"`
-	Choices []ChatCompletionChoice   `json:"choices"`
-	Usage   *UsageResponse           `json:"usage,omitempty"`
+	ID      string                 `json:"id"`
+	Object  string                 `json:"object"`
+	Created int64                  `json:"created"`
+	Model   string                 `json:"model"`
+	Choices []ChatCompletionChoice `json:"choices"`
+	Usage   *UsageResponse         `json:"usage,omitempty"`
 }
 
 type ChatCompletionChoice struct {
@@ -117,11 +117,11 @@ type UsageResponse struct {
 }
 
 type StreamChunkResponse struct {
-	ID      string               `json:"id"`
-	Object  string               `json:"object"`
-	Created int64                `json:"created"`
-	Model   string               `json:"model"`
-	Choices []StreamChunkChoice  `json:"choices"`
+	ID      string              `json:"id"`
+	Object  string              `json:"object"`
+	Created int64               `json:"created"`
+	Model   string              `json:"model"`
+	Choices []StreamChunkChoice `json:"choices"`
 }
 
 type StreamChunkChoice struct {
@@ -557,6 +557,186 @@ func (gs *GatewayServer) handleListAgents(w http.ResponseWriter, r *http.Request
 		agents := gs.agentManager.ListAgents()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(agents)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+// handleListSkills lists all available skills
+func (gs *GatewayServer) handleListSkills(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+		return
+	}
+
+	workspace := gs.config.WorkspacePath()
+	type skillInfo struct {
+		Name        string `json:"name"`
+		Source      string `json:"source"`
+		Description string `json:"description"`
+		Available   bool   `json:"available"`
+		Missing     string `json:"missing,omitempty"`
+	}
+
+	var skills []skillInfo
+
+	// Read workspace skills
+	skillsDirs := []struct {
+		path   string
+		source string
+	}{
+		{filepath.Join(workspace, "skills"), "workspace"},
+	}
+
+	// Also check builtin skills path
+	builtinPath := filepath.Join(filepath.Dir(workspace), "skills-builtin")
+	if _, err := os.Stat(builtinPath); err == nil {
+		skillsDirs = append(skillsDirs, struct {
+			path   string
+			source string
+		}{builtinPath, "builtin"})
+	}
+
+	for _, sd := range skillsDirs {
+		dirs, err := os.ReadDir(sd.path)
+		if err != nil {
+			continue
+		}
+		for _, dir := range dirs {
+			if !dir.IsDir() {
+				continue
+			}
+			skillFile := filepath.Join(sd.path, dir.Name(), "SKILL.md")
+			if _, err := os.Stat(skillFile); err != nil {
+				continue
+			}
+
+			info := skillInfo{
+				Name:      dir.Name(),
+				Source:    sd.source,
+				Available: true,
+			}
+
+			// Try to read frontmatter for description
+			content, err := os.ReadFile(skillFile)
+			if err == nil {
+				// Simple frontmatter extraction
+				text := string(content)
+				if strings.HasPrefix(text, "---\n") {
+					if end := strings.Index(text[4:], "\n---"); end != -1 {
+						frontmatter := text[4 : 4+end]
+						// Parse JSON frontmatter
+						var meta struct {
+							Name        string `json:"name"`
+							Description string `json:"description"`
+						}
+						if json.Unmarshal([]byte(frontmatter), &meta) == nil {
+							info.Description = meta.Description
+						}
+					}
+				}
+			}
+
+			skills = append(skills, info)
+		}
+	}
+
+	if skills == nil {
+		skills = []skillInfo{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"skills": skills,
+	})
+}
+
+// handleListWorkflows lists all available workflows
+func (gs *GatewayServer) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+		return
+	}
+
+	workspace := gs.config.WorkspacePath()
+	workflowsDir := filepath.Join(workspace, "workflows")
+
+	type workflowInfo struct {
+		Name        string            `json:"name"`
+		Description string            `json:"description"`
+		StepCount   int               `json:"step_count"`
+		Variables   map[string]string `json:"variables,omitempty"`
+	}
+
+	var workflows []workflowInfo
+
+	dirs, err := os.ReadDir(workflowsDir)
+	if err == nil {
+		for _, file := range dirs {
+			if file.IsDir() || !strings.HasSuffix(file.Name(), ".json") {
+				continue
+			}
+
+			data, err := os.ReadFile(filepath.Join(workflowsDir, file.Name()))
+			if err != nil {
+				continue
+			}
+
+			var wf struct {
+				Name        string            `json:"name"`
+				Description string            `json:"description"`
+				Variables   map[string]string `json:"variables,omitempty"`
+				Steps       []interface{}     `json:"steps"`
+			}
+			if json.Unmarshal(data, &wf) != nil {
+				continue
+			}
+
+			name := strings.TrimSuffix(file.Name(), ".json")
+			if wf.Name != "" {
+				name = wf.Name
+			}
+
+			workflows = append(workflows, workflowInfo{
+				Name:        name,
+				Description: wf.Description,
+				StepCount:   len(wf.Steps),
+				Variables:   wf.Variables,
+			})
+		}
+	}
+
+	if workflows == nil {
+		workflows = []workflowInfo{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"workflows": workflows,
+	})
+}
+
+// handleGetWorkflow returns a full workflow definition
+func (gs *GatewayServer) handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+		return
+	}
+
+	name := strings.TrimPrefix(r.URL.Path, "/v1/workflows/")
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "workflow name required", "invalid_request_error")
+		return
+	}
+
+	workspace := gs.config.WorkspacePath()
+	filePath := filepath.Join(workspace, "workflows", name+".json")
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "workflow not found", "not_found")
 		return
 	}
 

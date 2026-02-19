@@ -87,6 +87,40 @@ const fetchSessions = async () => {
     }
 }
 
+const loadSessionHistory = async (sessionKey) => {
+    if (!sessionKey) return
+    try {
+        const res = await axios.get(`${GATEWAY_API}/sessions/${sessionKey}`)
+        const data = res.data
+        if (data && data.messages && data.messages.length > 0) {
+            messages.value = data.messages.map((msg, i) => ({
+                id: `history-${i}`,
+                role: msg.role,
+                content: msg.content || '',
+                timestamp: data.updated ? new Date(data.updated) : new Date()
+            }))
+        } else {
+            // No history, show welcome
+            messages.value = [{
+                id: 'intro',
+                role: 'assistant',
+                content: 'Hello! I am **Pepebot** 🐸. \n\nI can help you with:\n- Android Automation\n- Web Tasks\n- Coding & more.\n\nSelect an agent and start chatting!',
+                timestamp: new Date()
+            }]
+        }
+        scrollToBottom()
+    } catch (e) {
+        console.error("Failed to load session history", e)
+        // On error (e.g. session doesn't exist yet), show welcome
+        messages.value = [{
+            id: 'intro',
+            role: 'assistant',
+            content: 'Hello! I am **Pepebot** 🐸. \n\nI can help you with:\n- Android Automation\n- Web Tasks\n- Coding & more.\n\nSelect an agent and start chatting!',
+            timestamp: new Date()
+        }]
+    }
+}
+
 const createNewSession = async () => {
     const newKey = `web:${selectedAgentId.value}:${Date.now()}`
     try {
@@ -232,12 +266,14 @@ const triggerFileInput = () => {
 }
 
 // --- Lifecycle ---
-onMounted(() => {
-    fetchAgents()
-    fetchSessions()
+onMounted(async () => {
+    await fetchAgents()
+    await fetchSessions()
     
-    // Initial welcome message if empty
-    if (messages.value.length === 0) {
+    // Load history for the selected session
+    if (selectedSessionKey.value) {
+        await loadSessionHistory(selectedSessionKey.value)
+    } else {
         messages.value.push({
             id: 'intro',
             role: 'assistant',
@@ -247,10 +283,15 @@ onMounted(() => {
     }
 })
 
+// Watch for session changes to load history
+watch(selectedSessionKey, async (newKey, oldKey) => {
+    if (newKey && newKey !== oldKey) {
+        await loadSessionHistory(newKey)
+    }
+})
+
 // Watch for agent changes to update session key default
 watch(selectedAgentId, (newId) => {
-    // Optionally auto-switch session or just let user decide
-    // For now, we update the default key if current key was auto-generated
     if (selectedSessionKey.value.startsWith('web:') && selectedSessionKey.value.split(':').length === 2) {
          selectedSessionKey.value = `web:${newId}`
     }

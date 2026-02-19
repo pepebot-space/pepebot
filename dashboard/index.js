@@ -1,151 +1,99 @@
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const path = require('path');
-const axios = require('axios');
-const { PrismaClient } = require('@prisma/client');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
-const PEPEBOT_GATEWAY = process.env.PEPEBOT_GATEWAY || 'http://localhost:18790';
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname, './client/dist'))); // Serve frontend
 
 // Storage for uploaded files
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const uploadDir = path.join(__dirname, 'uploads');
-        // Ensure uploads directory exists (should be created on startup ideally)
-        const fs = require('fs');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir);
-        }
-        cb(null, uploadDir)
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-        cb(null, uniqueSuffix + '-' + file.originalname)
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
     }
-})
-const upload = multer({ storage: storage });
+});
+const upload = multer({ storage });
 
-// Routes
+// ─── API Routes ─────────────────────────────────────────────
 
-// 1. Health Check
+// Health Check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
 
-// 2. Proxy to Pepebot Gateway - Send Message (OpenAI Compatible)
-// 2. Proxy to Pepebot Gateway - Send Message (OpenAI Compatible with SSE)
-app.post('/api/chat', async (req, res) => {
-    try {
-        const { message, session_key, media, agent_id } = req.body;
-
-        // Construct messages array
-        const messages = [{ role: "user", content: message }];
-        if (media && media.length > 0) {
-            messages[0].content = [
-                { type: "text", text: message },
-                ...media.map(url => ({ type: "image_url", image_url: { url } }))
-            ];
-        }
-
-        const payload = {
-            model: "maia/gemini-3-pro-preview",
-            messages: messages,
-            stream: true // Enable streaming
-        };
-
-        // Important: Axios needs responseType: 'stream' to handle SSE
-        const response = await axios({
-            method: 'post',
-            url: `${PEPEBOT_GATEWAY}/v1/chat/completions`,
-            data: payload,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Session-Key': session_key || 'web:default',
-                'X-Agent': agent_id || 'default'
-            },
-            responseType: 'stream'
-        });
-
-        // Set headers for SSE
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-
-        // Pipe the stream from the gateway to the client
-        response.data.pipe(res);
-
-    } catch (error) {
-        console.error('Error Proxying to Pepebot:', error.message);
-        // If headers aren't sent, send error JSON
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Failed to communicate with Pepebot Gateway', details: error.message });
-        }
-    }
-});
-
-// 2.1 Get Sessions
-app.get('/api/sessions', async (req, res) => {
-    try {
-        const response = await axios.get(`${PEPEBOT_GATEWAY}/v1/sessions`);
-        res.json(response.data);
-    } catch (error) {
-        res.json({ sessions: [] }); // Valid fallback
-    }
-});
-
-// 2.2 Create New Session
-app.post('/api/sessions/new', async (req, res) => {
-    try {
-        const { key } = req.body;
-        // POST /v1/sessions/{key}/new
-        const response = await axios.post(`${PEPEBOT_GATEWAY}/v1/sessions/${key}/new`);
-        res.json(response.data);
-    } catch (error) {
-        console.error('Error creating session:', error.message);
-        res.status(500).json({ error: 'Failed to create session' });
-    }
-});
-
-// 3. Upload Image
+// Upload Image
 app.post('/api/upload', upload.single('image'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
-    // Construct full URL for the uploaded file
     const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
     res.json({ success: true, url: fileUrl, filename: req.file.filename });
 });
 
-// 4. Get Agents
-app.get('/api/agents', async (req, res) => {
-    try {
-        const response = await axios.get(`${PEPEBOT_GATEWAY}/v1/agents`);
-        res.json(response.data);
-    } catch (error) {
-        // Fallback if gateway is down
-        res.json({
-            agents: {
-                default: { name: 'Pepebot (Offline)', status: 'offline', version: '0.4.0' }
-            }
+// ─── Server Startup ─────────────────────────────────────────
+
+async function startServer() {
+    if (isProduction) {
+        // Production: serve pre-built static files
+        const distPath = path.join(__dirname, 'client', 'dist');
+        app.use(express.static(distPath));
+
+        // SPA fallback
+        app.get(/(.*)/, (req, res) => {
+            res.sendFile(path.join(distPath, 'index.html'));
         });
+
+        console.log(`📦 Serving static files from: ${distPath}`);
+    } else {
+        // Development: use Vite dev server as middleware
+        const { createServer: createViteServer } = await import('vite');
+
+        const vite = await createViteServer({
+            configFile: path.join(__dirname, 'client', 'vite.config.js'),
+            root: path.join(__dirname, 'client'),
+            server: { middlewareMode: true },
+            appType: 'spa',
+        });
+
+        app.use(vite.middlewares);
+
+        console.log('⚡ Vite dev server attached as middleware');
     }
-});
 
-// 5. Catch-all for SPA
-app.get(/(.*)/, (req, res) => {
-    res.sendFile(path.join(__dirname, './client/dist/index.html'));
-});
+    app.listen(PORT, () => {
+        const mode = isProduction ? 'Production' : 'Development';
+        console.log(`
+╔═══════════════════════════════════════════╗
+║  Pepebot Dashboard                        ║
+║  URL: http://localhost:${String(PORT).padEnd(5)}              ║
+║  Mode: ${mode.padEnd(15)}                   ║
+╚═══════════════════════════════════════════╝
+        `);
+    });
+}
 
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+startServer().catch((error) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
 });

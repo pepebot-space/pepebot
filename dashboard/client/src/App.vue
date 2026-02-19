@@ -1,6 +1,6 @@
 <script setup>
 import { RouterLink, RouterView } from 'vue-router'
-import { Home, MessageSquare, Box, Settings, Cpu } from 'lucide-vue-next'
+import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings } from 'lucide-vue-next'
 </script>
 
 <template>
@@ -13,19 +13,22 @@ import { Home, MessageSquare, Box, Settings, Cpu } from 'lucide-vue-next'
         </div>
       </div>
       
-      <nav class="flex-1 flex flex-col gap-6 w-full items-center">
+      <nav class="flex-1 flex flex-col gap-4 w-full items-center">
         <RouterLink to="/" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
-          <Home :size="24" />
+          <Home :size="22" />
         </RouterLink>
         <RouterLink to="/chat" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
-          <MessageSquare :size="24" />
+          <MessageSquare :size="22" />
         </RouterLink>
         <RouterLink to="/agents" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
-           <Cpu :size="24" />
+           <Cpu :size="22" />
         </RouterLink>
-        <div class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all cursor-pointer">
-          <Box :size="24" />
-        </div>
+        <RouterLink to="/skills" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
+           <Zap :size="22" />
+        </RouterLink>
+        <RouterLink to="/workflows" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
+           <GitBranch :size="22" />
+        </RouterLink>
       </nav>
 
       <div class="mt-auto flex flex-col gap-6 w-full items-center">
