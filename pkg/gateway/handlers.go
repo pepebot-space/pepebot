@@ -371,14 +371,36 @@ func (gs *GatewayServer) handleSessionRoutes(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Direct session key - DELETE to delete
+	// Direct session key - GET to get history, DELETE to delete
 	sessionKey := path
+	if r.Method == http.MethodGet {
+		gs.handleGetSession(w, r, sessionKey)
+		return
+	}
 	if r.Method == http.MethodDelete {
 		gs.handleDeleteSession(w, r, sessionKey)
 		return
 	}
 
-	writeError(w, http.StatusNotFound, "not found", "invalid_request_error")
+	writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+}
+
+// handleGetSession returns the full session history
+func (gs *GatewayServer) handleGetSession(w http.ResponseWriter, r *http.Request, sessionKey string) {
+	sessions := gs.agentManager.GetSessions()
+	if sessions == nil {
+		writeError(w, http.StatusNotFound, "session not found", "invalid_request_error")
+		return
+	}
+
+	session := sessions.GetSession(sessionKey)
+	if session == nil {
+		writeError(w, http.StatusNotFound, "session not found: "+sessionKey, "invalid_request_error")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(session)
 }
 
 // handleSessionNew clears and creates a new session

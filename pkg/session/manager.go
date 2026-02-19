@@ -39,6 +39,13 @@ func NewSessionManager(storage string) *SessionManager {
 	return sm
 }
 
+// GetSession returns a session by key, or nil if not found
+func (sm *SessionManager) GetSession(key string) *Session {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.sessions[key]
+}
+
 func (sm *SessionManager) GetOrCreate(key string) *Session {
 	sm.mu.RLock()
 	session, ok := sm.sessions[key]
