@@ -24,8 +24,75 @@ type ChatCompletionRequest struct {
 }
 
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"`
+}
+
+// ChatContentBlock represents an OpenAI-compatible content block (text, image_url, file)
+type ChatContentBlock struct {
+	Type     string          `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	ImageURL *ChatImageURL   `json:"image_url,omitempty"`
+	File     *ChatFileData   `json:"file,omitempty"`
+}
+
+type ChatImageURL struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
+}
+
+type ChatFileData struct {
+	FileData string `json:"file_data,omitempty"`
+	URL      string `json:"url,omitempty"`
+}
+
+// parseMessageContent extracts text content and media URLs from a ChatMessage.
+// Content can be a plain string or an array of content blocks (OpenAI multimodal format).
+func parseMessageContent(msg ChatMessage) (text string, media []string) {
+	switch v := msg.Content.(type) {
+	case string:
+		return v, nil
+	case []interface{}:
+		var texts []string
+		for _, item := range v {
+			block, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			blockType, _ := block["type"].(string)
+			switch blockType {
+			case "text":
+				if t, ok := block["text"].(string); ok {
+					texts = append(texts, t)
+				}
+			case "image_url":
+				if imgObj, ok := block["image_url"].(map[string]interface{}); ok {
+					if url, ok := imgObj["url"].(string); ok {
+						media = append(media, url)
+					}
+				}
+			case "file":
+				if fileObj, ok := block["file"].(map[string]interface{}); ok {
+					if fd, ok := fileObj["file_data"].(string); ok {
+						media = append(media, fd)
+					} else if u, ok := fileObj["url"].(string); ok {
+						media = append(media, u)
+					}
+				}
+			}
+		}
+		return strings.Join(texts, "\n"), media
+	default:
+		return fmt.Sprintf("%v", v), nil
+	}
+}
+
+// getContentString returns the string representation of ChatMessage content for responses
+func getContentString(content interface{}) string {
+	if s, ok := content.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", content)
 }
 
 type ChatCompletionResponse struct {
@@ -146,27 +213,31 @@ func (gs *GatewayServer) handleChatCompletions(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parse content: supports plain string or multimodal content blocks
+	textContent, media := parseMessageContent(lastMessage)
+
 	logger.DebugCF("gateway", "Chat completion request", map[string]interface{}{
 		"agent":       agentName,
 		"session_key": sessionKey,
 		"stream":      req.Stream,
 		"model":       req.Model,
+		"has_media":   len(media) > 0,
 	})
 
 	completionID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 
 	if req.Stream {
-		gs.handleStreamingResponse(w, r, lastMessage.Content, sessionKey, agentName, req.Model, completionID)
+		gs.handleStreamingResponse(w, r, textContent, media, sessionKey, agentName, req.Model, completionID)
 	} else {
-		gs.handleNonStreamingResponse(w, r, lastMessage.Content, sessionKey, agentName, req.Model, completionID)
+		gs.handleNonStreamingResponse(w, r, textContent, media, sessionKey, agentName, req.Model, completionID)
 	}
 }
 
 // handleNonStreamingResponse handles non-streaming chat completions
-func (gs *GatewayServer) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, content, sessionKey, agentName, model, completionID string) {
+func (gs *GatewayServer) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, content string, media []string, sessionKey, agentName, model, completionID string) {
 	ctx := r.Context()
 
-	response, err := gs.agentManager.ProcessDirect(ctx, content, sessionKey, agentName)
+	response, err := gs.agentManager.ProcessDirect(ctx, content, media, sessionKey, agentName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "processing error: "+err.Error(), "server_error")
 		return
@@ -194,7 +265,7 @@ func (gs *GatewayServer) handleNonStreamingResponse(w http.ResponseWriter, r *ht
 }
 
 // handleStreamingResponse handles SSE streaming chat completions
-func (gs *GatewayServer) handleStreamingResponse(w http.ResponseWriter, r *http.Request, content, sessionKey, agentName, model, completionID string) {
+func (gs *GatewayServer) handleStreamingResponse(w http.ResponseWriter, r *http.Request, content string, media []string, sessionKey, agentName, model, completionID string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "streaming not supported", "server_error")
@@ -226,7 +297,7 @@ func (gs *GatewayServer) handleStreamingResponse(w http.ResponseWriter, r *http.
 
 	ctx := r.Context()
 
-	err := gs.agentManager.ProcessDirectStream(ctx, content, sessionKey, agentName, func(chunk providers.StreamChunk) {
+	err := gs.agentManager.ProcessDirectStream(ctx, content, media, sessionKey, agentName, func(chunk providers.StreamChunk) {
 		if chunk.Done {
 			// Send finish chunk
 			stopReason := "stop"

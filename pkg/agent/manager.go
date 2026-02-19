@@ -160,7 +160,7 @@ func (am *AgentManager) GetConfig() *config.Config {
 }
 
 // ProcessDirectStream processes a message with streaming using the specified agent
-func (am *AgentManager) ProcessDirectStream(ctx context.Context, content, sessionKey, agentName string, callback providers.StreamCallback) error {
+func (am *AgentManager) ProcessDirectStream(ctx context.Context, content string, media []string, sessionKey, agentName string, callback providers.StreamCallback) error {
 	if agentName == "" {
 		agentName = am.defaultAgent
 	}
@@ -170,11 +170,11 @@ func (am *AgentManager) ProcessDirectStream(ctx context.Context, content, sessio
 		return err
 	}
 
-	return agentLoop.ProcessDirectStream(ctx, content, sessionKey, callback)
+	return agentLoop.ProcessDirectStream(ctx, content, media, sessionKey, callback)
 }
 
 // ProcessDirect processes a message without streaming using the specified agent
-func (am *AgentManager) ProcessDirect(ctx context.Context, content, sessionKey, agentName string) (string, error) {
+func (am *AgentManager) ProcessDirect(ctx context.Context, content string, media []string, sessionKey, agentName string) (string, error) {
 	if agentName == "" {
 		agentName = am.defaultAgent
 	}
@@ -184,7 +184,7 @@ func (am *AgentManager) ProcessDirect(ctx context.Context, content, sessionKey, 
 		return "", err
 	}
 
-	return agentLoop.ProcessDirect(ctx, content, sessionKey)
+	return agentLoop.ProcessDirect(ctx, content, media, sessionKey)
 }
 
 // ClearSession clears a session on the specified agent

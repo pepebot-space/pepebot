@@ -183,12 +183,24 @@ func (c *WhatsAppChannel) sendWithMedia(ctx context.Context, jid types.JID, capt
 			fileName = filepath.Base(mediaURL)
 		}
 
-		// Detect MIME type from extension
+		// Detect MIME type and upload type from extension
 		ext := strings.ToLower(filepath.Ext(mediaURL))
 		var mimeType string
+		var uploadType whatsmeow.MediaType
 
-		// Upload file to WhatsApp
-		uploaded, err := c.client.Upload(ctx, fileData, whatsmeow.MediaDocument)
+		switch ext {
+		case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+			uploadType = whatsmeow.MediaImage
+		case ".mp4", ".avi", ".mov", ".mkv", ".webm":
+			uploadType = whatsmeow.MediaVideo
+		case ".mp3", ".wav", ".ogg", ".m4a", ".flac", ".opus":
+			uploadType = whatsmeow.MediaAudio
+		default:
+			uploadType = whatsmeow.MediaDocument
+		}
+
+		// Upload file to WhatsApp with correct media type
+		uploaded, err := c.client.Upload(ctx, fileData, uploadType)
 		if err != nil {
 			logger.ErrorCF("whatsapp", "Failed to upload media", map[string]interface{}{
 				"file":  fileName,
