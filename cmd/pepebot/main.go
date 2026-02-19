@@ -881,7 +881,7 @@ func agentCmd() {
 
 	if message != "" {
 		ctx := context.Background()
-		response, err := agentLoop.ProcessDirect(ctx, message, sessionKey)
+		response, err := agentLoop.ProcessDirect(ctx, message, nil, sessionKey)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
@@ -967,7 +967,7 @@ func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 		}
 
 		ctx := context.Background()
-		response, err := agentLoop.ProcessDirect(ctx, input, sessionKey)
+		response, err := agentLoop.ProcessDirect(ctx, input, nil, sessionKey)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			continue
@@ -1008,7 +1008,7 @@ func simpleInteractiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 		}
 
 		ctx := context.Background()
-		response, err := agentLoop.ProcessDirect(ctx, input, sessionKey)
+		response, err := agentLoop.ProcessDirect(ctx, input, nil, sessionKey)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			continue
