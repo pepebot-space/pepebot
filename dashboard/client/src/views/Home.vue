@@ -7,9 +7,10 @@ import {
   ArrowRight, TrendingUp, Clock, Bot, Sparkles,
   ChevronRight, Send
 } from 'lucide-vue-next'
+import { getGatewayApiUrl } from '../lib/gateway.js'
 
 const router = useRouter()
-const GATEWAY_API = 'http://localhost:18790/v1'
+const GATEWAY_API = getGatewayApiUrl()
 
 // --- Live Data ---
 const stats = ref({ agents: 0, skills: 0, workflows: 0, sessions: 0 })

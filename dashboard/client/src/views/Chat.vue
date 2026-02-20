@@ -5,6 +5,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { Send, Paperclip, Loader2, Bot, MessageSquare, Plus, ChevronDown, X, Sparkles } from 'lucide-vue-next'
+import { getGatewayApiUrl } from '../lib/gateway.js'
 
 // --- Markdown Setup ---
 const md = new MarkdownIt({
@@ -36,7 +37,7 @@ const selectedSessionKey = ref('')
 const selectedAgentId = ref('default')
 const showSessionMenu = ref(false)
 
-const GATEWAY_API = 'http://localhost:18790/v1'
+const GATEWAY_API = getGatewayApiUrl()
 const BACKEND_API = 'http://localhost:3000/api'
 
 // --- Computed ---

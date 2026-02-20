@@ -1,10 +1,29 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
-import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings } from 'lucide-vue-next'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings, LogOut } from 'lucide-vue-next'
+import { setActiveGateway, getActiveGateway } from './lib/gateway.js'
+
+const route = useRoute()
+const router = useRouter()
+
+const isSetupPage = computed(() => route.name === 'setup')
+const activeGateway = computed(() => getActiveGateway())
+
+function logout() {
+  setActiveGateway(null)
+  router.push('/setup')
+}
 </script>
 
 <template>
-  <div class="flex h-screen bg-[#101014] text-white font-sans overflow-hidden">
+  <!-- Setup page: full-screen, no sidebar -->
+  <div v-if="isSetupPage" class="h-screen bg-[#0a0a0e] text-white font-sans overflow-hidden">
+    <RouterView />
+  </div>
+
+  <!-- Dashboard: sidebar + content -->
+  <div v-else class="flex h-screen bg-[#101014] text-white font-sans overflow-hidden">
     <!-- Sidebar -->
     <aside class="w-16 flex flex-col items-center py-6 border-r border-white/5 bg-[#101014]">
       <div class="mb-8">
@@ -31,13 +50,17 @@ import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings } from 'lucide-vue-n
         </RouterLink>
       </nav>
 
-      <div class="mt-auto flex flex-col gap-6 w-full items-center">
+      <div class="mt-auto flex flex-col gap-4 w-full items-center">
         <RouterLink to="/config" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
             <Settings :size="22" />
         </RouterLink>
-        <div class="w-10 h-10 rounded-full bg-orange-500 overflow-hidden border-2 border-white/20">
-            <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="User" />
-        </div>
+        <button
+          @click="logout"
+          class="p-3 rounded-xl hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-all"
+          title="Disconnect gateway"
+        >
+          <LogOut :size="20" />
+        </button>
       </div>
     </aside>
 

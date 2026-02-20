@@ -3,6 +3,7 @@ import { ref, nextTick, watch, computed, onMounted, onUnmounted } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import { Send, X, Loader2, Trash2 } from 'lucide-vue-next'
+import { getGatewayApiUrl } from '../lib/gateway.js'
 
 const props = defineProps({
   context: { type: String, default: 'general' },
@@ -23,7 +24,7 @@ const md = new MarkdownIt({
 })
 
 // --- State ---
-const GATEWAY_API = 'http://localhost:18790/v1'
+const GATEWAY_API = getGatewayApiUrl()
 const isOpen = ref(false)
 const messages = ref([])
 const newMessage = ref('')

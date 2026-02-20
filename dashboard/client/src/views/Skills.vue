@@ -4,10 +4,11 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { Zap, Activity, Package, CheckCircle, XCircle, ExternalLink } from 'lucide-vue-next'
 import AgentChat from '../components/AgentChat.vue'
+import { getGatewayApiUrl } from '../lib/gateway.js'
 
 const router = useRouter()
 
-const GATEWAY_API = 'http://localhost:18790/v1'
+const GATEWAY_API = getGatewayApiUrl()
 const skills = ref([])
 const isLoading = ref(true)
 const filter = ref('all') // all, workspace, builtin

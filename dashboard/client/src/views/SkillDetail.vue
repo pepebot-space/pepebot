@@ -10,8 +10,9 @@ import { markdown } from '@codemirror/lang-markdown'
 import { json as jsonLang } from '@codemirror/lang-json'
 import { ArrowLeft, File, Folder, FolderOpen, Activity, FileText, Code, Terminal, Save, Check, AlertTriangle } from 'lucide-vue-next'
 import AgentChat from '../components/AgentChat.vue'
+import { getGatewayApiUrl } from '../lib/gateway.js'
 
-const GATEWAY_API = 'http://localhost:18790/v1'
+const GATEWAY_API = getGatewayApiUrl()
 const route = useRoute()
 const router = useRouter()
 const skillName = computed(() => route.params.name)

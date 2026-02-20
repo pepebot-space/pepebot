@@ -2,8 +2,9 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { Settings, Save, RotateCcw, Activity, Check, AlertTriangle, ChevronDown, ChevronUp, Server, Cpu, Radio, Key, Wrench, Shield, Eye, EyeOff } from 'lucide-vue-next'
+import { getGatewayApiUrl } from '../lib/gateway.js'
 
-const GATEWAY_API = 'http://localhost:18790/v1'
+const GATEWAY_API = getGatewayApiUrl()
 const config = ref(null)
 const isLoading = ref(true)
 const isSaving = ref(false)

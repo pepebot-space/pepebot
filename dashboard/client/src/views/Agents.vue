@@ -3,8 +3,9 @@ import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { Cpu, Activity, Server, ToggleLeft, ToggleRight, Thermometer, Hash, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import AgentChat from '../components/AgentChat.vue'
+import { getGatewayApiUrl } from '../lib/gateway.js'
 
-const GATEWAY_API = 'http://localhost:18790/v1'
+const GATEWAY_API = getGatewayApiUrl()
 const agents = ref({})
 const isLoading = ref(true)
 const expandedAgent = ref(null)
