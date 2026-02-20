@@ -20,18 +20,19 @@ onMounted(async () => {
     }
 })
 
-const toggleExpand = async (name) => {
-    if (expandedWorkflow.value === name) {
+const toggleExpand = async (wf) => {
+    const key = wf.file || wf.name
+    if (expandedWorkflow.value === key) {
         expandedWorkflow.value = null
         return
     }
-    expandedWorkflow.value = name
+    expandedWorkflow.value = key
 
     // Fetch full details if not cached
-    if (!workflowDetails.value[name]) {
+    if (!workflowDetails.value[key]) {
         try {
-            const response = await axios.get(`${GATEWAY_API}/workflows/${name}`)
-            workflowDetails.value[name] = response.data
+            const response = await axios.get(`${GATEWAY_API}/workflows/${key}`)
+            workflowDetails.value[key] = response.data
         } catch (e) {
             console.error('Failed to fetch workflow details:', e)
         }
@@ -75,7 +76,7 @@ const toggleExpand = async (name) => {
         class="bg-[#1e1e24] rounded-2xl border border-white/5 hover:border-white/10 transition-all overflow-hidden"
       >
         <!-- Card Header -->
-        <div class="p-5 cursor-pointer" @click="toggleExpand(wf.name)">
+        <div class="p-5 cursor-pointer" @click="toggleExpand(wf)">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center text-emerald-400">
@@ -95,18 +96,18 @@ const toggleExpand = async (name) => {
                 <Variable :size="13" />
                 <span>{{ Object.keys(wf.variables).length }} vars</span>
               </div>
-              <component :is="expandedWorkflow === wf.name ? ChevronUp : ChevronDown" :size="16" class="text-gray-500" />
+              <component :is="expandedWorkflow === (wf.file || wf.name) ? ChevronUp : ChevronDown" :size="16" class="text-gray-500" />
             </div>
           </div>
         </div>
 
         <!-- Expanded: Steps & Variables -->
-        <div v-if="expandedWorkflow === wf.name && workflowDetails[wf.name]" class="px-5 pb-5 border-t border-white/5">
+        <div v-if="expandedWorkflow === (wf.file || wf.name) && workflowDetails[wf.file || wf.name]" class="px-5 pb-5 border-t border-white/5">
           <!-- Variables -->
-          <div v-if="workflowDetails[wf.name].variables && Object.keys(workflowDetails[wf.name].variables).length > 0" class="mt-4 mb-4">
+          <div v-if="workflowDetails[wf.file || wf.name].variables && Object.keys(workflowDetails[wf.file || wf.name].variables).length > 0" class="mt-4 mb-4">
             <h4 class="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wider">Variables</h4>
             <div class="flex flex-wrap gap-2">
-              <div v-for="(val, key) in workflowDetails[wf.name].variables" :key="key" 
+              <div v-for="(val, key) in workflowDetails[wf.file || wf.name].variables" :key="key" 
                 class="bg-white/5 px-2.5 py-1 rounded-lg text-xs">
                 <span class="text-purple-400 font-mono">{{ key }}</span>
                 <span class="text-gray-600 mx-1">=</span>
@@ -119,7 +120,7 @@ const toggleExpand = async (name) => {
           <div>
             <h4 class="text-xs text-gray-500 font-medium mb-3 uppercase tracking-wider">Steps</h4>
             <div class="space-y-2">
-              <div v-for="(step, index) in workflowDetails[wf.name].steps" :key="index"
+              <div v-for="(step, index) in workflowDetails[wf.file || wf.name].steps" :key="index"
                 class="flex items-start gap-3 bg-white/[0.03] rounded-xl p-3">
                 <div class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs text-gray-400 flex-shrink-0 mt-0.5">
                   {{ index + 1 }}
@@ -137,7 +138,7 @@ const toggleExpand = async (name) => {
         </div>
 
         <!-- Loading details -->
-        <div v-else-if="expandedWorkflow === wf.name && !workflowDetails[wf.name]" class="px-5 pb-5 border-t border-white/5">
+        <div v-else-if="expandedWorkflow === (wf.file || wf.name) && !workflowDetails[wf.file || wf.name]" class="px-5 pb-5 border-t border-white/5">
           <div class="flex items-center justify-center py-6">
             <Activity :size="20" class="animate-spin text-green-500" />
           </div>

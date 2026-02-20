@@ -870,6 +870,7 @@ func (gs *GatewayServer) handleListWorkflows(w http.ResponseWriter, r *http.Requ
 
 	type workflowInfo struct {
 		Name        string            `json:"name"`
+		File        string            `json:"file"`
 		Description string            `json:"description"`
 		StepCount   int               `json:"step_count"`
 		Variables   map[string]string `json:"variables,omitempty"`
@@ -899,13 +900,15 @@ func (gs *GatewayServer) handleListWorkflows(w http.ResponseWriter, r *http.Requ
 				continue
 			}
 
-			name := strings.TrimSuffix(file.Name(), ".json")
+			baseName := strings.TrimSuffix(file.Name(), ".json")
+			displayName := baseName
 			if wf.Name != "" {
-				name = wf.Name
+				displayName = wf.Name
 			}
 
 			workflows = append(workflows, workflowInfo{
-				Name:        name,
+				Name:        displayName,
+				File:        baseName,
 				Description: wf.Description,
 				StepCount:   len(wf.Steps),
 				Variables:   wf.Variables,
