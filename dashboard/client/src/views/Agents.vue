@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { Cpu, Activity, Server, ToggleLeft, ToggleRight, Thermometer, Hash, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import AgentChat from '../components/AgentChat.vue'
 
 const GATEWAY_API = 'http://localhost:18790/v1'
 const agents = ref({})
@@ -129,5 +130,7 @@ const toggleExpand = (id) => {
         </div>
       </div>
     </div>
+
+    <AgentChat context="agents" />
   </div>
 </template>

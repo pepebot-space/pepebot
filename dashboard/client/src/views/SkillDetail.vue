@@ -9,6 +9,7 @@ import { javascript } from '@codemirror/lang-javascript'
 import { markdown } from '@codemirror/lang-markdown'
 import { json as jsonLang } from '@codemirror/lang-json'
 import { ArrowLeft, File, Folder, FolderOpen, Activity, FileText, Code, Terminal, Save, Check, AlertTriangle } from 'lucide-vue-next'
+import AgentChat from '../components/AgentChat.vue'
 
 const GATEWAY_API = 'http://localhost:18790/v1'
 const route = useRoute()
@@ -305,6 +306,11 @@ function toggleDir(dir) {
         <p class="text-sm">Select a file to view</p>
       </div>
     </div>
+
+    <AgentChat 
+      context="skill-editor" 
+      :contextData="{ skillName: skillName, selectedFile: selectedFile?.path }" 
+    />
   </div>
 </template>
 

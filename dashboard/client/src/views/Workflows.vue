@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { GitBranch, Activity, Play, ChevronDown, ChevronUp, Variable, Layers } from 'lucide-vue-next'
+import AgentChat from '../components/AgentChat.vue'
 
 const GATEWAY_API = 'http://localhost:18790/v1'
 const workflows = ref([])
@@ -145,5 +146,7 @@ const toggleExpand = async (wf) => {
         </div>
       </div>
     </div>
+
+    <AgentChat context="workflows" />
   </div>
 </template>

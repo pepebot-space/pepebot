@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { Zap, Activity, Package, CheckCircle, XCircle, ExternalLink } from 'lucide-vue-next'
+import AgentChat from '../components/AgentChat.vue'
 
 const router = useRouter()
 
@@ -119,5 +120,7 @@ const skillCounts = computed(() => ({
         </div>
       </div>
     </div>
+
+    <AgentChat context="skills" />
   </div>
 </template>
