@@ -31,7 +31,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/voice"
 )
 
-const version = "0.4.3"
+const version = "0.5.0"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {

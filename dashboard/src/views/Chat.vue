@@ -38,7 +38,6 @@ const selectedAgentId = ref('default')
 const showSessionMenu = ref(false)
 
 const GATEWAY_API = getGatewayApiUrl()
-const BACKEND_API = 'http://localhost:3000/api'
 
 // --- Computed ---
 const currentAgent = computed(() => agents.value[selectedAgentId.value] || {})
@@ -163,10 +162,12 @@ const sendMessage = async () => {
   try {
     let uploadedImageUrl = null
     if (userMsg.image && fileInput.value?.files[0]) {
-      const formData = new FormData()
-      formData.append('image', fileInput.value.files[0])
-      const uploadRes = await axios.post(`${BACKEND_API}/upload`, formData)
-      uploadedImageUrl = uploadRes.data.url
+      const file = fileInput.value.files[0]
+      uploadedImageUrl = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result)
+        reader.readAsDataURL(file)
+      })
     }
 
     const payload = {

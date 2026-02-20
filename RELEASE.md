@@ -1,51 +1,33 @@
-# 🐸 Pepebot v0.4.3 - OpenAI-Compatible Gateway API
+# 🐸 Pepebot v0.5.0 - Local Dashboard Interface
 
-**Release Date:** 2026-02-18
+**Release Date:** 2026-02-20
 
 ## 🎉 What's New
 
-### 🌐 OpenAI-Compatible HTTP API with SSE Streaming
+### 🖥️ Local Dashboard Interface
 
-Pepebot gateway now includes a full HTTP API server that speaks the OpenAI Chat Completions protocol. Connect any OpenAI-compatible client, dashboard, or tool — it just works.
+Pepebot now includes a fully featured modern Web UI dashboard for managing your AI agent locally or deployed via static hosting like Cloudflare Pages.
 
-**Chat with streaming:**
+**Start the dashboard:**
 ```bash
-curl -N -X POST http://localhost:18790/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "X-Agent: default" \
-  -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
+pepebot gateway
 ```
+*The dashboard will automatically be available via your gateway interface (default: http://localhost:18790)*
 
-**SSE response format (OpenAI-compatible):**
-```
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"content":"Hello"}}]}
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"content":"!"}}]}
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{},"finish_reason":"stop"}]}
-data: [DONE]
-```
+### 🐸 Floating AI Assistant (Frog Panel)
 
-### 📡 API Endpoints
+Global access to Pepebot within the dashboard interface.
+- Embedded chat interface that slides in from the right edge
+- Context-aware prompting based on the active dashboard page
+- Full Markdown and Code syntax highlighting support
+- Image upload capabilities directly from the browser
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/v1/chat/completions` | Chat with agent (streaming + non-streaming) |
-| `GET` | `/v1/models` | List available models |
-| `GET` | `/v1/agents` | List registered agents |
-| `GET` | `/v1/sessions` | List active web sessions |
-| `POST` | `/v1/sessions/{key}/new` | Start new chat session |
-| `POST` | `/v1/sessions/{key}/stop` | Stop in-flight processing |
-| `DELETE` | `/v1/sessions/{key}` | Delete a session |
-| `GET` | `/health` | Health check |
+### ☁️ Cloudflare Pages Ready
 
-### 🔑 Key Features
-
-- **OpenAI protocol**: Works with any OpenAI-compatible client SDK
-- **SSE streaming**: Real-time token-by-token responses
-- **Multi-agent**: Select agent via `X-Agent` header
-- **Session management**: Create, list, clear, and stop sessions via API
-- **CORS enabled**: Ready for browser dashboards
-- **Tool calls internal**: Agent handles tools server-side, API returns clean content
-- **No new dependencies**: Pure `net/http` stdlib
+Complete restructure of the frontend architecture for zero-server static hosting.
+- Removed intermediate proxy servers
+- Direct API connections via CORS and localStorage configuration
+- Upload payloads now converted locally to Base64 natively
 
 ## 📦 Installation
 
@@ -67,31 +49,17 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.4.3).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.0).
 
 ## 🚀 Quick Start
 
-1. **Start the gateway:**
+1. **Start the gateway & dashboard:**
    ```bash
    pepebot gateway -v
    ```
 
-2. **Check health:**
-   ```bash
-   curl http://localhost:18790/health
-   ```
-
-3. **Chat with the agent:**
-   ```bash
-   curl -X POST http://localhost:18790/v1/chat/completions \
-     -H "Content-Type: application/json" \
-     -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":false}'
-   ```
-
-4. **List agents:**
-   ```bash
-   curl http://localhost:18790/v1/agents
-   ```
+2. **Access the Web Dashboard:**
+   Open your browser and navigate to `http://localhost:18790` (or your configured gateway port)
 
 ## 📚 Documentation
 
@@ -109,8 +77,8 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 📝 Full Changelog
 
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#043---2026-02-18).
+For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#050---2026-02-20).
 
 ---
 
-**Note:** When upgrading from v0.4.2, all existing configurations and data are preserved. No migration needed. The HTTP API server starts automatically alongside existing chat channels when running `pepebot gateway`.
+**Note:** When upgrading from v0.4.x, all existing configurations and data are preserved. No migration needed. The dashboard will automatically serve traffic from your gateway configuration.
