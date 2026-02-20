@@ -40,6 +40,7 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/skills", gs.corsMiddleware(gs.handleListSkills))
 	mux.HandleFunc("/v1/workflows", gs.corsMiddleware(gs.handleListWorkflows))
 	mux.HandleFunc("/v1/workflows/", gs.corsMiddleware(gs.handleGetWorkflow))
+	mux.HandleFunc("/v1/config", gs.corsMiddleware(gs.handleConfig))
 
 	addr := fmt.Sprintf("%s:%d", gs.config.Gateway.Host, gs.config.Gateway.Port)
 	gs.httpServer = &http.Server{

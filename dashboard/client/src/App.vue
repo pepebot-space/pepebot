@@ -32,9 +32,9 @@ import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings } from 'lucide-vue-n
       </nav>
 
       <div class="mt-auto flex flex-col gap-6 w-full items-center">
-        <div class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all cursor-pointer">
-            <Settings :size="24" />
-        </div>
+        <RouterLink to="/config" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
+            <Settings :size="22" />
+        </RouterLink>
         <div class="w-10 h-10 rounded-full bg-orange-500 overflow-hidden border-2 border-white/20">
             <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="User" />
         </div>

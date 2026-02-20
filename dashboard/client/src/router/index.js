@@ -29,6 +29,11 @@ const router = createRouter({
             path: '/workflows',
             name: 'workflows',
             component: () => import('../views/Workflows.vue')
+        },
+        {
+            path: '/config',
+            name: 'config',
+            component: () => import('../views/Config.vue')
         }
     ]
 })

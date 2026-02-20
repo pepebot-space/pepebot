@@ -744,6 +744,126 @@ func (gs *GatewayServer) handleGetWorkflow(w http.ResponseWriter, r *http.Reques
 	w.Write(data)
 }
 
+// configPath returns the path to config.json
+func configPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".pepebot", "config.json")
+}
+
+// handleConfig handles GET (read) and PUT (write) for config.json
+func (gs *GatewayServer) handleConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		gs.handleGetConfig(w, r)
+	case http.MethodPut:
+		gs.handlePutConfig(w, r)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+	}
+}
+
+// handleGetConfig reads config.json and returns it (with masked API keys)
+func (gs *GatewayServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	data, err := os.ReadFile(configPath())
+	if err != nil {
+		writeError(w, http.StatusNotFound, "config not found", "not_found")
+		return
+	}
+
+	// Parse to map so we can mask API keys
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to parse config", "server_error")
+		return
+	}
+
+	// Mask API keys for security
+	maskAPIKeys(cfg)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cfg)
+}
+
+// handlePutConfig saves the provided JSON to config.json
+func (gs *GatewayServer) handlePutConfig(w http.ResponseWriter, r *http.Request) {
+	var newConfig map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error(), "invalid_request_error")
+		return
+	}
+
+	// Read current config to preserve masked fields
+	currentData, err := os.ReadFile(configPath())
+	if err == nil {
+		var currentConfig map[string]interface{}
+		if json.Unmarshal(currentData, &currentConfig) == nil {
+			// Restore masked API keys from current config
+			restoreMaskedKeys(newConfig, currentConfig)
+		}
+	}
+
+	// Write with pretty formatting
+	data, err := json.MarshalIndent(newConfig, "", "  ")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to marshal config", "server_error")
+		return
+	}
+
+	if err := os.WriteFile(configPath(), data, 0644); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save config: "+err.Error(), "server_error")
+		return
+	}
+
+	logger.InfoC("gateway", "Config updated via dashboard")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "ok",
+		"message": "Configuration saved. Restart gateway to apply changes.",
+	})
+}
+
+// maskAPIKeys masks sensitive fields in config for display
+func maskAPIKeys(obj map[string]interface{}) {
+	for key, val := range obj {
+		switch v := val.(type) {
+		case map[string]interface{}:
+			maskAPIKeys(v)
+		case string:
+			if (strings.Contains(key, "api_key") || strings.Contains(key, "token") || strings.Contains(key, "secret")) && v != "" {
+				if len(v) > 8 {
+					obj[key] = v[:4] + "****" + v[len(v)-4:]
+				} else {
+					obj[key] = "****"
+				}
+			}
+		}
+	}
+}
+
+// restoreMaskedKeys replaces masked values (containing ****) with originals from current config
+func restoreMaskedKeys(newCfg, currentCfg map[string]interface{}) {
+	for key, newVal := range newCfg {
+		currentVal, exists := currentCfg[key]
+		if !exists {
+			continue
+		}
+
+		switch nv := newVal.(type) {
+		case map[string]interface{}:
+			if cv, ok := currentVal.(map[string]interface{}); ok {
+				restoreMaskedKeys(nv, cv)
+			}
+		case string:
+			if strings.Contains(nv, "****") {
+				if cv, ok := currentVal.(string); ok {
+					newCfg[key] = cv
+				}
+			}
+		}
+	}
+}
+
 // writeError writes a JSON error response
 func writeError(w http.ResponseWriter, statusCode int, message, errType string) {
 	w.Header().Set("Content-Type", "application/json")

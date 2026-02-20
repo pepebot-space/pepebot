@@ -83,6 +83,8 @@ Configure in `~/.pepebot/config.json`:
 | `GET` | `/v1/skills` | List installed skills |
 | `GET` | `/v1/workflows` | List available workflows |
 | `GET` | `/v1/workflows/{name}` | Get workflow definition |
+| `GET` | `/v1/config` | Get configuration (masked keys) |
+| `PUT` | `/v1/config` | Update configuration |
 | `GET` | `/health` | Health check |
 
 ---
@@ -519,6 +521,102 @@ Get the full workflow definition including all steps and variables.
 ```bash
 curl http://localhost:18790/v1/workflows/deploy-app
 ```
+
+---
+
+#### Get Configuration
+
+**GET** `/v1/config`
+
+Returns the current `~/.pepebot/config.json` with sensitive fields (API keys, tokens, secrets) masked.
+
+**Response:**
+```json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.pepebot/workspace",
+      "model": "maia/gemini-3-pro-preview",
+      "max_tokens": 8192,
+      "temperature": 0.7,
+      "max_tool_iterations": 20
+    }
+  },
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790
+  },
+  "providers": {
+    "maiarouter": {
+      "api_key": "sk-i****-SOw",
+      "api_base": ""
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "8504****4Dqw",
+      "allow_from": []
+    }
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "api_key": "",
+        "max_results": 5
+      }
+    }
+  }
+}
+```
+
+> **Note:** Fields matching `api_key`, `token`, or `secret` are automatically masked as `xxxx****xxxx` to prevent accidental exposure.
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/config
+```
+
+---
+
+#### Update Configuration
+
+**PUT** `/v1/config`
+
+Save a new configuration to `~/.pepebot/config.json`. Masked values (containing `****`) are automatically restored from the current config, so unchanged secrets are preserved.
+
+**Request Body:** Full config JSON object (same structure as GET response).
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Configuration saved. Restart gateway to apply changes."
+}
+```
+
+**Error Response:**
+```json
+{
+  "error": {
+    "message": "invalid JSON: ...",
+    "type": "invalid_request_error",
+    "code": "Bad Request"
+  }
+}
+```
+
+**Example:**
+```bash
+curl -X PUT http://localhost:18790/v1/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agents": {"defaults": {"model": "maia/claude-4-sonnet", "temperature": 0.5}},
+    "gateway": {"host": "0.0.0.0", "port": 18790}
+  }'
+```
+
+> **Important:** Changes take effect after restarting the gateway.
 
 ---
 
