@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-02-20
+
+### Added
+- **Local Dashboard Interface**: Fully rewritten Vue/Vite static dashboard for managing Pepebot
+  - `pepebot gateway` now serves a modern Web UI connecting to the local API
+  - Gateway configuration routing mechanism targeting `http://localhost:18790/v1`
+  - Dashboard features Pages for Agents, Skills, Workflows, Configuration, and Sessions
+  - Setup screen for configuring the API gateway URL and multi-gateway management
+  - Ready for static deployment (Cloudflare Pages, Vercel, Netlify)
+- **Floating AI Assistant (Frog Panel)**: Global access to Pepebot within the dashboard
+  - Embedded chat interface that slides in from the right edge
+  - Implemented SSE context streaming identical to terminal functionality
+  - Context-aware prompting based on the active dashboard page (e.g. creating skills on the Skills page)
+  - Full Markdown and Code syntax highlighting support in web chat
+  - Image upload capabilities via Data URL/Base64 encoding directly from the browser
+
+### Changed
+- **Dashboard Architecture**: Complete restructure for static hosting
+  - Removed intermediate Express.js proxy layer and SQLite uploads db
+  - Moved Vite application from `client/` to root `dashboard/` workspace
+  - Image payloads now converted locally via `FileReader` instead of an `api/upload` endpoint
+- **Gateway Security**: Added CORS wildcard origins for cross-network Web UI access
+
 ## [0.4.3] - 2026-02-18
 
 ### Added

@@ -76,9 +76,18 @@ Configure in `~/.pepebot/config.json`:
 | `GET` | `/v1/models` | List available models |
 | `GET` | `/v1/agents` | List registered agents |
 | `GET` | `/v1/sessions` | List active web sessions |
+| `GET` | `/v1/sessions/{key}` | Get session history |
 | `POST` | `/v1/sessions/{key}/new` | Clear & start new session |
 | `POST` | `/v1/sessions/{key}/stop` | Stop in-flight processing |
 | `DELETE` | `/v1/sessions/{key}` | Delete a session |
+| `GET` | `/v1/skills` | List installed skills |
+| `GET` | `/v1/skills/{name}` | List files in a skill |
+| `GET` | `/v1/skills/{name}/{path}` | Get skill file content |
+| `POST` | `/v1/skills/{name}/{path}` | Save skill file content |
+| `GET` | `/v1/workflows` | List available workflows |
+| `GET` | `/v1/workflows/{name}` | Get workflow definition |
+| `GET` | `/v1/config` | Get configuration (masked keys) |
+| `PUT` | `/v1/config` | Update configuration |
 | `GET` | `/health` | Health check |
 
 ---
@@ -377,6 +386,362 @@ Delete a specific session and its history.
 ```bash
 curl -X DELETE http://localhost:18790/v1/sessions/web:default
 ```
+
+---
+
+#### List Skills
+
+**GET** `/v1/skills`
+
+List all installed skills from workspace and builtin directories.
+
+**Response:**
+```json
+{
+  "skills": [
+    {
+      "name": "weather",
+      "source": "workspace",
+      "description": "Get weather information for any location",
+      "available": true
+    },
+    {
+      "name": "github",
+      "source": "workspace",
+      "description": "GitHub integration and management",
+      "available": true
+    },
+    {
+      "name": "tmux",
+      "source": "builtin",
+      "description": "Terminal multiplexer management",
+      "available": false,
+      "missing": "CLI: tmux"
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Skill directory name |
+| `source` | string | `"workspace"` or `"builtin"` |
+| `description` | string | From SKILL.md frontmatter |
+| `available` | boolean | Whether requirements are met |
+| `missing` | string | Missing requirements (if unavailable) |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/skills
+```
+
+---
+
+#### List Skill Files
+
+**GET** `/v1/skills/{name}`
+
+List all files in a skill directory recursively.
+
+**Path Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Skill directory name |
+
+**Response:**
+```json
+{
+  "skill": "weather",
+  "files": [
+    {
+      "name": "SKILL.md",
+      "path": "SKILL.md",
+      "is_dir": false,
+      "size": 1168
+    },
+    {
+      "name": "scripts",
+      "path": "scripts",
+      "is_dir": true,
+      "size": 0
+    },
+    {
+      "name": "init.py",
+      "path": "scripts/init.py",
+      "is_dir": false,
+      "size": 2048
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | File or directory base name |
+| `path` | string | Relative path within the skill |
+| `is_dir` | boolean | Whether this entry is a directory |
+| `size` | int | File size in bytes |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/skills/weather
+```
+
+---
+
+#### Get Skill File Content
+
+**GET** `/v1/skills/{name}/{path}`
+
+Return the raw content of a file within a skill directory.
+
+**Path Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Skill directory name |
+| `path` | Relative file path (e.g. `SKILL.md` or `scripts/init.py`) |
+
+**Response:** Raw file content with appropriate `Content-Type` header.
+
+| Extension | Content-Type |
+|-----------|-------------|
+| `.json` | `application/json` |
+| `.md` | `text/markdown` |
+| `.py` | `text/x-python` |
+| `.js` | `text/javascript` |
+| `.sh` | `text/x-shellscript` |
+| `.yaml` | `text/yaml` |
+| other | `text/plain` |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/skills/weather/SKILL.md
+curl http://localhost:18790/v1/skills/ralph/scripts/init.py
+```
+
+---
+
+#### Save Skill File
+
+**POST** `/v1/skills/{name}/{path}`
+
+Save content to a file within a skill directory. The request body is written as raw file content.
+
+**Path Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Skill directory name |
+| `path` | Relative file path |
+
+**Request Body:** Raw file content (`Content-Type: text/plain`)
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "File saved",
+  "path": "SKILL.md"
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:18790/v1/skills/weather/SKILL.md \
+  -H "Content-Type: text/plain" \
+  -d '---
+name: weather
+description: Updated weather skill
+---
+# Weather Skill'
+```
+
+---
+
+#### List Workflows
+
+**GET** `/v1/workflows`
+
+List all available workflow definitions from `~/.pepebot/workspace/workflows/`.
+
+**Response:**
+```json
+{
+  "workflows": [
+    {
+      "name": "deploy-app",
+      "description": "Build and deploy application to production",
+      "step_count": 5,
+      "variables": {
+        "app_name": "myapp",
+        "env": "production"
+      }
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Workflow name (from JSON or filename) |
+| `description` | string | Workflow description |
+| `step_count` | int | Number of steps in the workflow |
+| `variables` | object | Default variable key-value pairs |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/workflows
+```
+
+---
+
+#### Get Workflow Definition
+
+**GET** `/v1/workflows/{name}`
+
+Get the full workflow definition including all steps and variables.
+
+**Response:**
+```json
+{
+  "name": "deploy-app",
+  "description": "Build and deploy application to production",
+  "variables": {
+    "app_name": "myapp",
+    "env": "production"
+  },
+  "steps": [
+    {
+      "name": "Build",
+      "tool": "shell",
+      "args": {
+        "command": "npm run build"
+      }
+    },
+    {
+      "name": "Deploy",
+      "goal": "Deploy {{app_name}} to {{env}}"
+    }
+  ]
+}
+```
+
+**Error (404):**
+```json
+{
+  "error": {
+    "message": "workflow not found",
+    "type": "not_found",
+    "code": "Not Found"
+  }
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/workflows/deploy-app
+```
+
+---
+
+#### Get Configuration
+
+**GET** `/v1/config`
+
+Returns the current `~/.pepebot/config.json` with sensitive fields (API keys, tokens, secrets) masked.
+
+**Response:**
+```json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.pepebot/workspace",
+      "model": "maia/gemini-3-pro-preview",
+      "max_tokens": 8192,
+      "temperature": 0.7,
+      "max_tool_iterations": 20
+    }
+  },
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790
+  },
+  "providers": {
+    "maiarouter": {
+      "api_key": "sk-i****-SOw",
+      "api_base": ""
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "8504****4Dqw",
+      "allow_from": []
+    }
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "api_key": "",
+        "max_results": 5
+      }
+    }
+  }
+}
+```
+
+> **Note:** Fields matching `api_key`, `token`, or `secret` are automatically masked as `xxxx****xxxx` to prevent accidental exposure.
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/config
+```
+
+---
+
+#### Update Configuration
+
+**PUT** `/v1/config`
+
+Save a new configuration to `~/.pepebot/config.json`. Masked values (containing `****`) are automatically restored from the current config, so unchanged secrets are preserved.
+
+**Request Body:** Full config JSON object (same structure as GET response).
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Configuration saved. Restart gateway to apply changes."
+}
+```
+
+**Error Response:**
+```json
+{
+  "error": {
+    "message": "invalid JSON: ...",
+    "type": "invalid_request_error",
+    "code": "Bad Request"
+  }
+}
+```
+
+**Example:**
+```bash
+curl -X PUT http://localhost:18790/v1/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agents": {"defaults": {"model": "maia/claude-4-sonnet", "temperature": 0.5}},
+    "gateway": {"host": "0.0.0.0", "port": 18790}
+  }'
+```
+
+> **Important:** Changes take effect after restarting the gateway.
 
 ---
 

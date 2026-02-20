@@ -26,8 +26,20 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 - 🎯 **Skills System**: Customizable and extensible skill system
 - 🚀 **Lightweight & Fast**: Small binary size with high performance
 - 🔧 **Gateway Server**: HTTP server for custom integrations
-- 💻 **CLI Interface**: Interactive command-line interface
+- 💻 **Web Dashboard**: Modern Web UI accessible locally via gateway or online at [dash.pepebot.space](https://dash.pepebot.space)
 - 🎙️ **Voice Support**: Audio/voice message transcription
+
+## 🖥️ Web Dashboard
+
+Pepebot comes with a fully-featured modern dashboard. You can access the unified Web UI to manage agents, skills, and chat via [https://dash.pepebot.space](https://dash.pepebot.space), or run it locally by starting `pepebot gateway`.
+
+<div align="center">
+  <img src="assets/screenshots/1.webp" width="49%">
+  <img src="assets/screenshots/2.webp" width="49%">
+  <img src="assets/screenshots/3.webp" width="49%">
+  <img src="assets/screenshots/4.webp" width="49%">
+  <img src="assets/screenshots/5.webp" width="100%">
+</div>
 
 ## 📦 Installation
 
@@ -85,7 +97,7 @@ environment.systemPackages = with pkgs; [
   (callPackage (fetchFromGitHub {
     owner = "pepebot-space";
     repo = "pepebot";
-    rev = "v0.4.0";
+    rev = "v0.5.0";
     sha256 = "...";
   }) {})
 ];

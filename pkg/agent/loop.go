@@ -71,8 +71,8 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
-	toolsRegistry.Register(tools.NewSendImageTool(bus))
-	toolsRegistry.Register(tools.NewSendFileTool(bus))
+	toolsRegistry.Register(tools.NewSendImageTool(bus, workspace))
+	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
@@ -127,8 +127,8 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))
-	toolsRegistry.Register(tools.NewSendImageTool(bus))
-	toolsRegistry.Register(tools.NewSendFileTool(bus))
+	toolsRegistry.Register(tools.NewSendImageTool(bus, workspace))
+	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
@@ -220,12 +220,13 @@ func (al *AgentLoop) Sessions() *session.SessionManager {
 	return al.sessions
 }
 
-func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey string) (string, error) {
+func (al *AgentLoop) ProcessDirect(ctx context.Context, content string, media []string, sessionKey string) (string, error) {
 	msg := bus.InboundMessage{
 		Channel:    "cli",
 		SenderID:   "user",
 		ChatID:     "direct",
 		Content:    content,
+		Media:      media,
 		SessionKey: sessionKey,
 	}
 
@@ -234,12 +235,13 @@ func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey stri
 
 // ProcessDirectStream processes a message with streaming for the final response.
 // Tool iterations use non-streaming Chat(); only the final LLM call streams.
-func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content, sessionKey string, callback providers.StreamCallback) error {
+func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, media []string, sessionKey string, callback providers.StreamCallback) error {
 	msg := bus.InboundMessage{
 		Channel:    "web",
 		SenderID:   "user",
 		ChatID:     "web",
 		Content:    content,
+		Media:      media,
 		SessionKey: sessionKey,
 	}
 
