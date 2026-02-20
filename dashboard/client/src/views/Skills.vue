@@ -1,7 +1,10 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { Zap, Activity, Package, CheckCircle, XCircle, ExternalLink } from 'lucide-vue-next'
+
+const router = useRouter()
 
 const GATEWAY_API = 'http://localhost:18790/v1'
 const skills = ref([])
@@ -80,7 +83,8 @@ const skillCounts = computed(() => ({
       <div 
         v-for="skill in filteredSkills" 
         :key="skill.name"
-        class="bg-[#1e1e24] p-5 rounded-2xl border border-white/5 hover:border-white/10 transition-all flex flex-col gap-3 group"
+        @click="router.push(`/skills/${skill.name}`)"
+        class="bg-[#1e1e24] p-5 rounded-2xl border border-white/5 hover:border-white/10 transition-all flex flex-col gap-3 group cursor-pointer"
       >
         <!-- Header -->
         <div class="flex items-start justify-between">

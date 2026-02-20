@@ -38,6 +38,7 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/sessions/", gs.corsMiddleware(gs.handleSessionRoutes))
 	mux.HandleFunc("/v1/agents", gs.corsMiddleware(gs.handleListAgents))
 	mux.HandleFunc("/v1/skills", gs.corsMiddleware(gs.handleListSkills))
+	mux.HandleFunc("/v1/skills/", gs.corsMiddleware(gs.handleSkillRoutes))
 	mux.HandleFunc("/v1/workflows", gs.corsMiddleware(gs.handleListWorkflows))
 	mux.HandleFunc("/v1/workflows/", gs.corsMiddleware(gs.handleGetWorkflow))
 	mux.HandleFunc("/v1/config", gs.corsMiddleware(gs.handleConfig))

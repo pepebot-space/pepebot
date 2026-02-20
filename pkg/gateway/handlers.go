@@ -3,6 +3,7 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -650,6 +651,210 @@ func (gs *GatewayServer) handleListSkills(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"skills": skills,
+	})
+}
+
+// findSkillPath resolves a skill name to its directory path
+func (gs *GatewayServer) findSkillPath(name string) string {
+	workspace := gs.config.WorkspacePath()
+	// Check workspace skills first
+	p := filepath.Join(workspace, "skills", name)
+	if info, err := os.Stat(p); err == nil && info.IsDir() {
+		return p
+	}
+	// Check builtin skills
+	p = filepath.Join(filepath.Dir(workspace), "skills-builtin", name)
+	if info, err := os.Stat(p); err == nil && info.IsDir() {
+		return p
+	}
+	return ""
+}
+
+// handleSkillRoutes handles /v1/skills/{name} and /v1/skills/{name}/{path...}
+func (gs *GatewayServer) handleSkillRoutes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+		return
+	}
+
+	// Parse: /v1/skills/{name} or /v1/skills/{name}/{path...}
+	rest := strings.TrimPrefix(r.URL.Path, "/v1/skills/")
+	if rest == "" {
+		writeError(w, http.StatusBadRequest, "skill name required", "invalid_request_error")
+		return
+	}
+
+	// Split into name and optional file path
+	parts := strings.SplitN(rest, "/", 2)
+	skillName := parts[0]
+	filePath := ""
+	if len(parts) > 1 {
+		filePath = parts[1]
+	}
+
+	skillDir := gs.findSkillPath(skillName)
+	if skillDir == "" {
+		writeError(w, http.StatusNotFound, "skill not found: "+skillName, "not_found")
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		if filePath == "" {
+			writeError(w, http.StatusBadRequest, "file path required for POST", "invalid_request_error")
+			return
+		}
+		gs.handleSkillFileSave(w, r, skillDir, filePath)
+		return
+	}
+
+	if filePath == "" {
+		gs.handleSkillFileList(w, skillDir, skillName)
+	} else {
+		gs.handleSkillFileContent(w, skillDir, filePath)
+	}
+}
+
+// handleSkillFileList returns a recursive file tree for a skill
+func (gs *GatewayServer) handleSkillFileList(w http.ResponseWriter, skillDir, skillName string) {
+	type fileEntry struct {
+		Name  string `json:"name"`
+		Path  string `json:"path"`
+		IsDir bool   `json:"is_dir"`
+		Size  int64  `json:"size"`
+	}
+
+	var files []fileEntry
+
+	filepath.Walk(skillDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		// Get relative path
+		rel, _ := filepath.Rel(skillDir, path)
+		if rel == "." {
+			return nil
+		}
+		// Skip hidden files/dirs
+		if strings.HasPrefix(filepath.Base(rel), ".") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		files = append(files, fileEntry{
+			Name:  filepath.Base(rel),
+			Path:  rel,
+			IsDir: info.IsDir(),
+			Size:  info.Size(),
+		})
+		return nil
+	})
+
+	if files == nil {
+		files = []fileEntry{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"skill": skillName,
+		"files": files,
+	})
+}
+
+// handleSkillFileContent returns the raw content of a file within a skill
+func (gs *GatewayServer) handleSkillFileContent(w http.ResponseWriter, skillDir, filePath string) {
+	// Sanitize path to prevent directory traversal
+	cleanPath := filepath.Clean(filePath)
+	if strings.Contains(cleanPath, "..") {
+		writeError(w, http.StatusBadRequest, "invalid path", "invalid_request_error")
+		return
+	}
+
+	fullPath := filepath.Join(skillDir, cleanPath)
+
+	// Ensure the resolved path is still within the skill directory
+	absSkillDir, _ := filepath.Abs(skillDir)
+	absFullPath, _ := filepath.Abs(fullPath)
+	if !strings.HasPrefix(absFullPath, absSkillDir) {
+		writeError(w, http.StatusForbidden, "access denied", "permission_error")
+		return
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "file not found: "+filePath, "not_found")
+		return
+	}
+
+	// Detect content type
+	ext := strings.ToLower(filepath.Ext(filePath))
+	contentType := "text/plain; charset=utf-8"
+	switch ext {
+	case ".json":
+		contentType = "application/json"
+	case ".md":
+		contentType = "text/markdown; charset=utf-8"
+	case ".py":
+		contentType = "text/x-python; charset=utf-8"
+	case ".js":
+		contentType = "text/javascript; charset=utf-8"
+	case ".sh", ".bash":
+		contentType = "text/x-shellscript; charset=utf-8"
+	case ".yaml", ".yml":
+		contentType = "text/yaml; charset=utf-8"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Write(data)
+}
+
+// handleSkillFileSave writes content to a file within a skill
+func (gs *GatewayServer) handleSkillFileSave(w http.ResponseWriter, r *http.Request, skillDir, filePath string) {
+	// Sanitize path to prevent directory traversal
+	cleanPath := filepath.Clean(filePath)
+	if strings.Contains(cleanPath, "..") {
+		writeError(w, http.StatusBadRequest, "invalid path", "invalid_request_error")
+		return
+	}
+
+	fullPath := filepath.Join(skillDir, cleanPath)
+
+	// Ensure the resolved path is still within the skill directory
+	absSkillDir, _ := filepath.Abs(skillDir)
+	absFullPath, _ := filepath.Abs(fullPath)
+	if !strings.HasPrefix(absFullPath, absSkillDir) {
+		writeError(w, http.StatusForbidden, "access denied", "permission_error")
+		return
+	}
+
+	// Read body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to read body", "invalid_request_error")
+		return
+	}
+	defer r.Body.Close()
+
+	// Create parent directories if needed
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create directory: "+err.Error(), "server_error")
+		return
+	}
+
+	if err := os.WriteFile(fullPath, body, 0644); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save file: "+err.Error(), "server_error")
+		return
+	}
+
+	logger.InfoC("gateway", fmt.Sprintf("Skill file updated via dashboard: %s/%s", filepath.Base(skillDir), filePath))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "ok",
+		"message": "File saved",
+		"path":    filePath,
 	})
 }
 

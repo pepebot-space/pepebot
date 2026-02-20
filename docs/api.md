@@ -81,6 +81,9 @@ Configure in `~/.pepebot/config.json`:
 | `POST` | `/v1/sessions/{key}/stop` | Stop in-flight processing |
 | `DELETE` | `/v1/sessions/{key}` | Delete a session |
 | `GET` | `/v1/skills` | List installed skills |
+| `GET` | `/v1/skills/{name}` | List files in a skill |
+| `GET` | `/v1/skills/{name}/{path}` | Get skill file content |
+| `POST` | `/v1/skills/{name}/{path}` | Save skill file content |
 | `GET` | `/v1/workflows` | List available workflows |
 | `GET` | `/v1/workflows/{name}` | Get workflow definition |
 | `GET` | `/v1/config` | Get configuration (masked keys) |
@@ -432,6 +435,128 @@ List all installed skills from workspace and builtin directories.
 **Example:**
 ```bash
 curl http://localhost:18790/v1/skills
+```
+
+---
+
+#### List Skill Files
+
+**GET** `/v1/skills/{name}`
+
+List all files in a skill directory recursively.
+
+**Path Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Skill directory name |
+
+**Response:**
+```json
+{
+  "skill": "weather",
+  "files": [
+    {
+      "name": "SKILL.md",
+      "path": "SKILL.md",
+      "is_dir": false,
+      "size": 1168
+    },
+    {
+      "name": "scripts",
+      "path": "scripts",
+      "is_dir": true,
+      "size": 0
+    },
+    {
+      "name": "init.py",
+      "path": "scripts/init.py",
+      "is_dir": false,
+      "size": 2048
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | File or directory base name |
+| `path` | string | Relative path within the skill |
+| `is_dir` | boolean | Whether this entry is a directory |
+| `size` | int | File size in bytes |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/skills/weather
+```
+
+---
+
+#### Get Skill File Content
+
+**GET** `/v1/skills/{name}/{path}`
+
+Return the raw content of a file within a skill directory.
+
+**Path Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Skill directory name |
+| `path` | Relative file path (e.g. `SKILL.md` or `scripts/init.py`) |
+
+**Response:** Raw file content with appropriate `Content-Type` header.
+
+| Extension | Content-Type |
+|-----------|-------------|
+| `.json` | `application/json` |
+| `.md` | `text/markdown` |
+| `.py` | `text/x-python` |
+| `.js` | `text/javascript` |
+| `.sh` | `text/x-shellscript` |
+| `.yaml` | `text/yaml` |
+| other | `text/plain` |
+
+**Example:**
+```bash
+curl http://localhost:18790/v1/skills/weather/SKILL.md
+curl http://localhost:18790/v1/skills/ralph/scripts/init.py
+```
+
+---
+
+#### Save Skill File
+
+**POST** `/v1/skills/{name}/{path}`
+
+Save content to a file within a skill directory. The request body is written as raw file content.
+
+**Path Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Skill directory name |
+| `path` | Relative file path |
+
+**Request Body:** Raw file content (`Content-Type: text/plain`)
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "File saved",
+  "path": "SKILL.md"
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:18790/v1/skills/weather/SKILL.md \
+  -H "Content-Type: text/plain" \
+  -d '---
+name: weather
+description: Updated weather skill
+---
+# Weather Skill'
 ```
 
 ---
