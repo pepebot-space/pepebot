@@ -15,7 +15,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/chzyer/readline"
@@ -1063,7 +1062,8 @@ func gatewayCmd() {
 	}
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP)
+	signal.Notify(sigChan, os.Interrupt)
+	notifyRestartSignal(sigChan)
 
 	for {
 		shouldRestart := gatewayRun(sigChan)
@@ -1153,7 +1153,7 @@ func gatewayRun(sigChan chan os.Signal) bool {
 
 	// Restart function: sends SIGHUP to self to trigger graceful restart
 	restartFunc := func() {
-		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+		triggerRestart()
 	}
 
 	// Start HTTP API server (with restart support)
@@ -1187,7 +1187,7 @@ func gatewayRun(sigChan chan os.Signal) bool {
 
 	sig := <-sigChan
 
-	restart := sig == syscall.SIGHUP
+	restart := isRestartSignal(sig)
 
 	if restart {
 		fmt.Println("\nRestarting...")
