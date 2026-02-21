@@ -55,6 +55,8 @@ Named values that can be:
 Individual actions executed sequentially:
 - **Tool Steps**: Call a specific tool with arguments
 - **Goal Steps**: Describe desired outcome in natural language for LLM
+- **Skill Steps**: Load a skill's content and combine with a goal
+- **Agent Steps**: Delegate a goal to another registered agent
 
 ### 4. Step Outputs
 Results from each step automatically become available as variables:
@@ -203,6 +205,24 @@ Record user interactions on an Android device and generate a workflow JSON file.
 }
 ```
 
+#### Skill Step
+```json
+{
+  "name": "unique_step_name",
+  "skill": "skill_name",
+  "goal": "Goal that uses the loaded skill content"
+}
+```
+
+#### Agent Step
+```json
+{
+  "name": "unique_step_name",
+  "agent": "agent_name",
+  "goal": "Goal to delegate to another agent"
+}
+```
+
 ---
 
 ## Variable System
@@ -344,14 +364,65 @@ Describe desired outcome in natural language for the LLM to interpret and act up
 }
 ```
 
-### Choosing Between Tool and Goal Steps
+### Skill Steps
 
-| Use Tool Step When... | Use Goal Step When... |
-|----------------------|----------------------|
-| You know exact tool and parameters | Logic requires analysis or decision |
-| Need deterministic behavior | Need adaptive behavior |
-| Performance is critical | Flexibility is critical |
-| Simple, direct operation | Complex, multi-condition operation |
+Load skill content and combine with a goal. The skill's content is loaded and stored along with the goal as `{{step_name_output}}`.
+
+**Characteristics:**
+- Loads skill definition content at execution time
+- Combines skill context with a goal instruction
+- Requires both `skill` and `goal` fields
+- Cannot be combined with `tool` or `agent`
+
+**Example:**
+```json
+{
+  "name": "analyze_with_skill",
+  "skill": "workflow",
+  "goal": "Using the workflow skill knowledge, analyze the output from step 'collect_data' and suggest improvements."
+}
+```
+
+### Agent Steps
+
+Delegate a goal to another registered agent. The agent processes the goal independently with an ephemeral session and returns a response as `{{step_name_output}}`.
+
+**Characteristics:**
+- Delegates to a different agent (different model, prompt, capabilities)
+- Uses ephemeral session key per workflow execution
+- Requires both `agent` and `goal` fields
+- Cannot be combined with `tool` or `skill`
+- Not available in standalone mode (CLI without gateway)
+
+**Example:**
+```json
+{
+  "name": "research_topic",
+  "agent": "researcher",
+  "goal": "Research the latest trends in {{topic}} and provide a concise summary with sources."
+}
+```
+
+**Output Access:**
+```json
+{
+  "name": "save_research",
+  "tool": "write_file",
+  "args": {
+    "path": "research_results.txt",
+    "content": "{{research_topic_output}}"
+  }
+}
+```
+
+### Choosing Between Step Types
+
+| Use Tool Step When... | Use Goal Step When... | Use Skill Step When... | Use Agent Step When... |
+|----------------------|----------------------|----------------------|----------------------|
+| You know exact tool and parameters | Logic requires analysis or decision | Need specialized knowledge from a skill | Need a different agent's capabilities |
+| Need deterministic behavior | Need adaptive behavior | Want to augment a goal with skill context | Want model/prompt specialization |
+| Performance is critical | Flexibility is critical | Skill provides domain-specific instructions | Task suits a different agent's expertise |
+| Simple, direct operation | Complex, multi-condition operation | Combining skill + LLM reasoning | Cross-agent collaboration |
 
 ---
 
@@ -1240,6 +1311,34 @@ Execute shell commands on the host system.
 ---
 
 ## FAQ
+
+### Can workflows use skills?
+
+Yes! Use skill steps to load skill content and combine it with a goal:
+
+```json
+{
+  "name": "skill_analysis",
+  "skill": "workflow",
+  "goal": "Using the workflow skill knowledge, analyze this data: {{data_output}}"
+}
+```
+
+The skill content is loaded and combined with the goal, stored as `{{step_name_output}}`.
+
+### Can workflows delegate to other agents?
+
+Yes! Use agent steps to delegate a goal to a different agent:
+
+```json
+{
+  "name": "delegate_research",
+  "agent": "researcher",
+  "goal": "Research the topic '{{topic}}' and provide a summary."
+}
+```
+
+The agent processes the goal independently and returns the response as `{{step_name_output}}`. Note: agent steps require the gateway (AgentManager); they are not available in standalone CLI mode.
 
 ### Can workflows call other workflows?
 

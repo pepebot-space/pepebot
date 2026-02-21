@@ -10,6 +10,18 @@ import (
 	"strings"
 )
 
+// WorkflowAgentProcessor allows workflows to delegate steps to other agents.
+// Implemented by AgentManager to avoid circular imports.
+type WorkflowAgentProcessor interface {
+	ProcessDirect(ctx context.Context, content string, media []string, sessionKey string, agentName string) (string, error)
+}
+
+// WorkflowSkillProvider allows workflows to load skill content.
+// Implemented by skills.SkillsLoader.
+type WorkflowSkillProvider interface {
+	LoadSkill(name string) (string, bool)
+}
+
 // WorkflowDefinition represents a workflow JSON structure
 type WorkflowDefinition struct {
 	Name        string            `json:"name"`
@@ -20,16 +32,30 @@ type WorkflowDefinition struct {
 
 // WorkflowStep represents a single step in a workflow
 type WorkflowStep struct {
-	Name string                 `json:"name"`
-	Tool string                 `json:"tool,omitempty"` // Tool name to execute
-	Args map[string]interface{} `json:"args,omitempty"` // Tool arguments
-	Goal string                 `json:"goal,omitempty"` // Natural language goal for LLM
+	Name  string                 `json:"name"`
+	Tool  string                 `json:"tool,omitempty"`  // Tool name to execute
+	Args  map[string]interface{} `json:"args,omitempty"`  // Tool arguments
+	Goal  string                 `json:"goal,omitempty"`  // Natural language goal for LLM
+	Skill string                 `json:"skill,omitempty"` // Skill name to load and combine with goal
+	Agent string                 `json:"agent,omitempty"` // Agent name to delegate goal to
 }
 
 // WorkflowHelper manages workflow execution and storage
 type WorkflowHelper struct {
-	workspace    string
-	toolRegistry *ToolRegistry
+	workspace      string
+	toolRegistry   *ToolRegistry
+	skillProvider  WorkflowSkillProvider
+	agentProcessor WorkflowAgentProcessor
+}
+
+// SetSkillProvider sets the skill provider for skill steps
+func (h *WorkflowHelper) SetSkillProvider(provider WorkflowSkillProvider) {
+	h.skillProvider = provider
+}
+
+// SetAgentProcessor sets the agent processor for agent steps
+func (h *WorkflowHelper) SetAgentProcessor(processor WorkflowAgentProcessor) {
+	h.agentProcessor = processor
 }
 
 // NewWorkflowHelper creates a new workflow helper
@@ -231,8 +257,54 @@ func (h *WorkflowHelper) executeWorkflow(ctx context.Context, workflow *Workflow
 			results = append(results, fmt.Sprintf("  Output: %s", displayOutput))
 		}
 
+		// Skill step: Load skill content and combine with goal
+		if step.Skill != "" {
+			if h.skillProvider == nil {
+				errMsg := fmt.Sprintf("  ERROR: skill provider not available")
+				results = append(results, errMsg)
+				return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: skill provider not available", i+1, step.Name)
+			}
+			skillContent, ok := h.skillProvider.LoadSkill(step.Skill)
+			if !ok {
+				errMsg := fmt.Sprintf("  ERROR: skill '%s' not found", step.Skill)
+				results = append(results, errMsg)
+				return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: skill '%s' not found", i+1, step.Name, step.Skill)
+			}
+			interpolatedGoal := interpolateVariables(step.Goal, variables)
+			combined := fmt.Sprintf("Using skill '%s':\n\n%s\n\nGoal: %s", step.Skill, skillContent, interpolatedGoal)
+			variables[step.Name+"_output"] = combined
+			results = append(results, fmt.Sprintf("  Skill: %s", step.Skill))
+			results = append(results, fmt.Sprintf("  Goal: %s", interpolatedGoal))
+		}
+
+		// Agent step: Delegate goal to another agent
+		if step.Agent != "" {
+			if h.agentProcessor == nil {
+				errMsg := fmt.Sprintf("  ERROR: agent processor not available (standalone mode)")
+				results = append(results, errMsg)
+				return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: agent processor not available (standalone mode does not support agent steps)", i+1, step.Name)
+			}
+			interpolatedGoal := interpolateVariables(step.Goal, variables)
+			sessionKey := fmt.Sprintf("workflow:%s:%s", workflow.Name, step.Name)
+			agentResponse, err := h.agentProcessor.ProcessDirect(ctx, interpolatedGoal, nil, sessionKey, step.Agent)
+			if err != nil {
+				errMsg := fmt.Sprintf("  ERROR: agent '%s' failed: %v", step.Agent, err)
+				results = append(results, errMsg)
+				return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: %w", i+1, step.Name, err)
+			}
+			variables[step.Name+"_output"] = agentResponse
+			displayOutput := agentResponse
+			maxLen := 500
+			if len(displayOutput) > maxLen {
+				displayOutput = displayOutput[:maxLen] + "... (truncated)"
+			}
+			results = append(results, fmt.Sprintf("  Agent: %s", step.Agent))
+			results = append(results, fmt.Sprintf("  Goal: %s", interpolatedGoal))
+			results = append(results, fmt.Sprintf("  Response: %s", displayOutput))
+		}
+
 		// Goal step: Return goal for LLM to interpret
-		if step.Goal != "" {
+		if step.Goal != "" && step.Skill == "" && step.Agent == "" {
 			interpolatedGoal := interpolateVariables(step.Goal, variables)
 			results = append(results, fmt.Sprintf("  Goal: %s", interpolatedGoal))
 			results = append(results, "  Note: This is a goal-based step. The LLM should interpret and act on this goal in the next iteration.")
@@ -275,14 +347,32 @@ func validateWorkflow(workflow *WorkflowDefinition, registry ...*ToolRegistry) e
 			return fmt.Errorf("step %d: missing 'name' field", i+1)
 		}
 
-		// Step must have either tool or goal
-		if step.Tool == "" && step.Goal == "" {
-			return fmt.Errorf("step %d (%s): must have either 'tool' or 'goal' field", i+1, step.Name)
+		// Step must have at least one type indicator
+		if step.Tool == "" && step.Goal == "" && step.Skill == "" && step.Agent == "" {
+			return fmt.Errorf("step %d (%s): must have at least one of 'tool', 'goal', 'skill', or 'agent' field", i+1, step.Name)
 		}
 
-		// Can't have both tool and goal
-		if step.Goal != "" && step.Tool != "" {
+		// Tool cannot be combined with skill or agent
+		if step.Tool != "" && (step.Skill != "" || step.Agent != "") {
+			return fmt.Errorf("step %d (%s): 'tool' cannot be combined with 'skill' or 'agent'", i+1, step.Name)
+		}
+
+		// Tool and goal are mutually exclusive (existing rule)
+		if step.Tool != "" && step.Goal != "" {
 			return fmt.Errorf("step %d (%s): has both 'tool' and 'goal'. Use only one per step", i+1, step.Name)
+		}
+
+		// Skill and agent are mutually exclusive
+		if step.Skill != "" && step.Agent != "" {
+			return fmt.Errorf("step %d (%s): 'skill' and 'agent' are mutually exclusive", i+1, step.Name)
+		}
+
+		// Skill and agent require goal
+		if step.Skill != "" && step.Goal == "" {
+			return fmt.Errorf("step %d (%s): 'skill' step requires a 'goal' field", i+1, step.Name)
+		}
+		if step.Agent != "" && step.Goal == "" {
+			return fmt.Errorf("step %d (%s): 'agent' step requires a 'goal' field", i+1, step.Name)
 		}
 
 		// Tool step validation
@@ -425,7 +515,17 @@ func (t *WorkflowSaveTool) Name() string {
 }
 
 func (t *WorkflowSaveTool) Description() string {
-	return `Save a workflow JSON file. IMPORTANT: Only use this tool when the user EXPLICITLY asks to create or save a workflow. Do NOT proactively create workflows. Structure: {"name":"...", "description":"...", "variables":{"key":"default"}, "steps":[{"name":"step_id", "tool":"tool_name", "args":{"param":"value"}}]}. RULES: (1) Every tool step MUST have "args" field, even if empty {}. (2) Use {{variable}} for interpolation. (3) Use "goal" instead of "tool" for LLM decision steps. NOTE: If the user wants to record/capture actions from their Android device to create a workflow, use adb_record_workflow instead.`
+	return `Save a workflow JSON file. IMPORTANT: Only use this tool when the user EXPLICITLY asks to create or save a workflow. Do NOT proactively create workflows.
+
+4 STEP TYPES:
+- Tool step: {"name":"id", "tool":"tool_name", "args":{"param":"value"}} — Execute a registered tool. MUST have "args" even if empty {}.
+- Goal step: {"name":"id", "goal":"instruction"} — Natural language for LLM to interpret.
+- Skill step: {"name":"id", "skill":"skill_name", "goal":"instruction"} — Load a skill's content + combine with goal. IMPORTANT: When the user says "use skill X" or "with skill X", ALWAYS use this step type. Do NOT manually replicate the skill's commands via tool steps.
+- Agent step: {"name":"id", "agent":"agent_name", "goal":"instruction"} — Delegate goal to another agent. The agent processes independently and returns a response.
+
+RULES: (1) "tool" cannot combine with "skill"/"agent". (2) "skill" and "agent" are mutually exclusive. (3) "skill" and "agent" REQUIRE "goal". (4) Use {{variable}} for interpolation. (5) Step outputs auto-stored as {{step_name_output}}.
+
+NOTE: If the user wants to record/capture actions from their Android device to create a workflow, use adb_record_workflow instead.`
 }
 
 func (t *WorkflowSaveTool) Parameters() map[string]interface{} {

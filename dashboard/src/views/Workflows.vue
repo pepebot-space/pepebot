@@ -132,6 +132,12 @@ const toggleExpand = async (wf) => {
                   <div v-if="step.tool" class="mt-1">
                     <span class="text-xs font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded">{{ step.tool }}</span>
                   </div>
+                  <div v-if="step.skill" class="mt-1">
+                    <span class="text-xs font-mono bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded">skill: {{ step.skill }}</span>
+                  </div>
+                  <div v-if="step.agent" class="mt-1">
+                    <span class="text-xs font-mono bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">agent: {{ step.agent }}</span>
+                  </div>
                   <p v-if="step.goal" class="text-xs text-gray-500 mt-1">{{ step.goal }}</p>
                 </div>
               </div>

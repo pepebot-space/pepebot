@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.1] - 2026-02-21
 
 ### Added
+- **Workflow Skill Steps**: Workflows can now load skill content and combine with goal instructions
+  - New `skill` field on workflow steps that loads skill definitions at execution time
+  - Combined skill content + goal stored as `{{step_name_output}}` for subsequent steps
+  - Requires `goal` field alongside `skill`; cannot be combined with `tool` or `agent`
+  - Uses existing SkillsLoader infrastructure (workspace + builtin skills)
+- **Workflow Agent Steps**: Workflows can now delegate goals to other registered agents
+  - New `agent` field on workflow steps for cross-agent collaboration
+  - Agent processes goal with ephemeral session key, response stored as `{{step_name_output}}`
+  - Requires `goal` field alongside `agent`; cannot be combined with `tool` or `skill`
+  - Graceful failure in standalone mode (CLI without gateway/AgentManager)
+  - Dependency injection via `WorkflowAgentProcessor` interface to avoid circular imports
+- **Dashboard Workflow View**: Updated step display with 4 step type badges
+  - Tool steps: blue badge (existing)
+  - Skill steps: purple badge with skill name
+  - Agent steps: amber badge with agent name
+  - Goal steps: text display (existing)
 - **ADB Activity Recorder** (`adb_record_workflow`): Generate workflow files by recording device interactions
   - Real-time touch event capture via `adb shell getevent -l` streaming
   - Automatic touch input device discovery and screen resolution detection

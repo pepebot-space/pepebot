@@ -1,8 +1,34 @@
-# 🐸 Pepebot v0.5.1 - ADB Activity Recorder
+# 🐸 Pepebot v0.5.1 - Workflow Skill & Agent Steps + ADB Activity Recorder
 
 **Release Date:** 2026-02-21
 
 ## 🎉 What's New
+
+### 🧩 Workflow Skill Steps
+
+Workflows can now load skill content and combine it with goal instructions! Use the `skill` field to bring specialized knowledge into your workflow steps.
+
+```json
+{
+  "name": "analyze_with_skill",
+  "skill": "workflow",
+  "goal": "Using this skill's knowledge, analyze the data from {{collect_output}}"
+}
+```
+
+### 🤝 Workflow Agent Steps
+
+Delegate workflow goals to other registered agents! Use the `agent` field to leverage different models and prompt configurations within a single workflow.
+
+```json
+{
+  "name": "research",
+  "agent": "researcher",
+  "goal": "Research {{topic}} and provide a summary"
+}
+```
+
+Agent responses are stored as `{{step_name_output}}` for use in subsequent steps.
 
 ### 🎬 ADB Activity Recorder
 
