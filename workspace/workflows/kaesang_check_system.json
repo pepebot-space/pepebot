@@ -1,0 +1,21 @@
+{
+    "name": "kaesang_check_system",
+    "description": "System check workflow using tmux, summarize skill, and Agent Kaesang (simulated via default agent)",
+    "steps": [
+        {
+            "name": "system_check",
+            "goal": "Create a new detached tmux session named 'kaesang_session', run the command 'uname -a', wait for 2 seconds, and then capture and return the text output from the pane.",
+            "skill": "tmux"
+        },
+        {
+            "name": "summarize_info",
+            "goal": "Summarize the system information provided in this text: {{system_check_output}}",
+            "skill": "summarize"
+        },
+        {
+            "name": "kaesang_comment",
+            "goal": "Berperanlah sebagai Kaesang Pangarep (anak muda santai, pengusaha pisang, gaya bicara slengean, suka bercanda, logat jawa halus dikit). Komentari hasil system check ini dengan gayamu: {{summarize_info_output}}",
+            "agent": "default"
+        }
+    ]
+}
