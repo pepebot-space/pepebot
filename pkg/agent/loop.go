@@ -66,6 +66,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		toolsRegistry.Register(tools.NewAdbSwipeTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbOpenAppTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbKeyEventTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbRecordWorkflowTool(adbHelper, workflowHelper))
 	}
 
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
@@ -122,6 +123,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 		toolsRegistry.Register(tools.NewAdbSwipeTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbOpenAppTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbKeyEventTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbRecordWorkflowTool(adbHelper, workflowHelper))
 	}
 
 	braveAPIKey := cfg.Tools.Web.Search.APIKey

@@ -21,7 +21,8 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 - 🤖 **Multi-Provider LLM**: Support for various AI providers including Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, MAIA Router and vLLM
 - 💬 **Multi-Channel**: Integration with Telegram, Discord, WhatsApp, MaixCam, and Feishu
 - 🛠️ **Tools System**: Filesystem operations, shell execution, web search, and more
-- 📱 **Android Automation**: 7 ADB tools for device control and UI automation
+- 📱 **Android Automation**: ADB tools for device control and UI automation
+- 🎬 **ADB Activity Recorder**: Record device interactions (taps, swipes) and auto-generate workflow files
 - 🔄 **Workflow System**: Multi-step automation with variable interpolation and LLM-driven goals
 - 🎯 **Skills System**: Customizable and extensible skill system
 - 🚀 **Lightweight & Fast**: Small binary size with high performance
@@ -689,6 +690,7 @@ adb devices
 - `adb_screenshot` - Capture device screenshots
 - `adb_ui_dump` - Get UI hierarchy (XML)
 - `adb_swipe` - Perform swipe gestures
+- `adb_record_workflow` - Record device interactions and generate workflow files
 
 #### Workflow System
 Create multi-step automation workflows combining ADB, web, file, and shell tools.

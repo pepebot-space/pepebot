@@ -1,33 +1,36 @@
-# 🐸 Pepebot v0.5.0 - Local Dashboard Interface
+# 🐸 Pepebot v0.5.1 - ADB Activity Recorder
 
-**Release Date:** 2026-02-20
+**Release Date:** 2026-02-21
 
 ## 🎉 What's New
 
-### 🖥️ Local Dashboard Interface
+### 🎬 ADB Activity Recorder
 
-Pepebot now includes a fully featured modern Web UI dashboard for managing your AI agent locally or deployed via static hosting like Cloudflare Pages.
+Record your Android device interactions and automatically generate replayable workflow files! Simply use your device while Pepebot watches — taps and swipes are captured in real-time via ADB.
 
-**Start the dashboard:**
-```bash
-pepebot gateway
+**How to use:**
 ```
-*The dashboard will automatically be available via your gateway interface (default: http://localhost:18790)*
+User: "Record my Android actions as a workflow named login_flow"
+```
 
-### 🐸 Floating AI Assistant (Frog Panel)
+- Pepebot starts listening to touch events on your device
+- Perform taps, swipes, and other interactions normally
+- Press **Volume Down** to stop recording
+- A workflow JSON file is automatically generated and saved
 
-Global access to Pepebot within the dashboard interface.
-- Embedded chat interface that slides in from the right edge
-- Context-aware prompting based on the active dashboard page
-- Full Markdown and Code syntax highlighting support
-- Image upload capabilities directly from the browser
+**What gets captured:**
+- Tap gestures (short touch, small movement)
+- Swipe gestures (long touch with displacement)
+- Final screenshot and UI dump for verification
 
-### ☁️ Cloudflare Pages Ready
+**Generated workflows** use standard `adb_tap` and `adb_swipe` steps with a `{{device}}` variable, so you can replay on any connected device.
 
-Complete restructure of the frontend architecture for zero-server static hosting.
-- Removed intermediate proxy servers
-- Direct API connections via CORS and localStorage configuration
-- Upload payloads now converted locally to Base64 natively
+### Key Features
+- Real-time touch event streaming via `getevent -l`
+- Automatic input device discovery and screen resolution detection
+- Smart gesture classification with debounce filtering
+- Post-recording screenshot + UI dump for LLM-based verification
+- Standard workflow format — edit, extend, or chain with other workflows
 
 ## 📦 Installation
 
@@ -49,23 +52,27 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.0).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.1).
 
 ## 🚀 Quick Start
 
-1. **Start the gateway & dashboard:**
+1. **Connect your Android device via USB** (enable USB debugging)
+2. **Start recording:**
    ```bash
-   pepebot gateway -v
+   pepebot agent -m "Record my actions as a workflow named my_recording"
    ```
-
-2. **Access the Web Dashboard:**
-   Open your browser and navigate to `http://localhost:18790` (or your configured gateway port)
+3. **Interact with your device** (tap, swipe)
+4. **Press Volume Down** to stop
+5. **Replay:**
+   ```bash
+   pepebot agent -m "Execute workflow my_recording"
+   ```
 
 ## 📚 Documentation
 
+- [Workflow Documentation](https://github.com/pepebot-space/pepebot/blob/main/docs/workflows.md)
 - [Installation Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/install.md)
 - [API Reference](https://github.com/pepebot-space/pepebot/blob/main/docs/api.md)
-- [Workflow Documentation](https://github.com/pepebot-space/pepebot/blob/main/docs/workflows.md)
 - [Full Changelog](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md)
 
 ## 🔗 Links
@@ -77,8 +84,8 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 📝 Full Changelog
 
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#050---2026-02-20).
+For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#051---2026-02-21).
 
 ---
 
-**Note:** When upgrading from v0.4.x, all existing configurations and data are preserved. No migration needed. The dashboard will automatically serve traffic from your gateway configuration.
+**Note:** When upgrading from v0.5.0, all existing configurations, workflows, and data are preserved. No migration needed.

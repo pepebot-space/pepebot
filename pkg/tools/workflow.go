@@ -425,7 +425,7 @@ func (t *WorkflowSaveTool) Name() string {
 }
 
 func (t *WorkflowSaveTool) Description() string {
-	return `Save a workflow JSON file. Structure: {"name":"...", "description":"...", "variables":{"key":"default"}, "steps":[{"name":"step_id", "tool":"tool_name", "args":{"param":"value"}}]}. RULES: (1) Every tool step MUST have "args" field, even if empty {}. (2) Use {{variable}} for interpolation. (3) Use "goal" instead of "tool" for LLM decision steps.`
+	return `Manually save a workflow JSON file that YOU write. Structure: {"name":"...", "description":"...", "variables":{"key":"default"}, "steps":[{"name":"step_id", "tool":"tool_name", "args":{"param":"value"}}]}. RULES: (1) Every tool step MUST have "args" field, even if empty {}. (2) Use {{variable}} for interpolation. (3) Use "goal" instead of "tool" for LLM decision steps. NOTE: If the user wants to record/capture actions from their Android device to create a workflow, use adb_record_workflow instead.`
 }
 
 func (t *WorkflowSaveTool) Parameters() map[string]interface{} {

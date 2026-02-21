@@ -124,6 +124,28 @@ User: "What workflows do we have?"
 Agent: [Calls workflow_list tool]
 ```
 
+### adb_record_workflow
+
+Record user interactions on an Android device and generate a workflow JSON file. See [ADB Activity Recorder](#adb-activity-recorder) for full documentation.
+
+**Parameters:**
+```json
+{
+  "workflow_name": "string (required)",
+  "description": "string (optional)",
+  "device": "string (optional)",
+  "max_duration": "number (optional, default: 300)"
+}
+```
+
+**Example:**
+```json
+{
+  "workflow_name": "my_recording",
+  "description": "Login flow recording"
+}
+```
+
 ---
 
 ## Workflow Structure
@@ -1304,6 +1326,100 @@ Agent: [Makes 3 parallel workflow_execute calls with different device overrides]
 
 ---
 
+## ADB Activity Recorder
+
+The ADB Activity Recorder lets you generate workflows by performing actions on your Android device while Pepebot records them in real-time via ADB's `getevent` command. Instead of manually writing workflow JSON, you simply interact with your device and the recorder captures your taps and swipes.
+
+### How It Works
+
+1. The agent calls the `adb_record_workflow` tool
+2. Pepebot discovers the touch input device and screen resolution
+3. `getevent -l` streams raw touch events from the device
+4. Touch events are parsed through a state machine that tracks BTN_TOUCH DOWN/UP, ABS_MT_POSITION_X/Y, and SYN_REPORT events
+5. Raw coordinates are mapped to screen pixels using the device's input range
+6. Gestures are classified as **taps** (short duration, small movement) or **swipes** (large displacement)
+7. Press **Volume Down** on the device to stop recording
+8. A final screenshot and UI dump are captured for verification
+9. The workflow JSON is saved to `~/.pepebot/workspace/workflows/`
+
+### Tool: adb_record_workflow
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_name` | string | Yes | Name for the workflow file |
+| `description` | string | No | Description of what the workflow does |
+| `device` | string | No | Device serial number (uses default if omitted) |
+| `max_duration` | number | No | Maximum recording time in seconds (default: 300) |
+
+**Example Usage:**
+```
+User: "Record my Android actions as a workflow named login_flow"
+Agent: [Calls adb_record_workflow with workflow_name="login_flow"]
+```
+
+**Example Output:**
+```json
+{
+  "workflow_name": "login_flow",
+  "action_count": 5,
+  "save_path": "/home/user/.pepebot/workspace/workflows/login_flow.json",
+  "stopped_by_user": true,
+  "screenshot_path": "/home/user/.pepebot/workspace/workflows/login_flow_final.png"
+}
+```
+
+### Generated Workflow Format
+
+The recorder generates a standard workflow with:
+- **`adb_tap`** steps for tap gestures (short duration, small movement)
+- **`adb_swipe`** steps for swipe gestures (large displacement)
+- A **`{{device}}`** variable for device targeting during replay
+- A final **`verify_final_state`** goal step with screenshot path and UI dump for LLM verification
+
+```json
+{
+  "name": "login_flow",
+  "description": "Recorded user actions from Android device",
+  "variables": { "device": "" },
+  "steps": [
+    {
+      "name": "action_1_tap",
+      "tool": "adb_tap",
+      "args": { "x": 540, "y": 960, "device": "{{device}}" }
+    },
+    {
+      "name": "action_2_swipe",
+      "tool": "adb_swipe",
+      "args": { "x": 200, "y": 1500, "x2": 200, "y2": 800, "duration": 400, "device": "{{device}}" }
+    },
+    {
+      "name": "verify_final_state",
+      "goal": "Verify the final screen state matches the expected outcome. Final screen UI elements: [UI dump]. Screenshot saved at: workflows/login_flow_final.png"
+    }
+  ]
+}
+```
+
+### Gesture Classification
+
+| Gesture | Criteria |
+|---------|----------|
+| **Tap** | Movement < 30px AND duration < 300ms |
+| **Swipe** | Movement >= 50px |
+| **Ambiguous** | Treated as tap at average position |
+
+Actions within 200ms of the previous action are debounced (discarded) to filter jitter.
+
+### Tips
+
+- **Keep movements deliberate**: Quick, intentional taps and swipes record best
+- **Wait between actions**: Pause briefly between taps to avoid debounce filtering
+- **Press Volume Down to stop**: This is the only way to end recording
+- **Replay with variables**: Override the `device` variable when executing on a different device
+- **Edit after recording**: The generated workflow is standard JSON — you can manually adjust coordinates or add goal steps
+
 ## Additional Resources
 
 - **Example Workflows:** `workspace/workflows/examples/`
@@ -1313,6 +1429,6 @@ Agent: [Makes 3 parallel workflow_execute calls with different device overrides]
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2026-02-17
-**Pepebot Version:** 0.4.0
+**Document Version:** 1.1
+**Last Updated:** 2026-02-21
+**Pepebot Version:** 0.5.1

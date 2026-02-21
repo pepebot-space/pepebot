@@ -31,7 +31,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/voice"
 )
 
-const version = "0.5.0"
+const version = "0.5.1"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -689,6 +689,32 @@ This document describes the tools available to pepebot.
 - Send messages to chat channels
 - Supports Telegram, WhatsApp, Feishu
 - Used for notifications and responses
+
+## Android Device Control (ADB)
+
+### ADB Tools
+- adb_devices: List connected Android devices
+- adb_shell: Execute shell commands on device
+- adb_tap: Tap screen coordinates
+- adb_swipe: Swipe gestures on screen
+- adb_input_text: Input text into focused field
+- adb_screenshot: Capture device screenshot
+- adb_ui_dump: Get UI hierarchy XML
+- adb_open_app: Launch app by package name
+- adb_keyevent: Send key events (Home, Back, etc.)
+
+### ADB Activity Recorder
+- adb_record_workflow: Record user interactions (taps, swipes) from Android device and auto-generate a workflow file
+- Use this when user says "workflow action", "record workflow", "capture actions", "rekam aksi", etc.
+- This captures real device interactions - do NOT use workflow_save for this purpose
+- Flow: explain to user → get confirmation → start recording → user interacts with device → Volume Down to stop → workflow saved
+
+## Workflow System
+
+### Workflow Tools
+- workflow_execute: Run a saved workflow
+- workflow_save: Manually create a workflow JSON (for when YOU write the steps)
+- workflow_list: List available workflows
 
 ## AI Capabilities
 

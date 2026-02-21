@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-02-21
+
+### Added
+- **ADB Activity Recorder** (`adb_record_workflow`): Generate workflow files by recording device interactions
+  - Real-time touch event capture via `adb shell getevent -l` streaming
+  - Automatic touch input device discovery and screen resolution detection
+  - Event parsing state machine: BTN_TOUCH DOWN/UP, ABS_MT_POSITION_X/Y, SYN_REPORT
+  - Raw-to-pixel coordinate mapping using device input range and screen dimensions
+  - Gesture classification: taps (< 30px movement, < 300ms), swipes (>= 50px movement)
+  - Time-based debounce filtering (200ms window) to eliminate jitter
+  - Press Volume Down on device to stop recording
+  - Post-recording screenshot and UI dump capture for verification
+  - Generated workflow includes `adb_tap`/`adb_swipe` steps with `{{device}}` variable
+  - Final `verify_final_state` goal step with screenshot path and UI dump for LLM verification
+  - Configurable max recording duration (default: 300s)
+- **ADB Streaming Helper** (`execAdbStreaming`): New `AdbHelper` method for long-running ADB commands
+  - Returns running `*exec.Cmd` and `io.ReadCloser` for line-by-line stdout processing
+  - Used by the activity recorder for continuous `getevent` output
+
+### Technical Details
+- Added `pkg/tools/adb_recorder.go`: Event parser, gesture classifier, coordinate mapper, and tool (~450 lines)
+- Added `pkg/tools/adb_recorder_test.go`: 18 unit tests covering event parsing, coordinate mapping, gesture classification, debounce, workflow building, and device info parsing
+- Modified `pkg/tools/adb.go`: Added `execAdbStreaming()` method and `io` import
+- Modified `pkg/agent/loop.go`: Registered `NewAdbRecordWorkflowTool` in both `NewAgentLoop` and `NewAgentLoopWithDefinition`
+- Updated `docs/workflows.md`: Added ADB Activity Recorder documentation section
+
 ## [0.5.0] - 2026-02-20
 
 ### Added
