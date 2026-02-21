@@ -154,7 +154,18 @@ const toggleExpand = async (wf) => {
                     </div>
                   </div>
                   
-                  <p v-if="step.goal" class="text-sm text-gray-400 leading-relaxed">{{ step.goal }}</p>
+                  <p v-if="step.goal" class="text-sm text-gray-400 leading-relaxed mb-3">{{ step.goal }}</p>
+                  
+                  <!-- Step Args -->
+                  <div v-if="step.args && Object.keys(step.args).length > 0" class="mt-2 text-xs bg-black/20 rounded-md p-2 border border-white/[0.05]">
+                    <div class="font-medium text-gray-500 mb-1">Arguments:</div>
+                    <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                      <template v-for="(v, k) in step.args" :key="k">
+                        <div class="text-gray-400 font-mono text-[11px]">{{ k }}:</div>
+                        <div class="text-gray-300 break-all">{{ v }}</div>
+                      </template>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
