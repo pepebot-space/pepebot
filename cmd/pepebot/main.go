@@ -31,7 +31,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/voice"
 )
 
-const version = "0.5.0"
+const version = "0.5.1"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -690,6 +690,32 @@ This document describes the tools available to pepebot.
 - Supports Telegram, WhatsApp, Feishu
 - Used for notifications and responses
 
+## Android Device Control (ADB)
+
+### ADB Tools
+- adb_devices: List connected Android devices
+- adb_shell: Execute shell commands on device
+- adb_tap: Tap screen coordinates
+- adb_swipe: Swipe gestures on screen
+- adb_input_text: Input text into focused field
+- adb_screenshot: Capture device screenshot
+- adb_ui_dump: Get UI hierarchy XML
+- adb_open_app: Launch app by package name
+- adb_keyevent: Send key events (Home, Back, etc.)
+
+### ADB Activity Recorder
+- adb_record_workflow: Record user interactions (taps, swipes) from Android device and auto-generate a workflow file
+- Use this when user says "workflow action", "record workflow", "capture actions", "rekam aksi", etc.
+- This captures real device interactions - do NOT use workflow_save for this purpose
+- Flow: explain to user → get confirmation → start recording → user interacts with device → Volume Down to stop → workflow saved
+
+## Workflow System
+
+### Workflow Tools
+- workflow_execute: Run a saved workflow
+- workflow_save: Manually create a workflow JSON (for when YOU write the steps)
+- workflow_list: List available workflows
+
 ## AI Capabilities
 
 ### Context Building
@@ -1035,6 +1061,24 @@ func gatewayCmd() {
 		fmt.Println("✓ Verbose logging enabled")
 	}
 
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	notifyRestartSignal(sigChan)
+
+	for {
+		shouldRestart := gatewayRun(sigChan)
+		if !shouldRestart {
+			break
+		}
+		fmt.Println("\n🔄 Restarting gateway...")
+		// Small delay to let connections drain
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// gatewayRun starts all gateway services and blocks until a signal is received.
+// Returns true if a restart was requested (SIGHUP), false if shutdown (SIGINT).
+func gatewayRun(sigChan chan os.Signal) bool {
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
@@ -1047,10 +1091,10 @@ func gatewayCmd() {
 		os.Exit(1)
 	}
 
-	bus := bus.NewMessageBus()
+	msgBus := bus.NewMessageBus()
 
 	// Create agent manager for multi-agent support
-	agentManager, err := agent.NewAgentManager(cfg, bus, provider)
+	agentManager, err := agent.NewAgentManager(cfg, msgBus, provider)
 	if err != nil {
 		fmt.Printf("Error creating agent manager: %v\n", err)
 		os.Exit(1)
@@ -1076,7 +1120,7 @@ func gatewayCmd() {
 		true,
 	)
 
-	channelManager, err := channels.NewManager(cfg, bus)
+	channelManager, err := channels.NewManager(cfg, msgBus)
 	if err != nil {
 		fmt.Printf("Error creating channel manager: %v\n", err)
 		os.Exit(1)
@@ -1107,8 +1151,15 @@ func gatewayCmd() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start HTTP API server
+	// Restart function: sends SIGHUP to self to trigger graceful restart
+	restartFunc := func() {
+		triggerRestart()
+	}
+
+	// Start HTTP API server (with restart support)
 	gatewayServer := gateway.NewGatewayServer(cfg, agentManager)
+	gatewayServer.SetRestartFunc(restartFunc)
+	agentManager.SetRestartFunc(restartFunc)
 	if err := gatewayServer.Start(ctx); err != nil {
 		fmt.Printf("Error starting HTTP API server: %v\n", err)
 		os.Exit(1)
@@ -1134,17 +1185,28 @@ func gatewayCmd() {
 	fmt.Printf("✓ Gateway started on %s:%d\n", cfg.Gateway.Host, cfg.Gateway.Port)
 	fmt.Println("Press Ctrl+C to stop")
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-	<-sigChan
+	sig := <-sigChan
 
-	fmt.Println("\nShutting down...")
+	restart := isRestartSignal(sig)
+
+	if restart {
+		fmt.Println("\nRestarting...")
+	} else {
+		fmt.Println("\nShutting down...")
+	}
 	cancel()
 	gatewayServer.Stop(context.Background())
 	heartbeatService.Stop()
 	cronService.Stop()
-	channelManager.StopAll(ctx)
-	fmt.Println("✓ Gateway stopped")
+	channelManager.StopAll(context.Background())
+
+	if restart {
+		fmt.Println("✓ Gateway stopped (restarting)")
+	} else {
+		fmt.Println("✓ Gateway stopped")
+	}
+
+	return restart
 }
 
 func statusCmd() {

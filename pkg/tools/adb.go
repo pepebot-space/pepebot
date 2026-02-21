@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,6 +105,28 @@ func (h *AdbHelper) execAdbBinary(ctx context.Context, device string, timeout ti
 	}
 
 	return stdout.Bytes(), nil
+}
+
+// execAdbStreaming starts an ADB command and returns the running Cmd and stdout reader for streaming.
+// The caller is responsible for killing the process and closing the reader when done.
+func (h *AdbHelper) execAdbStreaming(ctx context.Context, device string, args ...string) (*exec.Cmd, io.ReadCloser, error) {
+	cmdArgs := []string{}
+	if device != "" {
+		cmdArgs = append(cmdArgs, "-s", device)
+	}
+	cmdArgs = append(cmdArgs, args...)
+
+	cmd := exec.CommandContext(ctx, h.adbPath, cmdArgs...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, nil, fmt.Errorf("failed to start adb command: %w", err)
+	}
+
+	return cmd, stdout, nil
 }
 
 // resolvePath resolves relative paths to workspace directory

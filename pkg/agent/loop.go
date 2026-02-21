@@ -34,9 +34,15 @@ type AgentLoop struct {
 	sessions       *session.SessionManager
 	contextBuilder *ContextBuilder
 	tools          *tools.ToolRegistry
+	workflowHelper *tools.WorkflowHelper
 	running        bool
 	summarizing    sync.Map
 	agentName      string
+}
+
+// WorkflowHelper returns the workflow helper for external wiring (e.g. agent processor injection)
+func (al *AgentLoop) WorkflowHelper() *tools.WorkflowHelper {
+	return al.workflowHelper
 }
 
 func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
@@ -66,6 +72,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		toolsRegistry.Register(tools.NewAdbSwipeTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbOpenAppTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbKeyEventTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbRecordWorkflowTool(adbHelper, workflowHelper))
 	}
 
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
@@ -77,6 +84,9 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
 
+	contextBuilder := NewContextBuilder(workspace)
+	workflowHelper.SetSkillProvider(contextBuilder.SkillsLoader())
+
 	return &AgentLoop{
 		bus:            bus,
 		provider:       provider,
@@ -86,8 +96,9 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		contextWindow:  cfg.Agents.Defaults.MaxTokens,
 		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
 		sessions:       sessionsManager,
-		contextBuilder: NewContextBuilder(workspace),
+		contextBuilder: contextBuilder,
 		tools:          toolsRegistry,
+		workflowHelper: workflowHelper,
 		running:        false,
 		summarizing:    sync.Map{},
 		agentName:      "default",
@@ -122,6 +133,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 		toolsRegistry.Register(tools.NewAdbSwipeTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbOpenAppTool(adbHelper))
 		toolsRegistry.Register(tools.NewAdbKeyEventTool(adbHelper))
+		toolsRegistry.Register(tools.NewAdbRecordWorkflowTool(adbHelper, workflowHelper))
 	}
 
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
@@ -152,6 +164,8 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 		contextBuilder = NewContextBuilder(workspace)
 	}
 
+	workflowHelper.SetSkillProvider(contextBuilder.SkillsLoader())
+
 	return &AgentLoop{
 		bus:            bus,
 		provider:       provider,
@@ -163,6 +177,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 		sessions:       sessionsManager,
 		contextBuilder: contextBuilder,
 		tools:          toolsRegistry,
+		workflowHelper: workflowHelper,
 		running:        false,
 		summarizing:    sync.Map{},
 		agentName:      agentName,

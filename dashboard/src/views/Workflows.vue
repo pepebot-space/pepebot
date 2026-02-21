@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { GitBranch, Activity, Play, ChevronDown, ChevronUp, Variable, Layers } from 'lucide-vue-next'
+import { GitBranch, Activity, Play, ChevronDown, ChevronUp, Variable, Layers, Bot, Wrench, Zap } from 'lucide-vue-next'
 import AgentChat from '../components/AgentChat.vue'
 import { getGatewayApiUrl } from '../lib/gateway.js'
 
@@ -118,21 +118,54 @@ const toggleExpand = async (wf) => {
             </div>
           </div>
 
-          <!-- Steps -->
+          <!-- Steps Timeline -->
           <div>
-            <h4 class="text-xs text-gray-500 font-medium mb-3 uppercase tracking-wider">Steps</h4>
-            <div class="space-y-2">
+            <h4 class="text-xs text-gray-500 font-medium mb-4 uppercase tracking-wider">Execution Steps</h4>
+            <div class="relative space-y-0 pl-1">
+              <!-- Timeline vertical line -->
+              <div class="absolute left-[15px] top-6 bottom-6 w-0.5 bg-gradient-to-b from-gray-700 via-gray-700/50 to-transparent"></div>
+              
               <div v-for="(step, index) in workflowDetails[wf.file || wf.name].steps" :key="index"
-                class="flex items-start gap-3 bg-white/[0.03] rounded-xl p-3">
-                <div class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs text-gray-400 flex-shrink-0 mt-0.5">
+                class="relative flex items-start gap-5 p-3 group">
+                
+                <!-- Timeline node -->
+                <div class="relative z-10 w-8 h-8 rounded-full bg-[#1e1e24] border-2 border-gray-700 flex items-center justify-center text-xs text-gray-400 flex-shrink-0 mt-0.5 group-hover:border-gray-500 transition-colors shadow-[0_0_10px_rgba(0,0,0,0.5)]">
                   {{ index + 1 }}
                 </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-gray-200">{{ step.name || `Step ${index + 1}` }}</p>
-                  <div v-if="step.tool" class="mt-1">
-                    <span class="text-xs font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded">{{ step.tool }}</span>
+
+                <div class="flex-1 min-w-0 bg-white/[0.02] border border-white/5 rounded-xl p-4 hover:border-white/10 transition-all hover:bg-white/[0.04]">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-semibold text-gray-200">{{ step.name || `Step ${index + 1}` }}</p>
+                    
+                    <!-- Type Badge -->
+                    <div class="flex gap-2">
+                        <div v-if="step.tool" class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                          <Wrench :size="12" />
+                          <span class="text-[10px] font-mono uppercase tracking-wider font-semibold">Tool: {{ step.tool }}</span>
+                        </div>
+                        <div v-if="step.skill" class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                          <Zap :size="12" />
+                          <span class="text-[10px] font-mono uppercase tracking-wider font-semibold">Skill: {{ step.skill }}</span>
+                        </div>
+                        <div v-if="step.agent" class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                          <Bot :size="12" />
+                          <span class="text-[10px] font-mono uppercase tracking-wider font-semibold">Agent: {{ step.agent }}</span>
+                        </div>
+                    </div>
                   </div>
-                  <p v-if="step.goal" class="text-xs text-gray-500 mt-1">{{ step.goal }}</p>
+                  
+                  <p v-if="step.goal" class="text-sm text-gray-400 leading-relaxed mb-3">{{ step.goal }}</p>
+                  
+                  <!-- Step Args -->
+                  <div v-if="step.args && Object.keys(step.args).length > 0" class="mt-2 text-xs bg-black/20 rounded-md p-2 border border-white/[0.05]">
+                    <div class="font-medium text-gray-500 mb-1">Arguments:</div>
+                    <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                      <template v-for="(v, k) in step.args" :key="k">
+                        <div class="text-gray-400 font-mono text-[11px]">{{ k }}:</div>
+                        <div class="text-gray-300 break-all">{{ v }}</div>
+                      </template>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

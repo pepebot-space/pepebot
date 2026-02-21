@@ -37,6 +37,11 @@ func NewContextBuilderWithAgentDir(workspace, agentPromptDir string) *ContextBui
 	}
 }
 
+// SkillsLoader returns the underlying skills loader for external use (e.g. workflow skill steps)
+func (cb *ContextBuilder) SkillsLoader() *skills.SkillsLoader {
+	return cb.skillsLoader
+}
+
 func (cb *ContextBuilder) BuildSystemPrompt() string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	workspacePath, _ := filepath.Abs(filepath.Join(cb.workspace))
@@ -76,6 +81,16 @@ Only use the 'message' tool when you need to send a message to a specific chat c
 For normal conversation, just respond with text - do not call the message tool.
 
 Always be helpful, accurate, and concise. When using tools, explain what you're doing.
+
+## Workflow Tools Policy
+IMPORTANT: Only use workflow tools (workflow_save, workflow_execute, workflow_list, adb_record_workflow) when the user EXPLICITLY asks you to create, save, record, or run a workflow.
+Do NOT proactively create or suggest creating workflows. Do NOT save multi-step operations as workflows unless the user directly requests it.
+
+When creating workflows, use the correct step type:
+- When the user says "use skill X" or "with skill X": use a SKILL step ({"skill":"X", "goal":"..."}) — do NOT manually replicate the skill's commands via tool/exec steps.
+- When the user says "use agent X" or "delegate to agent X": use an AGENT step ({"agent":"X", "goal":"..."}).
+- For direct tool calls: use TOOL step ({"tool":"...", "args":{...}}).
+- For LLM decisions: use GOAL step ({"goal":"..."}).
 
 ## Memory Instructions
 When the user asks you to remember, save, or note something:

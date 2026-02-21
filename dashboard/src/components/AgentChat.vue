@@ -81,9 +81,19 @@ Workflow JSON format:
   "description": "What it does",
   "variables": { "key": "default_value" },
   "steps": [
-    { "name": "step_name", "tool": "tool_name", "goal": "description" }
+    { "name": "step_name", "tool": "tool_name", "args": {"param": "value"} },
+    { "name": "goal_step", "goal": "Natural language instruction for LLM" },
+    { "name": "skill_step", "skill": "skill_name", "goal": "Goal using the skill" },
+    { "name": "agent_step", "agent": "agent_name", "goal": "Goal to delegate to another agent" }
   ]
 }
+
+Step types:
+- "tool" + "args": Execute a registered tool directly
+- "goal" only: Natural language instruction for LLM
+- "skill" + "goal": Load a skill's content and combine with goal
+- "agent" + "goal": Delegate goal to another agent
+
 Be concise and provide complete valid JSON.`
 
     case 'agents':

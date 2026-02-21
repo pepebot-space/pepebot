@@ -1,9 +1,11 @@
 <script setup>
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { computed } from 'vue'
-import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings, LogOut } from 'lucide-vue-next'
-import { setActiveGateway, getActiveGateway } from './lib/gateway.js'
+import { computed, ref } from 'vue'
+import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings, LogOut, RefreshCw } from 'lucide-vue-next'
+import { setActiveGateway, getActiveGateway, getGatewayApiUrl } from './lib/gateway.js'
+import axios from 'axios'
 
+const GATEWAY_API = getGatewayApiUrl()
 const route = useRoute()
 const router = useRouter()
 
@@ -13,6 +15,21 @@ const activeGateway = computed(() => getActiveGateway())
 function logout() {
   setActiveGateway(null)
   router.push('/setup')
+}
+
+const isRestarting = ref(false)
+async function restartGateway() {
+  if (isRestarting.value) return
+  isRestarting.value = true
+  try {
+    await axios.post(`${GATEWAY_API}/v1/restart`)
+  } catch (e) {
+    console.warn("Gateway restart initiated (connection dropped)", e)
+  }
+  setTimeout(() => {
+    isRestarting.value = false
+    window.location.reload()
+  }, 2000)
 }
 </script>
 
@@ -54,6 +71,14 @@ function logout() {
         <RouterLink to="/config" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
             <Settings :size="22" />
         </RouterLink>
+        <button
+          @click="restartGateway"
+          class="p-3 rounded-xl hover:bg-yellow-500/10 text-gray-400 hover:text-yellow-400 transition-all"
+          :class="{ 'opacity-50 pointer-events-none': isRestarting }"
+          title="Restart Gateway"
+        >
+          <RefreshCw :size="20" :class="{ 'animate-spin': isRestarting }" />
+        </button>
         <button
           @click="logout"
           class="p-3 rounded-xl hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-all"

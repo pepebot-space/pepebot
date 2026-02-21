@@ -27,6 +27,16 @@ metadata: {"pepebot":{"emoji":"🔄","requires":{},"platform":"all"}}
     {
       "name": "analysis",
       "goal": "Instruction for LLM to interpret"
+    },
+    {
+      "name": "use_skill",
+      "skill": "skill_name",
+      "goal": "Goal that uses the loaded skill content"
+    },
+    {
+      "name": "delegate",
+      "agent": "agent_name",
+      "goal": "Goal to delegate to another agent"
     }
   ]
 }
@@ -36,9 +46,13 @@ metadata: {"pepebot":{"emoji":"🔄","requires":{},"platform":"all"}}
 
 1. **Every tool step MUST have `"args": {}`** - even if empty. No exceptions.
 2. **Every step needs `"name"`** - use snake_case identifiers.
-3. **Use `"tool"` OR `"goal"`** per step, never both.
-4. **Use `{{variable}}` for interpolation** in args and goals.
-5. **Step outputs** are auto-stored as `{{step_name_output}}`.
+3. **4 step types**: `tool`+`args`, `goal` only, `skill`+`goal`, `agent`+`goal`.
+4. **`tool` cannot combine** with `skill` or `agent`; `skill` and `agent` are mutually exclusive.
+5. **`skill` and `agent` require `goal`**.
+6. **Use `{{variable}}` for interpolation** in args and goals.
+7. **Step outputs** are auto-stored as `{{step_name_output}}`.
+
+**IMPORTANT:** When user says "use skill X" or "with skill X", ALWAYS use a **skill step** (`"skill": "X", "goal": "..."`). Do NOT manually replicate the skill's commands via tool/exec steps. The skill step automatically loads the skill content and combines it with the goal.
 
 ## Available Tools
 
@@ -98,6 +112,32 @@ metadata: {"pepebot":{"emoji":"🔄","requires":{},"platform":"all"}}
     {"name": "tap", "tool": "adb_tap", "args": {"x": "{{tap_x}}", "y": "{{tap_y}}", "device": "{{device}}"}},
     {"name": "wait", "tool": "adb_shell", "args": {"command": "sleep 2", "device": "{{device}}"}},
     {"name": "screenshot_after", "tool": "adb_screenshot", "args": {"filename": "after_tap.png", "device": "{{device}}"}}
+  ]
+}
+```
+
+### Skill-Enhanced Analysis
+```json
+{
+  "name": "Smart Analysis",
+  "description": "Use a skill to analyze device data",
+  "variables": {"device": ""},
+  "steps": [
+    {"name": "collect", "tool": "adb_shell", "args": {"command": "dumpsys battery", "device": "{{device}}"}},
+    {"name": "analyze", "skill": "workflow", "goal": "Analyze {{collect_output}} using workflow best practices"}
+  ]
+}
+```
+
+### Agent Delegation
+```json
+{
+  "name": "Multi-Agent Task",
+  "description": "Delegate research to another agent",
+  "variables": {"topic": "AI trends"},
+  "steps": [
+    {"name": "research", "agent": "researcher", "goal": "Research {{topic}} and provide a summary"},
+    {"name": "save", "tool": "write_file", "args": {"path": "research.txt", "content": "{{research_output}}"}}
   ]
 }
 ```
