@@ -579,8 +579,8 @@ func (t *AdbRecordWorkflowTool) Name() string {
 
 func (t *AdbRecordWorkflowTool) Description() string {
 	return "Record user interactions on an Android device (taps, swipes) and auto-generate a workflow JSON file. " +
-		"USE THIS TOOL when the user wants to create a workflow by recording/capturing their device actions, " +
-		"or when they say 'workflow action', 'record workflow', 'capture actions', 'rekam aksi', or 'buatkan workflow action'. " +
+		"IMPORTANT: Only use this tool when the user EXPLICITLY asks to record or create a workflow from device actions. " +
+		"Do NOT proactively use this tool. " +
 		"Do NOT use workflow_save for this — workflow_save is for manually writing workflow JSON. " +
 		"This tool captures real touch events from the device via ADB getevent. " +
 		"IMPORTANT: This tool BLOCKS while recording. You MUST first explain to the user: " +
