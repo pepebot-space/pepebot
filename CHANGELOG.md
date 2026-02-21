@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Skill steps: purple badge with skill name
   - Agent steps: amber badge with agent name
   - Goal steps: text display (existing)
+- **Graceful Gateway Restart**: `/restart` command and `POST /v1/restart` API endpoint
+  - Stops all services (HTTP server, channels, cron, heartbeat) then re-initializes from fresh config
+  - Available via chat command `/restart` on any channel (Telegram, Discord, WhatsApp, etc.)
+  - Available via HTTP API `POST /v1/restart` for dashboard/programmatic use
+  - `SIGHUP` signal also triggers graceful restart (e.g. `kill -HUP <pid>`)
+  - Config changes (model, API keys, channels) take effect without full process restart
 - **ADB Activity Recorder** (`adb_record_workflow`): Generate workflow files by recording device interactions
   - Real-time touch event capture via `adb shell getevent -l` streaming
   - Automatic touch input device discovery and screen resolution detection

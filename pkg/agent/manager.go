@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/config"
@@ -23,6 +24,12 @@ type AgentManager struct {
 	mu           sync.RWMutex
 	defaultAgent string
 	inFlight     sync.Map // map[sessionKey]context.CancelFunc
+	restartFunc  func()   // called to trigger graceful restart
+}
+
+// SetRestartFunc sets the function called when a restart is requested via /restart command
+func (am *AgentManager) SetRestartFunc(fn func()) {
+	am.restartFunc = fn
 }
 
 // NewAgentManager creates a new agent manager
@@ -296,6 +303,8 @@ func (am *AgentManager) handleCommand(ctx context.Context, msg bus.InboundMessag
 		response = am.cmdNew(msg)
 	case "/stop":
 		response = am.cmdStop(msg)
+	case "/restart":
+		response = am.cmdRestart()
 	case "/help":
 		response = am.cmdHelp()
 	case "/status":
@@ -346,13 +355,32 @@ func (am *AgentManager) cmdStop(msg bus.InboundMessage) string {
 	return "No active processing to stop."
 }
 
+// cmdRestart triggers a graceful gateway restart
+func (am *AgentManager) cmdRestart() string {
+	if am.restartFunc == nil {
+		return "Restart not available."
+	}
+
+	logger.InfoC("agent", "Restart requested via /restart command")
+
+	// Trigger restart after response is sent
+	go func() {
+		// Small delay to let the response message be delivered
+		time.Sleep(500 * time.Millisecond)
+		am.restartFunc()
+	}()
+
+	return "Gateway restart initiated. Services will be back shortly."
+}
+
 // cmdHelp returns a list of available commands
 func (am *AgentManager) cmdHelp() string {
 	return "Available commands:\n" +
-		"/new    - Clear session, start fresh conversation\n" +
-		"/stop   - Cancel current LLM processing\n" +
-		"/help   - Show this help message\n" +
-		"/status - Show agent & session info"
+		"/new     - Clear session, start fresh conversation\n" +
+		"/stop    - Cancel current LLM processing\n" +
+		"/restart - Graceful gateway restart\n" +
+		"/help    - Show this help message\n" +
+		"/status  - Show agent & session info"
 }
 
 // cmdStatus returns info about the current agent and session

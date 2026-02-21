@@ -16,6 +16,12 @@ type GatewayServer struct {
 	config       *config.Config
 	agentManager *agent.AgentManager
 	httpServer   *http.Server
+	restartFunc  func() // called to trigger graceful restart
+}
+
+// SetRestartFunc sets the function called when a restart is requested via API or chat command
+func (gs *GatewayServer) SetRestartFunc(fn func()) {
+	gs.restartFunc = fn
 }
 
 // NewGatewayServer creates a new gateway HTTP server
@@ -42,6 +48,7 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/workflows", gs.corsMiddleware(gs.handleListWorkflows))
 	mux.HandleFunc("/v1/workflows/", gs.corsMiddleware(gs.handleGetWorkflow))
 	mux.HandleFunc("/v1/config", gs.corsMiddleware(gs.handleConfig))
+	mux.HandleFunc("/v1/restart", gs.corsMiddleware(gs.handleRestart))
 
 	addr := fmt.Sprintf("%s:%d", gs.config.Gateway.Host, gs.config.Gateway.Port)
 	gs.httpServer = &http.Server{

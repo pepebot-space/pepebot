@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/chzyer/readline"
@@ -1061,6 +1062,23 @@ func gatewayCmd() {
 		fmt.Println("✓ Verbose logging enabled")
 	}
 
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP)
+
+	for {
+		shouldRestart := gatewayRun(sigChan)
+		if !shouldRestart {
+			break
+		}
+		fmt.Println("\n🔄 Restarting gateway...")
+		// Small delay to let connections drain
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// gatewayRun starts all gateway services and blocks until a signal is received.
+// Returns true if a restart was requested (SIGHUP), false if shutdown (SIGINT).
+func gatewayRun(sigChan chan os.Signal) bool {
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
@@ -1073,10 +1091,10 @@ func gatewayCmd() {
 		os.Exit(1)
 	}
 
-	bus := bus.NewMessageBus()
+	msgBus := bus.NewMessageBus()
 
 	// Create agent manager for multi-agent support
-	agentManager, err := agent.NewAgentManager(cfg, bus, provider)
+	agentManager, err := agent.NewAgentManager(cfg, msgBus, provider)
 	if err != nil {
 		fmt.Printf("Error creating agent manager: %v\n", err)
 		os.Exit(1)
@@ -1102,7 +1120,7 @@ func gatewayCmd() {
 		true,
 	)
 
-	channelManager, err := channels.NewManager(cfg, bus)
+	channelManager, err := channels.NewManager(cfg, msgBus)
 	if err != nil {
 		fmt.Printf("Error creating channel manager: %v\n", err)
 		os.Exit(1)
@@ -1133,8 +1151,15 @@ func gatewayCmd() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start HTTP API server
+	// Restart function: sends SIGHUP to self to trigger graceful restart
+	restartFunc := func() {
+		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	}
+
+	// Start HTTP API server (with restart support)
 	gatewayServer := gateway.NewGatewayServer(cfg, agentManager)
+	gatewayServer.SetRestartFunc(restartFunc)
+	agentManager.SetRestartFunc(restartFunc)
 	if err := gatewayServer.Start(ctx); err != nil {
 		fmt.Printf("Error starting HTTP API server: %v\n", err)
 		os.Exit(1)
@@ -1160,17 +1185,28 @@ func gatewayCmd() {
 	fmt.Printf("✓ Gateway started on %s:%d\n", cfg.Gateway.Host, cfg.Gateway.Port)
 	fmt.Println("Press Ctrl+C to stop")
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-	<-sigChan
+	sig := <-sigChan
 
-	fmt.Println("\nShutting down...")
+	restart := sig == syscall.SIGHUP
+
+	if restart {
+		fmt.Println("\nRestarting...")
+	} else {
+		fmt.Println("\nShutting down...")
+	}
 	cancel()
 	gatewayServer.Stop(context.Background())
 	heartbeatService.Stop()
 	cronService.Stop()
-	channelManager.StopAll(ctx)
-	fmt.Println("✓ Gateway stopped")
+	channelManager.StopAll(context.Background())
+
+	if restart {
+		fmt.Println("✓ Gateway stopped (restarting)")
+	} else {
+		fmt.Println("✓ Gateway stopped")
+	}
+
+	return restart
 }
 
 func statusCmd() {

@@ -1072,6 +1072,33 @@ func restoreMaskedKeys(newCfg, currentCfg map[string]interface{}) {
 	}
 }
 
+// handleRestart triggers a graceful gateway restart
+func (gs *GatewayServer) handleRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+		return
+	}
+
+	if gs.restartFunc == nil {
+		writeError(w, http.StatusServiceUnavailable, "restart not available", "server_error")
+		return
+	}
+
+	logger.InfoC("gateway", "Restart requested via API")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "ok",
+		"message": "Gateway restart initiated. Services will be back shortly.",
+	})
+
+	// Trigger restart after response is sent
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		gs.restartFunc()
+	}()
+}
+
 // writeError writes a JSON error response
 func writeError(w http.ResponseWriter, statusCode int, message, errType string) {
 	w.Header().Set("Content-Type", "application/json")

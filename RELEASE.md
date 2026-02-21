@@ -30,6 +30,27 @@ Delegate workflow goals to other registered agents! Use the `agent` field to lev
 
 Agent responses are stored as `{{step_name_output}}` for use in subsequent steps.
 
+### 🔄 Graceful Gateway Restart
+
+Restart the gateway without killing the process! Config changes, new agents, updated API keys — all take effect with a simple restart.
+
+**Via chat command (any channel):**
+```
+/restart
+```
+
+**Via API:**
+```bash
+curl -X POST http://localhost:18790/v1/restart
+```
+
+**Via signal:**
+```bash
+kill -HUP $(pgrep pepebot)
+```
+
+All services (HTTP server, channels, cron, heartbeat) are gracefully stopped and re-initialized from fresh config.
+
 ### 🎬 ADB Activity Recorder
 
 Record your Android device interactions and automatically generate replayable workflow files! Simply use your device while Pepebot watches — taps and swipes are captured in real-time via ADB.
