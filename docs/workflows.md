@@ -150,6 +150,117 @@ Record user interactions on an Android device and generate a workflow JSON file.
 
 ---
 
+## Workflow CLI (Standalone Execution)
+
+Workflows can be run directly from the terminal without the agent. This is ideal for cron jobs, shell scripts, CI/CD pipelines, and headless automation.
+
+### Commands
+
+```bash
+# List all workflows in workspace
+pepebot workflow list
+
+# Show full details (description, variables, steps with types)
+pepebot workflow show <name>
+
+# Run workflow from workspace
+pepebot workflow run <name>
+
+# Run with variable overrides (repeatable flag)
+pepebot workflow run <name> --var device=emulator-5554 --var query=hello
+
+# Run directly from any JSON file (bypass workspace lookup)
+pepebot workflow run -f /path/to/workflow.json
+pepebot workflow run -f /path/to/workflow.json --var key=value
+
+# Validate workflow structure and tool parameters
+pepebot workflow validate <name>
+pepebot workflow validate -f /path/to/workflow.json
+
+# Delete a workflow from workspace
+pepebot workflow delete <name>
+```
+
+### The `-f` Flag
+
+The `-f` (or `--file`) flag tells `pepebot workflow run` (and `validate`) to load from an arbitrary file path instead of the workspace `~/.pepebot/workspace/workflows/` directory. Use cases:
+
+- **Iterate on new workflows** before saving them to workspace
+- **Run workflows from external repos** or shared directories
+- **CI/CD pipelines** that store workflow JSON alongside application code
+- **One-off automation** scripts that generate workflow files dynamically
+
+### CLI vs Agent Execution
+
+| Feature | CLI (`pepebot workflow run`) | Agent (`workflow_execute` tool) |
+|---------|----------------------------|-------------------------------|
+| Tool steps | Executed directly | Executed directly |
+| Goal steps | Logged, not interpreted | LLM interprets and acts |
+| Skill steps | Content loaded as variable | Content loaded + LLM processes |
+| Agent steps | Not available (no gateway) | Delegates to other agents |
+| Variable overrides | `--var key=value` flags | `variables` JSON parameter |
+| Speed | Fast (no LLM overhead) | Slower (LLM calls per goal step) |
+| Best for | Cron, scripts, CI/CD, headless | Chat, interactive, LLM-driven tasks |
+
+### Cron Scheduling
+
+Schedule tool-only workflows to run automatically:
+
+```bash
+# Device health check every hour
+0 * * * * /usr/local/bin/pepebot workflow run device_health --var device=emulator-5554
+
+# Daily report with log file
+0 8 * * * /usr/local/bin/pepebot workflow run daily_report > /var/log/pepebot/daily_$(date +\%F).log 2>&1
+```
+
+Systemd timer alternative:
+```ini
+# /etc/systemd/system/pepebot-health.timer
+[Timer]
+OnCalendar=*:0/30
+
+# /etc/systemd/system/pepebot-health.service
+[Service]
+ExecStart=/usr/local/bin/pepebot workflow run device_health --var device=emulator-5554
+```
+
+### Shell Scripting
+
+```bash
+#!/bin/bash
+# Run across multiple devices
+for device in emulator-5554 emulator-5556 192.168.1.100:5555; do
+  echo "=== $device ==="
+  pepebot workflow run device_health --var device="$device"
+done
+```
+
+```bash
+#!/bin/bash
+# Validate before running
+pepebot workflow validate smoke_test || { echo "Invalid workflow!"; exit 1; }
+pepebot workflow run smoke_test --var device="$DEVICE" --var build="$BUILD"
+```
+
+### CI/CD Integration
+
+```bash
+# Run workflow JSON from the repo (not from workspace)
+pepebot workflow run -f ./ci/workflows/integration_test.json --var env=staging --var build=$CI_COMMIT_SHA
+```
+
+### Design Tips for Standalone Workflows
+
+- **Use only tool steps** for workflows meant to run via cron/scripts (no LLM needed)
+- **Add goal/agent steps** only when LLM reasoning is required
+- **Nest workflows** using `workflow_execute` as a tool step for modular automation
+- **Validate first** with `pepebot workflow validate` before deploying to cron
+- **Log output** by redirecting stdout to files for audit trails
+- **Use `--var` with shell variables** for dynamic configuration: `--var device="$DEVICE_SERIAL"`
+
+---
+
 ## Workflow Structure
 
 ### Basic Template
@@ -1528,6 +1639,6 @@ Actions within 200ms of the previous action are debounced (discarded) to filter 
 
 ---
 
-**Document Version:** 1.1
-**Last Updated:** 2026-02-21
-**Pepebot Version:** 0.5.1
+**Document Version:** 1.2
+**Last Updated:** 2026-02-22
+**Pepebot Version:** 0.5.2

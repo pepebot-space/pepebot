@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
 // ==================== Types ====================
@@ -509,19 +511,19 @@ func processEventStream(
 // ==================== Workflow Building ====================
 
 // buildWorkflowFromActions creates a WorkflowDefinition from recorded actions
-func buildWorkflowFromActions(name, description string, actions []RecordedAction, goalText string) *WorkflowDefinition {
+func buildWorkflowFromActions(name, description string, actions []RecordedAction, goalText string) *workflow.WorkflowDefinition {
 	if description == "" {
 		description = "Recorded user actions from Android device"
 	}
 
-	steps := make([]WorkflowStep, 0, len(actions)+1)
+	steps := make([]workflow.WorkflowStep, 0, len(actions)+1)
 
 	for i, action := range actions {
 		stepName := fmt.Sprintf("action_%d_%s", i+1, action.Type)
 
 		switch action.Type {
 		case "tap":
-			steps = append(steps, WorkflowStep{
+			steps = append(steps, workflow.WorkflowStep{
 				Name: stepName,
 				Tool: "adb_tap",
 				Args: map[string]interface{}{
@@ -531,7 +533,7 @@ func buildWorkflowFromActions(name, description string, actions []RecordedAction
 				},
 			})
 		case "swipe":
-			steps = append(steps, WorkflowStep{
+			steps = append(steps, workflow.WorkflowStep{
 				Name: stepName,
 				Tool: "adb_swipe",
 				Args: map[string]interface{}{
@@ -548,13 +550,13 @@ func buildWorkflowFromActions(name, description string, actions []RecordedAction
 
 	// Add verification goal step at the end
 	if goalText != "" {
-		steps = append(steps, WorkflowStep{
+		steps = append(steps, workflow.WorkflowStep{
 			Name: "verify_final_state",
 			Goal: goalText,
 		})
 	}
 
-	return &WorkflowDefinition{
+	return &workflow.WorkflowDefinition{
 		Name:        name,
 		Description: description,
 		Variables:   map[string]string{"device": ""},
@@ -566,10 +568,10 @@ func buildWorkflowFromActions(name, description string, actions []RecordedAction
 
 type AdbRecordWorkflowTool struct {
 	helper         *AdbHelper
-	workflowHelper *WorkflowHelper
+	workflowHelper *workflow.WorkflowHelper
 }
 
-func NewAdbRecordWorkflowTool(helper *AdbHelper, workflowHelper *WorkflowHelper) *AdbRecordWorkflowTool {
+func NewAdbRecordWorkflowTool(helper *AdbHelper, workflowHelper *workflow.WorkflowHelper) *AdbRecordWorkflowTool {
 	return &AdbRecordWorkflowTool{helper: helper, workflowHelper: workflowHelper}
 }
 
@@ -724,11 +726,11 @@ func (t *AdbRecordWorkflowTool) Execute(ctx context.Context, args map[string]int
 	// Step 6: Build and save workflow
 	workflow := buildWorkflowFromActions(workflowName, description, actions, goalText)
 
-	if err := t.workflowHelper.saveWorkflow(workflowName, workflow); err != nil {
+	if err := t.workflowHelper.SaveWorkflow(workflowName, workflow); err != nil {
 		return "", fmt.Errorf("failed to save workflow: %w", err)
 	}
 
-	savePath := filepath.Join(t.workflowHelper.workflowsDir(), workflowName+".json")
+	savePath := filepath.Join(t.workflowHelper.WorkflowsDir(), workflowName+".json")
 
 	// Step 7: Return summary
 	result := map[string]interface{}{

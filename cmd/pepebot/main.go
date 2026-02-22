@@ -30,6 +30,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/skills"
 	"github.com/pepebot-space/pepebot/pkg/tools"
 	"github.com/pepebot-space/pepebot/pkg/voice"
+	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
 const version = "0.5.2"
@@ -723,10 +724,23 @@ This document describes the tools available to pepebot.
 
 ## Workflow System
 
-### Workflow Tools
-- workflow_execute: Run a saved workflow
+### Workflow Tools (Agent)
+- workflow_execute: Run a saved workflow with optional variable overrides
 - workflow_save: Manually create a workflow JSON (for when YOU write the steps)
 - workflow_list: List available workflows
+
+### Workflow CLI (Standalone)
+Users can also run workflows directly from the terminal without the agent:
+
+` + "`" + `pepebot workflow list` + "`" + `                        — List all workflows
+` + "`" + `pepebot workflow show <name>` + "`" + `               — Show workflow details
+` + "`" + `pepebot workflow run <name>` + "`" + `                — Execute a workflow from workspace
+` + "`" + `pepebot workflow run <name> --var k=v` + "`" + `     — Execute with variable overrides
+` + "`" + `pepebot workflow run -f /path/to/file.json` + "`" + ` — Execute directly from any JSON file
+` + "`" + `pepebot workflow validate <name>` + "`" + `            — Validate workflow structure
+` + "`" + `pepebot workflow delete <name>` + "`" + `              — Delete a workflow
+
+This enables cron scheduling, shell scripts, CI/CD pipelines, and any automation that chains workflows without needing the agent.
 
 ## AI Capabilities
 
@@ -2068,7 +2082,7 @@ func workflowHelp() {
 	fmt.Println("  pepebot workflow delete old_workflow")
 }
 
-func newWorkflowHelper(workspace string, cfg *config.Config) *tools.WorkflowHelper {
+func newWorkflowHelper(workspace string, cfg *config.Config) *workflow.WorkflowHelper {
 	registry := tools.NewToolRegistry()
 	registry.Register(tools.NewReadFileTool(workspace))
 	registry.Register(tools.NewWriteFileTool(workspace))
@@ -2089,7 +2103,7 @@ func newWorkflowHelper(workspace string, cfg *config.Config) *tools.WorkflowHelp
 		registry.Register(tools.NewAdbKeyEventTool(adbHelper))
 	}
 
-	helper := tools.NewWorkflowHelper(workspace, registry)
+	helper := workflow.NewWorkflowHelper(workspace, registry)
 	registry.Register(tools.NewWorkflowExecuteTool(helper))
 	registry.Register(tools.NewWorkflowSaveTool(helper))
 	registry.Register(tools.NewWorkflowListTool(helper))
@@ -2284,7 +2298,7 @@ func workflowValidateCmd(workspace string, cfg *config.Config) {
 
 	helper := newWorkflowHelper(workspace, cfg)
 
-	var wfDef *tools.WorkflowDefinition
+	var wfDef *workflow.WorkflowDefinition
 	var loadErr error
 
 	if filePath != "" {

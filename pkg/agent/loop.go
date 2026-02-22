@@ -21,6 +21,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/session"
 	"github.com/pepebot-space/pepebot/pkg/tools"
+	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
 type AgentLoop struct {
@@ -34,14 +35,14 @@ type AgentLoop struct {
 	sessions       *session.SessionManager
 	contextBuilder *ContextBuilder
 	tools          *tools.ToolRegistry
-	workflowHelper *tools.WorkflowHelper
+	workflowHelper *workflow.WorkflowHelper
 	running        bool
 	summarizing    sync.Map
 	agentName      string
 }
 
 // WorkflowHelper returns the workflow helper for external wiring (e.g. agent processor injection)
-func (al *AgentLoop) WorkflowHelper() *tools.WorkflowHelper {
+func (al *AgentLoop) WorkflowHelper() *workflow.WorkflowHelper {
 	return al.workflowHelper
 }
 
@@ -56,7 +57,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewExecTool(workspace))
 
 	// Register workflow tools (always available, no dependencies)
-	workflowHelper := tools.NewWorkflowHelper(workspace, toolsRegistry)
+	workflowHelper := workflow.NewWorkflowHelper(workspace, toolsRegistry)
 	toolsRegistry.Register(tools.NewWorkflowExecuteTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowSaveTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowListTool(workflowHelper))
@@ -117,7 +118,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	toolsRegistry.Register(tools.NewExecTool(workspace))
 
 	// Register workflow tools (always available, no dependencies)
-	workflowHelper := tools.NewWorkflowHelper(workspace, toolsRegistry)
+	workflowHelper := workflow.NewWorkflowHelper(workspace, toolsRegistry)
 	toolsRegistry.Register(tools.NewWorkflowExecuteTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowSaveTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowListTool(workflowHelper))
