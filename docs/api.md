@@ -62,7 +62,7 @@ Configure in `~/.pepebot/config.json`:
 ```json
 {
   "gateway": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 18790
   }
 }
@@ -668,7 +668,7 @@ Returns the current `~/.pepebot/config.json` with sensitive fields (API keys, to
     }
   },
   "gateway": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 18790
   },
   "providers": {
@@ -737,7 +737,7 @@ curl -X PUT http://localhost:18790/v1/config \
   -H "Content-Type: application/json" \
   -d '{
     "agents": {"defaults": {"model": "maia/claude-4-sonnet", "temperature": 0.5}},
-    "gateway": {"host": "0.0.0.0", "port": 18790}
+    "gateway": {"host": "127.0.0.1", "port": 18790}
   }'
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: workflow
-description: "Create and manage multi-step automation workflows combining any tools (ADB, shell, web, file) with variable interpolation."
+description: "Create and manage multi-step automation workflows combining any tools (ADB, shell, web, file) with variable interpolation. Supports standalone CLI execution, cron scheduling, and scripting."
 metadata: {"pepebot":{"emoji":"🔄","requires":{},"platform":"all"}}
 ---
 
@@ -70,6 +70,60 @@ metadata: {"pepebot":{"emoji":"🔄","requires":{},"platform":"all"}}
 | `write_file` | `path`, `content` | Write file |
 | `web_search` | `query` | Search web |
 
+## Workflow Tools (Agent)
+
+- **`workflow_save`**: Save workflow JSON → `workflow_save(workflow_name, workflow_content)`
+- **`workflow_execute`**: Run workflow → `workflow_execute(workflow_name, variables?)`
+- **`workflow_list`**: List all workflows → `workflow_list()`
+
+## Workflow CLI (Standalone)
+
+Workflows can be executed directly from the terminal without the agent. This enables cron jobs, shell scripts, CI/CD, and headless automation.
+
+```bash
+# List workflows
+pepebot workflow list
+
+# Show workflow details (steps, variables, types)
+pepebot workflow show <name>
+
+# Run workflow from workspace
+pepebot workflow run <name>
+
+# Run with variable overrides (repeatable)
+pepebot workflow run <name> --var device=emulator-5554 --var query=hello
+
+# Run directly from any JSON file (bypass workspace)
+pepebot workflow run -f /path/to/workflow.json
+pepebot workflow run -f /path/to/workflow.json --var key=value
+
+# Validate workflow structure
+pepebot workflow validate <name>
+pepebot workflow validate -f /path/to/workflow.json
+
+# Delete a workflow
+pepebot workflow delete <name>
+```
+
+### Key: `-f` flag
+The `-f` (or `--file`) flag runs a workflow from any file path, bypassing workspace lookup. This is useful for:
+- Testing new workflows before saving to workspace
+- Running workflows from external repos or shared directories
+- CI/CD pipelines that store workflows alongside code
+- One-off automation scripts
+
+### Standalone vs Agent Execution
+| Feature | CLI (`pepebot workflow run`) | Agent (`workflow_execute`) |
+|---------|----------------------------|--------------------------|
+| Tool steps | Executed directly | Executed directly |
+| Goal steps | Logged but not interpreted | LLM interprets and acts |
+| Skill steps | Content loaded, stored as variable | Content loaded + LLM processes |
+| Agent steps | Not available (no gateway) | Delegates to other agents |
+| Variable overrides | `--var key=value` | `variables` parameter |
+| Use case | Cron, scripts, CI/CD, headless | Chat, interactive, LLM-driven |
+
+**Tip:** For tool-only workflows, CLI execution is faster and doesn't need an LLM. Design workflows with pure tool steps for standalone automation, and add goal/agent steps only when LLM reasoning is needed.
+
 ## Patterns
 
 ### Device Health Check
@@ -101,30 +155,16 @@ metadata: {"pepebot":{"emoji":"🔄","requires":{},"platform":"all"}}
 }
 ```
 
-### UI Tap with Coordinates
+### Nested Workflow (Workflow Calling Workflow)
 ```json
 {
-  "name": "Tap Button",
-  "description": "Tap specific coordinates on screen",
-  "variables": {"device": "", "tap_x": "540", "tap_y": "1200"},
-  "steps": [
-    {"name": "screenshot_before", "tool": "adb_screenshot", "args": {"filename": "before_tap.png", "device": "{{device}}"}},
-    {"name": "tap", "tool": "adb_tap", "args": {"x": "{{tap_x}}", "y": "{{tap_y}}", "device": "{{device}}"}},
-    {"name": "wait", "tool": "adb_shell", "args": {"command": "sleep 2", "device": "{{device}}"}},
-    {"name": "screenshot_after", "tool": "adb_screenshot", "args": {"filename": "after_tap.png", "device": "{{device}}"}}
-  ]
-}
-```
-
-### Skill-Enhanced Analysis
-```json
-{
-  "name": "Smart Analysis",
-  "description": "Use a skill to analyze device data",
+  "name": "Full Test Suite",
+  "description": "Run login, tests, and logout workflows in sequence",
   "variables": {"device": ""},
   "steps": [
-    {"name": "collect", "tool": "adb_shell", "args": {"command": "dumpsys battery", "device": "{{device}}"}},
-    {"name": "analyze", "skill": "workflow", "goal": "Analyze {{collect_output}} using workflow best practices"}
+    {"name": "login", "tool": "workflow_execute", "args": {"workflow_name": "login_flow"}},
+    {"name": "test", "tool": "workflow_execute", "args": {"workflow_name": "feature_tests"}},
+    {"name": "logout", "tool": "workflow_execute", "args": {"workflow_name": "logout_flow"}}
   ]
 }
 ```
@@ -142,21 +182,82 @@ metadata: {"pepebot":{"emoji":"🔄","requires":{},"platform":"all"}}
 }
 ```
 
-## Workflow Tools
+## Standalone Automation Recipes
 
-- **`workflow_save`**: Save workflow JSON → `workflow_save(workflow_name, workflow_content)`
-- **`workflow_execute`**: Run workflow → `workflow_execute(workflow_name, variables?)`
-- **`workflow_list`**: List all workflows → `workflow_list()`
+### Cron: Scheduled Device Health Check
+```bash
+# Run every hour — pure tool steps, no LLM needed
+0 * * * * pepebot workflow run device_health --var device=emulator-5554
+
+# Run daily report, save output to file
+0 8 * * * pepebot workflow run daily_report --var device=abc123 > /var/log/pepebot/daily_$(date +\%F).log 2>&1
+```
+
+### Shell Script: Multi-Device Batch
+```bash
+#!/bin/bash
+# Run a workflow across multiple devices
+for device in emulator-5554 emulator-5556 abc123; do
+  echo "=== Running on $device ==="
+  pepebot workflow run device_health --var device="$device"
+done
+```
+
+### Shell Script: Test Before Deploy
+```bash
+#!/bin/bash
+# Validate and run before deploying
+pepebot workflow validate smoke_test || exit 1
+pepebot workflow run smoke_test --var device="$DEVICE" --var build="$BUILD_NUMBER"
+```
+
+### CI/CD: Run Workflow From Repo
+```bash
+# Run a workflow checked into the repo (not from workspace)
+pepebot workflow run -f ./ci/workflows/integration_test.json --var env=staging
+```
+
+### Combine CLI + Script Output
+```bash
+#!/bin/bash
+# Collect data with workflow, post-process with other tools
+pepebot workflow run collect_metrics --var device=emulator-5554 > /tmp/metrics.txt
+# Parse and send to monitoring
+grep "battery" /tmp/metrics.txt | curl -X POST -d @- https://monitoring.example.com/api/metrics
+```
+
+### Systemd Timer (Alternative to Cron)
+```ini
+# /etc/systemd/system/pepebot-health.timer
+[Timer]
+OnCalendar=*:0/30
+# Every 30 minutes
+
+# /etc/systemd/system/pepebot-health.service
+[Service]
+ExecStart=/usr/local/bin/pepebot workflow run device_health --var device=emulator-5554
+```
 
 ## Variable System
 
 1. **Default variables**: Defined in `"variables"` field
-2. **Runtime overrides**: Passed via `workflow_execute` variables parameter
+2. **Runtime overrides**: Passed via `workflow_execute` variables parameter or `--var` flag in CLI
 3. **Step outputs**: Auto-created as `{{step_name_output}}`
 4. **Goal results**: Auto-created as `{{step_name_goal}}`
+
+## Design Tips for Powerful Workflows
+
+- **Tool-only workflows** run standalone without LLM — ideal for cron and scripts
+- **Goal/agent steps** require the agent loop — use `pepebot agent -m "run workflow X"` for those
+- **Nest workflows** using `workflow_execute` as a tool step to build modular test suites
+- **Use `-f` flag** to iterate on workflow JSON files before saving to workspace
+- **Validate before deploying** with `pepebot workflow validate` to catch errors early
+- **Log output** by redirecting CLI output to files for audit trails
+- **Combine `--var` with environment variables** in scripts: `--var device="$DEVICE_SERIAL"`
 
 ## Notes
 
 - Coordinate values (x, y, x1, y1, etc.) are auto-converted from strings to numbers
 - Tool names and required parameters are validated on save
 - `adb_ui_dump` may not work on all devices - use coordinates as fallback
+- Workflow files are stored in `~/.pepebot/workspace/workflows/` as JSON

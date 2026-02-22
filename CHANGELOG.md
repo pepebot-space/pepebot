@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-02-22
+
+### Added
+- **`pepebot workflow` CLI command**: New top-level command for managing and executing workflows directly from the terminal without needing an agent session
+  - `workflow list` — list all workflows in workspace with step count and description
+  - `workflow show <name>` — display full workflow details: description, variables, and each step with type, args, and goal
+  - `workflow run <name> [--var key=value ...]` — execute a workflow by name from workspace; supports variable overrides via repeatable `--var` flag
+  - `workflow run -f <path> [--var key=value ...]` — execute a workflow directly from any JSON file path (bypasses workspace lookup)
+  - `workflow validate <name>` / `workflow validate -f <path>` — validate workflow structure and tool parameter requirements
+  - `workflow delete <name>` — delete a workflow from workspace (with confirmation prompt)
+- **`WorkflowHelper` public API** in `pkg/workflow/workflow.go`: exported methods for use outside the agent loop
+  - `ListWorkflows()`, `WorkflowsDir()`, `LoadWorkflow(name)`, `LoadWorkflowFile(path)`
+  - `RunWorkflow(ctx, name, vars)`, `RunWorkflowFile(ctx, path, vars)`, `Validate(workflow)`
+
 ## [0.5.1] - 2026-02-21
 
 ### Added

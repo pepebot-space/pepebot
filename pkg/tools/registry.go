@@ -38,6 +38,16 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string
 	return tool.Execute(ctx, args)
 }
 
+// GetToolSchema returns the parameters schema for a named tool.
+// Implements workflow.ToolExecutor.
+func (r *ToolRegistry) GetToolSchema(name string) (map[string]interface{}, bool) {
+	tool, ok := r.Get(name)
+	if !ok {
+		return nil, false
+	}
+	return tool.Parameters(), true
+}
+
 func (r *ToolRegistry) GetDefinitions() []map[string]interface{} {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

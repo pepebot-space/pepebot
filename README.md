@@ -27,12 +27,21 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 - 🎯 **Skills System**: Customizable and extensible skill system
 - 🚀 **Lightweight & Fast**: Small binary size with high performance
 - 🔧 **Gateway Server**: HTTP server for custom integrations
-- 💻 **Web Dashboard**: Modern Web UI accessible locally via gateway or online at [dash.pepebot.space](https://dash.pepebot.space)
+- 💻 **Web Dashboard**: Modern Web UI accessible online at [dash.pepebot.space](https://dash.pepebot.space)
 - 🎙️ **Voice Support**: Audio/voice message transcription
 
 ## 🖥️ Web Dashboard
 
-Pepebot comes with a fully-featured modern dashboard. You can access the unified Web UI to manage agents, skills, and chat via [https://dash.pepebot.space](https://dash.pepebot.space), or run it locally by starting `pepebot gateway`.
+Pepebot's dashboard is hosted at [dash.pepebot.space](https://dash.pepebot.space) — there is no built-in dashboard in the gateway. To use it:
+
+1. Start your gateway: `pepebot gateway`
+2. Go to [dash.pepebot.space](https://dash.pepebot.space) and register your gateway address (e.g. `127.0.0.1:18790`)
+
+**Remote gateway?** Use SSH tunneling to expose it locally, then register `127.0.0.1:18790` on the dashboard:
+
+```bash
+ssh -L 18790:127.0.0.1:18790 <user>@<remote-host>
+```
 
 <div align="center">
   <img src="assets/screenshots/1.webp" width="49%">
@@ -435,7 +444,7 @@ Popular models available:
 ```json
 {
   "gateway": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 18790
   }
 }
@@ -455,6 +464,20 @@ Then type your commands or questions:
 🐸 > Hello! How are you?
 🐸 > Create a Python script for web scraping
 🐸 > /weather Jakarta
+```
+
+### Workflow CLI
+
+Run workflows directly from the terminal — no agent session needed:
+
+```bash
+pepebot workflow list                         # List all workflows
+pepebot workflow show <name>                  # Inspect a workflow
+pepebot workflow run <name>                   # Execute a workflow
+pepebot workflow run <name> --var key=value   # Override variables
+pepebot workflow run -f ./my_workflow.json    # Run from any file
+pepebot workflow validate <name>              # Validate structure
+pepebot workflow delete <name>                # Remove a workflow
 ```
 
 ### Bot Mode (Daemon)
@@ -595,7 +618,8 @@ pepebot/
 │   ├── session/          # Session management
 │   ├── skills/           # Skills loader & installer
 │   ├── tools/            # Tool implementations
-│   └── voice/            # Voice transcription
+│   ├── voice/            # Voice transcription
+│   └── workflow/         # Workflow engine & execution
 ├── skills/               # Built-in skills
 ├── assets/               # Logo and assets
 ├── config.example.json   # Configuration template
@@ -695,10 +719,52 @@ adb devices
 #### Workflow System
 Create multi-step automation workflows combining ADB, web, file, and shell tools.
 
-**Available Workflow Tools:**
+**Agent Workflow Tools (via chat):**
 - `workflow_execute` - Run saved workflows
 - `workflow_save` - Create new workflows
 - `workflow_list` - List available workflows
+
+**Workflow CLI (standalone, no agent needed):**
+
+```bash
+# List all workflows
+pepebot workflow list
+
+# Show workflow details (steps, variables, types)
+pepebot workflow show my_workflow
+
+# Run a workflow from workspace
+pepebot workflow run my_workflow
+
+# Run with variable overrides
+pepebot workflow run my_workflow --var device=emulator-5554 --var query=hello
+
+# Run directly from any JSON file (bypass workspace)
+pepebot workflow run -f /path/to/workflow.json
+
+# Validate workflow structure before deploying
+pepebot workflow validate my_workflow
+
+# Delete a workflow
+pepebot workflow delete my_workflow
+```
+
+**Cron / scripting:**
+
+```bash
+# Schedule with cron (tool-only workflows, no LLM needed)
+0 * * * * pepebot workflow run device_health --var device=emulator-5554
+
+# Multi-device batch
+for device in emulator-5554 emulator-5556; do
+  pepebot workflow run device_health --var device="$device"
+done
+
+# CI/CD — run workflow from repo
+pepebot workflow run -f ./ci/workflows/smoke_test.json --var env=staging
+```
+
+> **Tip:** Workflows with only tool steps run standalone without an LLM. Add goal/agent steps only when you need LLM reasoning. See [Workflow Documentation](./docs/workflows.md) for full details.
 
 ## 📚 Documentation
 

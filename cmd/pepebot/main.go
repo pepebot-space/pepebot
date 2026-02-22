@@ -7,13 +7,18 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -28,10 +33,12 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/skills"
+	"github.com/pepebot-space/pepebot/pkg/tools"
 	"github.com/pepebot-space/pepebot/pkg/voice"
+	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.1"
+const version = "0.5.2"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -158,6 +165,10 @@ func main() {
 			fmt.Printf("Unknown skills command: %s\n", subcommand)
 			skillsHelp()
 		}
+	case "workflow":
+		workflowCmd()
+	case "update":
+		updateCmd()
 	case "version", "--version", "-v":
 		fmt.Printf("%s pepebot v%s\n", logo, version)
 	default:
@@ -197,6 +208,16 @@ func printHelp() {
 	fmt.Println("  status      Show pepebot status")
 	fmt.Println("  cron        Manage scheduled tasks")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
+	fmt.Println("  workflow    Manage and execute workflows")
+	fmt.Println("              Subcommands:")
+	fmt.Println("                list                        List all workflows")
+	fmt.Println("                show <name>                 Show workflow details")
+	fmt.Println("                run <name> [options]        Execute a workflow")
+	fmt.Println("                  -f, --file <path>         Run from a file instead of workspace")
+	fmt.Println("                  --var key=value           Override a workflow variable (repeatable)")
+	fmt.Println("                delete <name>               Delete a workflow")
+	fmt.Println("                validate <name> [-f <path>] Validate workflow structure")
+	fmt.Println("  update      Update pepebot to the latest version")
 	fmt.Println("  version     Show version information")
 	fmt.Println("")
 }
@@ -711,10 +732,23 @@ This document describes the tools available to pepebot.
 
 ## Workflow System
 
-### Workflow Tools
-- workflow_execute: Run a saved workflow
+### Workflow Tools (Agent)
+- workflow_execute: Run a saved workflow with optional variable overrides
 - workflow_save: Manually create a workflow JSON (for when YOU write the steps)
 - workflow_list: List available workflows
+
+### Workflow CLI (Standalone)
+Users can also run workflows directly from the terminal without the agent:
+
+` + "`" + `pepebot workflow list` + "`" + `                        — List all workflows
+` + "`" + `pepebot workflow show <name>` + "`" + `               — Show workflow details
+` + "`" + `pepebot workflow run <name>` + "`" + `                — Execute a workflow from workspace
+` + "`" + `pepebot workflow run <name> --var k=v` + "`" + `     — Execute with variable overrides
+` + "`" + `pepebot workflow run -f /path/to/file.json` + "`" + ` — Execute directly from any JSON file
+` + "`" + `pepebot workflow validate <name>` + "`" + `            — Validate workflow structure
+` + "`" + `pepebot workflow delete <name>` + "`" + `              — Delete a workflow
+
+This enables cron scheduling, shell scripts, CI/CD pipelines, and any automation that chains workflows without needing the agent.
 
 ## AI Capabilities
 
@@ -1986,4 +2020,495 @@ func agentShowCmd() {
 		}
 	}
 	fmt.Println()
+}
+
+// =============================================================================
+// Workflow Commands
+// =============================================================================
+
+func workflowCmd() {
+	if len(os.Args) < 3 {
+		workflowHelp()
+		return
+	}
+
+	subcommand := os.Args[2]
+
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	workspace := cfg.WorkspacePath()
+
+	switch subcommand {
+	case "list":
+		workflowListCmd(workspace, cfg)
+	case "show":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: pepebot workflow show <name>")
+			return
+		}
+		workflowShowCmd(workspace, cfg, os.Args[3])
+	case "run":
+		workflowRunCmd(workspace, cfg)
+	case "delete", "remove":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: pepebot workflow delete <name>")
+			return
+		}
+		workflowDeleteCmd(workspace, cfg, os.Args[3])
+	case "validate":
+		workflowValidateCmd(workspace, cfg)
+	default:
+		fmt.Printf("Unknown workflow command: %s\n", subcommand)
+		workflowHelp()
+	}
+}
+
+func workflowHelp() {
+	fmt.Println("\nWorkflow commands:")
+	fmt.Println("  list                         List all workflows in workspace")
+	fmt.Println("  show <name>                  Show workflow details (steps, variables)")
+	fmt.Println("  run <name> [options]          Execute a workflow from workspace")
+	fmt.Println("    -f, --file <path>           Load workflow from file instead of workspace")
+	fmt.Println("    --var key=value             Override a workflow variable (repeatable)")
+	fmt.Println("  delete <name>                Delete a workflow from workspace")
+	fmt.Println("  validate <name>              Validate workflow structure")
+	fmt.Println("    -f, --file <path>           Validate a file instead of workspace workflow")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  pepebot workflow list")
+	fmt.Println("  pepebot workflow show my_workflow")
+	fmt.Println("  pepebot workflow run my_workflow")
+	fmt.Println("  pepebot workflow run my_workflow --var device=emulator-5554 --var query=hello")
+	fmt.Println("  pepebot workflow run -f /tmp/test.json")
+	fmt.Println("  pepebot workflow run -f /tmp/test.json --var key=value")
+	fmt.Println("  pepebot workflow validate my_workflow")
+	fmt.Println("  pepebot workflow validate -f /tmp/test.json")
+	fmt.Println("  pepebot workflow delete old_workflow")
+}
+
+func newWorkflowHelper(workspace string, cfg *config.Config) *workflow.WorkflowHelper {
+	registry := tools.NewToolRegistry()
+	registry.Register(tools.NewReadFileTool(workspace))
+	registry.Register(tools.NewWriteFileTool(workspace))
+	registry.Register(tools.NewListDirTool(workspace))
+	registry.Register(tools.NewExecTool(workspace))
+	registry.Register(tools.NewWebSearchTool(cfg.Tools.Web.Search.APIKey, cfg.Tools.Web.Search.MaxResults))
+	registry.Register(tools.NewWebFetchTool(50000))
+
+	if adbHelper, err := tools.NewAdbHelper(workspace); err == nil {
+		registry.Register(tools.NewAdbDevicesTool(adbHelper))
+		registry.Register(tools.NewAdbShellTool(adbHelper))
+		registry.Register(tools.NewAdbTapTool(adbHelper))
+		registry.Register(tools.NewAdbInputTextTool(adbHelper))
+		registry.Register(tools.NewAdbScreenshotTool(adbHelper))
+		registry.Register(tools.NewAdbUIDumpTool(adbHelper))
+		registry.Register(tools.NewAdbSwipeTool(adbHelper))
+		registry.Register(tools.NewAdbOpenAppTool(adbHelper))
+		registry.Register(tools.NewAdbKeyEventTool(adbHelper))
+	}
+
+	helper := workflow.NewWorkflowHelper(workspace, registry)
+	registry.Register(tools.NewWorkflowExecuteTool(helper))
+	registry.Register(tools.NewWorkflowSaveTool(helper))
+	registry.Register(tools.NewWorkflowListTool(helper))
+
+	return helper
+}
+
+func workflowListCmd(workspace string, cfg *config.Config) {
+	helper := newWorkflowHelper(workspace, cfg)
+	names := helper.ListWorkflows()
+
+	if len(names) == 0 {
+		fmt.Printf("No workflows found in %s\n", helper.WorkflowsDir())
+		return
+	}
+
+	fmt.Println("\nWorkflows:")
+	fmt.Println("----------")
+	for _, name := range names {
+		wf, err := helper.LoadWorkflow(name)
+		if err != nil {
+			fmt.Printf("  ✗ %-30s (error: %v)\n", name, err)
+			continue
+		}
+		desc := wf.Description
+		if desc == "" {
+			desc = "(no description)"
+		}
+		fmt.Printf("  %-30s %d steps  %s\n", name, len(wf.Steps), desc)
+	}
+	fmt.Println()
+}
+
+func workflowShowCmd(workspace string, cfg *config.Config, name string) {
+	helper := newWorkflowHelper(workspace, cfg)
+
+	wf, err := helper.LoadWorkflow(name)
+	if err != nil {
+		fmt.Printf("✗ %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n📋 Workflow: %s\n", wf.Name)
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	if wf.Description != "" {
+		fmt.Printf("  Description: %s\n", wf.Description)
+	}
+
+	if len(wf.Variables) > 0 {
+		fmt.Println("\n  Variables:")
+		for k, v := range wf.Variables {
+			fmt.Printf("    %-20s = %s\n", k, v)
+		}
+	}
+
+	fmt.Printf("\n  Steps (%d):\n", len(wf.Steps))
+	for i, step := range wf.Steps {
+		fmt.Printf("\n  [%d] %s\n", i+1, step.Name)
+		switch {
+		case step.Tool != "":
+			fmt.Printf("      type: tool → %s\n", step.Tool)
+			for k, v := range step.Args {
+				fmt.Printf("      arg  %-16s = %v\n", k, v)
+			}
+		case step.Skill != "":
+			fmt.Printf("      type: skill → %s\n", step.Skill)
+			fmt.Printf("      goal: %s\n", step.Goal)
+		case step.Agent != "":
+			fmt.Printf("      type: agent → %s\n", step.Agent)
+			fmt.Printf("      goal: %s\n", step.Goal)
+		default:
+			fmt.Printf("      type: goal\n")
+			fmt.Printf("      goal: %s\n", step.Goal)
+		}
+	}
+	fmt.Println()
+}
+
+func workflowRunCmd(workspace string, cfg *config.Config) {
+	args := os.Args[3:]
+	workflowName := ""
+	filePath := ""
+	overrideVars := map[string]string{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-f", "--file":
+			if i+1 < len(args) {
+				filePath = args[i+1]
+				i++
+			}
+		case "--var":
+			if i+1 < len(args) {
+				parts := strings.SplitN(args[i+1], "=", 2)
+				if len(parts) == 2 {
+					overrideVars[parts[0]] = parts[1]
+				} else {
+					fmt.Printf("Warning: --var %q is not in key=value format, skipping\n", args[i+1])
+				}
+				i++
+			}
+		default:
+			if workflowName == "" && !strings.HasPrefix(args[i], "-") {
+				workflowName = args[i]
+			}
+		}
+	}
+
+	if workflowName == "" && filePath == "" {
+		fmt.Println("Usage: pepebot workflow run <name> [--var key=value ...]")
+		fmt.Println("       pepebot workflow run -f <path> [--var key=value ...]")
+		return
+	}
+
+	helper := newWorkflowHelper(workspace, cfg)
+
+	if len(overrideVars) > 0 {
+		fmt.Println("Variables:")
+		for k, v := range overrideVars {
+			fmt.Printf("  %s = %s\n", k, v)
+		}
+		fmt.Println()
+	}
+
+	ctx := context.Background()
+	var result string
+	var err error
+
+	if filePath != "" {
+		fmt.Printf("Running workflow from file: %s\n\n", filePath)
+		result, err = helper.RunWorkflowFile(ctx, filePath, overrideVars)
+	} else {
+		fmt.Printf("Running workflow: %s\n\n", workflowName)
+		result, err = helper.RunWorkflow(ctx, workflowName, overrideVars)
+	}
+
+	if err != nil {
+		fmt.Printf("✗ %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(result)
+}
+
+func workflowDeleteCmd(workspace string, cfg *config.Config, name string) {
+	helper := newWorkflowHelper(workspace, cfg)
+
+	if _, err := helper.LoadWorkflow(name); err != nil {
+		fmt.Printf("✗ Workflow %q not found: %v\n", name, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Delete workflow %q? (y/n): ", name)
+	var response string
+	fmt.Scanln(&response)
+	if strings.ToLower(strings.TrimSpace(response)) != "y" {
+		fmt.Println("Aborted.")
+		return
+	}
+
+	path := filepath.Join(helper.WorkflowsDir(), name+".json")
+	if err := os.Remove(path); err != nil {
+		fmt.Printf("✗ Failed to delete: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Deleted workflow %q\n", name)
+}
+
+func workflowValidateCmd(workspace string, cfg *config.Config) {
+	args := os.Args[3:]
+	workflowName := ""
+	filePath := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-f", "--file":
+			if i+1 < len(args) {
+				filePath = args[i+1]
+				i++
+			}
+		default:
+			if workflowName == "" && !strings.HasPrefix(args[i], "-") {
+				workflowName = args[i]
+			}
+		}
+	}
+
+	if workflowName == "" && filePath == "" {
+		fmt.Println("Usage: pepebot workflow validate <name>")
+		fmt.Println("       pepebot workflow validate -f <path>")
+		return
+	}
+
+	helper := newWorkflowHelper(workspace, cfg)
+
+	var wfDef *workflow.WorkflowDefinition
+	var loadErr error
+
+	if filePath != "" {
+		wfDef, loadErr = helper.LoadWorkflowFile(filePath)
+	} else {
+		wfDef, loadErr = helper.LoadWorkflow(workflowName)
+	}
+
+	if loadErr != nil {
+		fmt.Printf("✗ Failed to load: %v\n", loadErr)
+		os.Exit(1)
+	}
+
+	if err := helper.Validate(wfDef); err != nil {
+		fmt.Printf("✗ Validation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	source := workflowName
+	if filePath != "" {
+		source = filePath
+	}
+	fmt.Printf("✓ Workflow %q is valid (%d steps)\n", source, len(wfDef.Steps))
+}
+
+// =============================================================================
+// Update Command
+// =============================================================================
+
+func updateCmd() {
+	// Detect current binary path
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("✗ Failed to detect binary path: %v\n", err)
+		os.Exit(1)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		fmt.Printf("✗ Failed to resolve symlinks: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Detect OS/arch for asset naming
+	osName := runtime.GOOS
+	archName := runtime.GOARCH
+	switch archName {
+	case "arm":
+		archName = "armv7"
+	}
+
+	binaryExt := ""
+	if osName == "windows" {
+		binaryExt = ".exe"
+	}
+
+	fmt.Printf("%s pepebot update\n\n", logo)
+	fmt.Printf("  Current version: v%s\n", version)
+	fmt.Printf("  Binary:          %s\n", execPath)
+	fmt.Printf("  Platform:        %s/%s\n\n", osName, archName)
+
+	// Fetch latest release info from GitHub
+	fmt.Println("Checking for updates...")
+	latestVersion, err := fetchLatestVersion()
+	if err != nil {
+		fmt.Printf("✗ Failed to check for updates: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Normalize version (strip leading 'v')
+	latestClean := strings.TrimPrefix(latestVersion, "v")
+	if latestClean == version {
+		fmt.Printf("\n✓ Already up to date (v%s)\n", version)
+		return
+	}
+
+	fmt.Printf("  Latest version:  %s\n\n", latestVersion)
+
+	// Build download URL
+	assetName := fmt.Sprintf("pepebot-%s-%s.tar.gz", osName, archName)
+	downloadURL := fmt.Sprintf("https://github.com/pepebot-space/pepebot/releases/download/%s/%s", latestVersion, assetName)
+	binaryName := fmt.Sprintf("pepebot-%s-%s%s", osName, archName, binaryExt)
+
+	fmt.Printf("Downloading %s...\n", assetName)
+
+	// Download the tar.gz
+	resp, err := http.Get(downloadURL)
+	if err != nil {
+		fmt.Printf("✗ Failed to download: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("✗ Download failed: HTTP %d\n", resp.StatusCode)
+		if resp.StatusCode == 404 {
+			fmt.Printf("  Asset not found: %s\n", assetName)
+			fmt.Printf("  Check available releases at: https://github.com/pepebot-space/pepebot/releases\n")
+		}
+		os.Exit(1)
+	}
+
+	// Extract binary from tar.gz
+	binaryData, err := extractBinaryFromTarGz(resp.Body, binaryName)
+	if err != nil {
+		fmt.Printf("✗ Failed to extract binary: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Atomic replace: write to temp file in same directory, then rename
+	dir := filepath.Dir(execPath)
+	tmpFile, err := os.CreateTemp(dir, "pepebot-update-*")
+	if err != nil {
+		fmt.Printf("✗ Failed to create temp file: %v\n", err)
+		os.Exit(1)
+	}
+	tmpPath := tmpFile.Name()
+
+	if _, err := tmpFile.Write(binaryData); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		fmt.Printf("✗ Failed to write update: %v\n", err)
+		os.Exit(1)
+	}
+	tmpFile.Close()
+
+	// Set executable permissions
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
+		fmt.Printf("✗ Failed to set permissions: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Replace the binary
+	if err := os.Rename(tmpPath, execPath); err != nil {
+		os.Remove(tmpPath)
+		fmt.Printf("✗ Failed to replace binary: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n✓ Updated pepebot: v%s → %s\n", version, latestVersion)
+}
+
+// fetchLatestVersion queries the GitHub API for the latest release tag.
+func fetchLatestVersion() (string, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/pepebot-space/pepebot/releases/latest", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if release.TagName == "" {
+		return "", fmt.Errorf("no tag_name in release response")
+	}
+
+	return release.TagName, nil
+}
+
+// extractBinaryFromTarGz reads a tar.gz stream and returns the contents of the
+// file matching binaryName.
+func extractBinaryFromTarGz(r io.Reader, binaryName string) ([]byte, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("gzip error: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("tar error: %w", err)
+		}
+
+		if header.Typeflag == tar.TypeReg && filepath.Base(header.Name) == binaryName {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				return nil, fmt.Errorf("read error: %w", err)
+			}
+			return data, nil
+		}
+	}
+
+	return nil, fmt.Errorf("binary %q not found in archive", binaryName)
 }

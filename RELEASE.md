@@ -1,3 +1,44 @@
+# 🐸 Pepebot v0.5.2 - Workflow CLI
+
+**Release Date:** 2026-02-22
+
+## 🎉 What's New
+
+### 📋 Workflow CLI — Run Automations Without the Agent
+
+You can now manage and execute workflows directly from the terminal! No need to chat with the agent just to run an automation.
+
+```bash
+# List all your workflows
+pepebot workflow list
+
+# Inspect a workflow before running it
+pepebot workflow show my_workflow
+
+# Run a workflow from your workspace
+pepebot workflow run my_workflow
+
+# Run with variable overrides
+pepebot workflow run my_workflow --var device=emulator-5554 --var query=hello
+
+# Run directly from a JSON file (great for testing new workflows)
+pepebot workflow run -f /tmp/test_workflow.json
+pepebot workflow run -f /tmp/test_workflow.json --var key=value
+
+# Validate a workflow's structure
+pepebot workflow validate my_workflow
+pepebot workflow validate -f /tmp/test_workflow.json
+
+# Delete a workflow
+pepebot workflow delete old_workflow
+```
+
+The `-f` flag lets you point at any JSON file on disk, bypassing the workspace — perfect for iterating on new workflows before saving them to your workspace.
+
+> **Note:** Workflows with `goal` or `agent` steps that require an LLM will return a note explaining they need the full agent loop. Use `pepebot agent -m "run workflow X"` for those.
+
+---
+
 # 🐸 Pepebot v0.5.1 - Workflow Skill & Agent Steps + ADB Activity Recorder
 
 **Release Date:** 2026-02-21
