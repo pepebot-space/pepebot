@@ -31,6 +31,12 @@ type WorkflowSkillProvider interface {
 	LoadSkill(name string) (string, bool)
 }
 
+// GoalProcessor allows workflows to process goal steps using an LLM.
+// Implemented by cliGoalProcessor in CLI mode.
+type GoalProcessor interface {
+	ProcessGoal(ctx context.Context, goal string) (string, error)
+}
+
 // WorkflowDefinition represents a workflow JSON structure.
 type WorkflowDefinition struct {
 	Name        string            `json:"name"`
@@ -55,6 +61,7 @@ type WorkflowHelper struct {
 	executor       ToolExecutor
 	skillProvider  WorkflowSkillProvider
 	agentProcessor WorkflowAgentProcessor
+	goalProcessor  GoalProcessor
 }
 
 // NewWorkflowHelper creates a new WorkflowHelper.
@@ -76,6 +83,11 @@ func (h *WorkflowHelper) SetSkillProvider(provider WorkflowSkillProvider) {
 // SetAgentProcessor sets the agent processor for agent steps.
 func (h *WorkflowHelper) SetAgentProcessor(processor WorkflowAgentProcessor) {
 	h.agentProcessor = processor
+}
+
+// SetGoalProcessor sets the goal processor for goal-based steps.
+func (h *WorkflowHelper) SetGoalProcessor(processor GoalProcessor) {
+	h.goalProcessor = processor
 }
 
 // WorkflowsDir returns the path to the workflows directory.
@@ -200,6 +212,7 @@ func (h *WorkflowHelper) ExecuteWorkflow(ctx context.Context, wf *WorkflowDefini
 			}
 
 			variables[step.Name+"_output"] = output
+			variables[step.Name] = output
 
 			displayOutput := output
 			if len(displayOutput) > 500 {
@@ -223,6 +236,7 @@ func (h *WorkflowHelper) ExecuteWorkflow(ctx context.Context, wf *WorkflowDefini
 			interpolatedGoal := interpolateVariables(step.Goal, variables)
 			combined := fmt.Sprintf("Using skill '%s':\n\n%s\n\nGoal: %s", step.Skill, skillContent, interpolatedGoal)
 			variables[step.Name+"_output"] = combined
+			variables[step.Name] = combined
 			results = append(results, fmt.Sprintf("  Skill: %s", step.Skill))
 			results = append(results, fmt.Sprintf("  Goal: %s", interpolatedGoal))
 		}
@@ -241,6 +255,7 @@ func (h *WorkflowHelper) ExecuteWorkflow(ctx context.Context, wf *WorkflowDefini
 				return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: %w", i+1, step.Name, err)
 			}
 			variables[step.Name+"_output"] = agentResponse
+			variables[step.Name] = agentResponse
 			displayOutput := agentResponse
 			if len(displayOutput) > 500 {
 				displayOutput = displayOutput[:500] + "... (truncated)"
@@ -254,8 +269,25 @@ func (h *WorkflowHelper) ExecuteWorkflow(ctx context.Context, wf *WorkflowDefini
 		if step.Goal != "" && step.Skill == "" && step.Agent == "" {
 			interpolatedGoal := interpolateVariables(step.Goal, variables)
 			results = append(results, fmt.Sprintf("  Goal: %s", interpolatedGoal))
-			results = append(results, "  Note: This is a goal-based step. The LLM should interpret and act on this goal in the next iteration.")
-			variables[step.Name+"_goal"] = interpolatedGoal
+
+			if h.goalProcessor != nil {
+				goalOutput, err := h.goalProcessor.ProcessGoal(ctx, interpolatedGoal)
+				if err != nil {
+					results = append(results, fmt.Sprintf("  ERROR: goal processing failed: %v", err))
+					return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: %w", i+1, step.Name, err)
+				}
+				variables[step.Name+"_output"] = goalOutput
+				variables[step.Name] = goalOutput
+				variables[step.Name+"_goal"] = interpolatedGoal
+				displayOutput := goalOutput
+				if len(displayOutput) > 500 {
+					displayOutput = displayOutput[:500] + "... (truncated)"
+				}
+				results = append(results, fmt.Sprintf("  Output: %s", displayOutput))
+			} else {
+				results = append(results, "  Note: This is a goal-based step. The LLM should interpret and act on this goal in the next iteration.")
+				variables[step.Name+"_goal"] = interpolatedGoal
+			}
 		}
 
 		results = append(results, "")
@@ -419,6 +451,7 @@ func validateWorkflow(wf *WorkflowDefinition, executor ToolExecutor) error {
 			}
 		}
 
+		definedVars[step.Name] = true
 		definedVars[step.Name+"_output"] = true
 		definedVars[step.Name+"_goal"] = true
 	}

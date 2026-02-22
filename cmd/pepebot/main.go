@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.2"
+const version = "0.5.3"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -2023,6 +2023,27 @@ func agentShowCmd() {
 }
 
 // =============================================================================
+// Workflow Goal Processor (CLI mode LLM calls)
+// =============================================================================
+
+// cliGoalProcessor implements workflow.GoalProcessor using an LLM provider.
+type cliGoalProcessor struct {
+	provider providers.LLMProvider
+	model    string
+}
+
+func (p *cliGoalProcessor) ProcessGoal(ctx context.Context, goal string) (string, error) {
+	messages := []providers.Message{
+		{Role: "user", Content: goal},
+	}
+	resp, err := p.provider.Chat(ctx, messages, nil, p.model, nil)
+	if err != nil {
+		return "", fmt.Errorf("LLM call failed: %w", err)
+	}
+	return resp.Content, nil
+}
+
+// =============================================================================
 // Workflow Commands
 // =============================================================================
 
@@ -2090,7 +2111,7 @@ func workflowHelp() {
 	fmt.Println("  pepebot workflow delete old_workflow")
 }
 
-func newWorkflowHelper(workspace string, cfg *config.Config) *workflow.WorkflowHelper {
+func newWorkflowHelper(workspace string, cfg *config.Config, goalProcessor workflow.GoalProcessor) *workflow.WorkflowHelper {
 	registry := tools.NewToolRegistry()
 	registry.Register(tools.NewReadFileTool(workspace))
 	registry.Register(tools.NewWriteFileTool(workspace))
@@ -2112,6 +2133,9 @@ func newWorkflowHelper(workspace string, cfg *config.Config) *workflow.WorkflowH
 	}
 
 	helper := workflow.NewWorkflowHelper(workspace, registry)
+	if goalProcessor != nil {
+		helper.SetGoalProcessor(goalProcessor)
+	}
 	registry.Register(tools.NewWorkflowExecuteTool(helper))
 	registry.Register(tools.NewWorkflowSaveTool(helper))
 	registry.Register(tools.NewWorkflowListTool(helper))
@@ -2120,7 +2144,7 @@ func newWorkflowHelper(workspace string, cfg *config.Config) *workflow.WorkflowH
 }
 
 func workflowListCmd(workspace string, cfg *config.Config) {
-	helper := newWorkflowHelper(workspace, cfg)
+	helper := newWorkflowHelper(workspace, cfg, nil)
 	names := helper.ListWorkflows()
 
 	if len(names) == 0 {
@@ -2146,7 +2170,7 @@ func workflowListCmd(workspace string, cfg *config.Config) {
 }
 
 func workflowShowCmd(workspace string, cfg *config.Config, name string) {
-	helper := newWorkflowHelper(workspace, cfg)
+	helper := newWorkflowHelper(workspace, cfg, nil)
 
 	wf, err := helper.LoadWorkflow(name)
 	if err != nil {
@@ -2226,7 +2250,19 @@ func workflowRunCmd(workspace string, cfg *config.Config) {
 		return
 	}
 
-	helper := newWorkflowHelper(workspace, cfg)
+	// Create LLM provider for goal step processing
+	var goalProc workflow.GoalProcessor
+	provider, err := providers.CreateProvider(cfg)
+	if err != nil {
+		fmt.Printf("Warning: could not create LLM provider for goal steps: %v\n", err)
+	} else {
+		goalProc = &cliGoalProcessor{
+			provider: provider,
+			model:    cfg.Agents.Defaults.Model,
+		}
+	}
+
+	helper := newWorkflowHelper(workspace, cfg, goalProc)
 
 	if len(overrideVars) > 0 {
 		fmt.Println("Variables:")
@@ -2238,7 +2274,6 @@ func workflowRunCmd(workspace string, cfg *config.Config) {
 
 	ctx := context.Background()
 	var result string
-	var err error
 
 	if filePath != "" {
 		fmt.Printf("Running workflow from file: %s\n\n", filePath)
@@ -2256,7 +2291,7 @@ func workflowRunCmd(workspace string, cfg *config.Config) {
 }
 
 func workflowDeleteCmd(workspace string, cfg *config.Config, name string) {
-	helper := newWorkflowHelper(workspace, cfg)
+	helper := newWorkflowHelper(workspace, cfg, nil)
 
 	if _, err := helper.LoadWorkflow(name); err != nil {
 		fmt.Printf("✗ Workflow %q not found: %v\n", name, err)
@@ -2304,7 +2339,7 @@ func workflowValidateCmd(workspace string, cfg *config.Config) {
 		return
 	}
 
-	helper := newWorkflowHelper(workspace, cfg)
+	helper := newWorkflowHelper(workspace, cfg, nil)
 
 	var wfDef *workflow.WorkflowDefinition
 	var loadErr error
