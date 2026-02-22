@@ -1,20 +1,63 @@
-# 🐸 Pepebot v0.5.3 - LLM Support for Workflow CLI
+# 🐸 Pepebot v0.5.4 - Platform Messaging Tools
 
 **Release Date:** 2026-02-22
 
 ## 🎉 What's New
 
-### 🧠 LLM Support for `goal` steps in Workflow CLI
+### 📨 Direct Telegram & Discord Messaging (No Gateway Required!)
 
-You can now execute workflows that contain `goal` steps directly from the terminal! Previously, `goal` steps required the full agent loop (`pepebot agent -m "run workflow X"`).
+Send messages, images, and files to Telegram and Discord from the agent or any workflow — even without the gateway running. Perfect for scheduled notifications and automated reports.
 
-With v0.5.3, the `pepebot workflow` command integrates a dedicated `cliGoalProcessor` that uses your default configured LLM provider to process goals on the fly. 
-
-```bash
-# Run a complex workflow with goal steps directly
-pepebot workflow run ui_automation
-pepebot workflow run -f /tmp/smart_workflow.json
+**Telegram:**
+```json
+{
+  "name": "notify",
+  "tool": "telegram_send",
+  "args": {
+    "chat_id": "123456789",
+    "text": "Daily report:\n{{fetch_data}}"
+  }
+}
 ```
+
+**Discord:**
+```json
+{
+  "name": "post",
+  "tool": "discord_send",
+  "args": {
+    "channel_id": "987654321",
+    "content": "Build complete! {{build_output}}"
+  }
+}
+```
+
+**WhatsApp** (requires gateway):
+```json
+{
+  "name": "alert",
+  "tool": "whatsapp_send",
+  "args": {
+    "jid": "628123456789@s.whatsapp.net",
+    "text": "Alert: {{message}}"
+  }
+}
+```
+
+**File sending** (photos, video, audio, documents):
+```json
+{
+  "tool": "telegram_send",
+  "args": {
+    "chat_id": "123456789",
+    "file_path": "/path/to/screenshot.png",
+    "caption": "Today's snapshot"
+  }
+}
+```
+
+Telegram auto-detects file type: images → `sendPhoto`, video → `sendVideo`, audio → `sendAudio`, everything else → `sendDocument`.
+
 ---
 
 ## 📦 Installation
@@ -37,27 +80,24 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.1).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.4).
 
 ## 🚀 Quick Start
 
-1. **Connect your Android device via USB** (enable USB debugging)
-2. **Start recording:**
+1. **Configure your Telegram or Discord token** in `~/.pepebot/config.json`
+2. **Use in a workflow:**
    ```bash
-   pepebot agent -m "Record my actions as a workflow named my_recording"
+   pepebot workflow run daily_report
    ```
-3. **Interact with your device** (tap, swipe)
-4. **Press Volume Down** to stop
-5. **Replay:**
+3. **Or from the agent:**
    ```bash
-   pepebot agent -m "Execute workflow my_recording"
+   pepebot agent -m "Send a summary to my Telegram chat 123456789"
    ```
 
 ## 📚 Documentation
 
 - [Workflow Documentation](https://github.com/pepebot-space/pepebot/blob/main/docs/workflows.md)
 - [Installation Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/install.md)
-- [API Reference](https://github.com/pepebot-space/pepebot/blob/main/docs/api.md)
 - [Full Changelog](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md)
 
 ## 🔗 Links
@@ -69,8 +109,8 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 📝 Full Changelog
 
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#051---2026-02-21).
+For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#054---2026-02-22).
 
 ---
 
-**Note:** When upgrading from v0.5.0, all existing configurations, workflows, and data are preserved. No migration needed.
+**Note:** When upgrading from v0.5.3, all existing configurations, workflows, and data are preserved. No migration needed.

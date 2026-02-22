@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pepebot-space/pepebot/pkg/agent"
+	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 )
@@ -15,6 +16,7 @@ import (
 type GatewayServer struct {
 	config       *config.Config
 	agentManager *agent.AgentManager
+	bus          *bus.MessageBus
 	httpServer   *http.Server
 	restartFunc  func() // called to trigger graceful restart
 }
@@ -25,10 +27,11 @@ func (gs *GatewayServer) SetRestartFunc(fn func()) {
 }
 
 // NewGatewayServer creates a new gateway HTTP server
-func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager) *GatewayServer {
+func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgBus *bus.MessageBus) *GatewayServer {
 	return &GatewayServer{
 		config:       cfg,
 		agentManager: agentManager,
+		bus:          msgBus,
 	}
 }
 
@@ -49,6 +52,7 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/workflows/", gs.corsMiddleware(gs.handleGetWorkflow))
 	mux.HandleFunc("/v1/config", gs.corsMiddleware(gs.handleConfig))
 	mux.HandleFunc("/v1/restart", gs.corsMiddleware(gs.handleRestart))
+	mux.HandleFunc("/v1/send", gs.corsMiddleware(gs.handleSend))
 
 	addr := fmt.Sprintf("%s:%d", gs.config.Gateway.Host, gs.config.Gateway.Port)
 	gs.httpServer = &http.Server{

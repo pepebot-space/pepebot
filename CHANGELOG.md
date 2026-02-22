@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-02-22
+
+### Added
+- **Platform Messaging Tools** (`telegram_send`, `discord_send`, `whatsapp_send`): New tools for sending messages directly to Telegram, Discord, and WhatsApp
+  - `telegram_send` — sends text (HTML), photos, video, audio, and documents via the Telegram Bot API; works without the gateway running; registered when `channels.telegram.token` is configured
+  - `discord_send` — sends text and file attachments via the Discord REST API; works without the gateway running; registered when `channels.discord.token` is configured
+  - `whatsapp_send` — queues messages/media to a WhatsApp JID via the message bus; requires the gateway to be running
+  - Both `telegram_send` and `discord_send` are registered in the workflow CLI (`newWorkflowHelper`), enabling workflows like `pepebot workflow run daily_report` to deliver notifications without a running gateway
+  - `whatsapp_send` is registered in the agent loop and requires the gateway
+  - File type auto-detection for Telegram: images → `sendPhoto`, video → `sendVideo`, audio → `sendAudio`, other → `sendDocument`
+  - Shared package-level `resolveFilePath` helper consolidates duplicate logic from `send_image.go` and `send_file.go`
+
 ## [0.5.3] - 2026-02-22
 
 ### Added

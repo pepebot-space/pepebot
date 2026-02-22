@@ -83,6 +83,15 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 
+	// Platform messaging tools (direct API — no gateway required)
+	if cfg.Channels.Telegram.Token != "" {
+		toolsRegistry.Register(tools.NewTelegramSendTool(cfg.Channels.Telegram.Token, workspace))
+	}
+	if cfg.Channels.Discord.Token != "" {
+		toolsRegistry.Register(tools.NewDiscordSendTool(cfg.Channels.Discord.Token, workspace))
+	}
+	toolsRegistry.Register(tools.NewWhatsAppSendTool(bus, workspace))
+
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
 
 	contextBuilder := NewContextBuilder(workspace)
@@ -143,6 +152,15 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	toolsRegistry.Register(tools.NewSendImageTool(bus, workspace))
 	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
+
+	// Platform messaging tools (direct API — no gateway required)
+	if cfg.Channels.Telegram.Token != "" {
+		toolsRegistry.Register(tools.NewTelegramSendTool(cfg.Channels.Telegram.Token, workspace))
+	}
+	if cfg.Channels.Discord.Token != "" {
+		toolsRegistry.Register(tools.NewDiscordSendTool(cfg.Channels.Discord.Token, workspace))
+	}
+	toolsRegistry.Register(tools.NewWhatsAppSendTool(bus, workspace))
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
 

@@ -34,7 +34,7 @@ type WorkflowExecuteTool struct {
 func (t *WorkflowExecuteTool) Name() string { return "workflow_execute" }
 
 func (t *WorkflowExecuteTool) Description() string {
-	return "Execute a workflow from a JSON file. Workflows are multi-step automations that can call any registered tools (ADB, shell, browser, etc.) with variable interpolation and goal-based steps."
+	return "Execute a workflow from a JSON file. Workflows are multi-step automations that can call any registered tools (ADB, shell, browser, messaging, etc.) with variable interpolation and goal-based steps. Messaging tools available in workflows: telegram_send, discord_send, whatsapp_send."
 }
 
 func (t *WorkflowExecuteTool) Parameters() map[string]interface{} {
@@ -101,6 +101,14 @@ func (t *WorkflowSaveTool) Description() string {
 - Agent step: {"name":"id", "agent":"agent_name", "goal":"instruction"} — Delegate goal to another agent. The agent processes independently and returns a response.
 
 RULES: (1) "tool" cannot combine with "skill"/"agent". (2) "skill" and "agent" are mutually exclusive. (3) "skill" and "agent" REQUIRE "goal". (4) Use {{variable}} for interpolation. (5) Step outputs auto-stored as {{step_name_output}}.
+
+CHANNEL MESSAGING TOOLS (use in tool steps to send notifications):
+- telegram_send: {"chat_id":"123456789", "text":"msg"} or {"chat_id":"...", "file_path":"/path/img.png", "caption":"..."}
+  Works without gateway. Required: chat_id. Optional: text, file_path, caption.
+- discord_send: {"channel_id":"987654321", "content":"msg"} or {"channel_id":"...", "content":"...", "file_path":"/path/file"}
+  Works without gateway. Required: channel_id. Optional: content, file_path.
+- whatsapp_send: {"jid":"628x@s.whatsapp.net", "text":"msg"} or {"jid":"...", "file_path":"/path/file", "caption":"..."}
+  Requires gateway running. Required: jid. Optional: text, file_path, caption.
 
 NOTE: If the user wants to record/capture actions from their Android device to create a workflow, use adb_record_workflow instead.`
 }
