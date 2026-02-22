@@ -28,10 +28,11 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/skills"
+	"github.com/pepebot-space/pepebot/pkg/tools"
 	"github.com/pepebot-space/pepebot/pkg/voice"
 )
 
-const version = "0.5.1"
+const version = "0.5.2"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -158,6 +159,8 @@ func main() {
 			fmt.Printf("Unknown skills command: %s\n", subcommand)
 			skillsHelp()
 		}
+	case "workflow":
+		workflowCmd()
 	case "version", "--version", "-v":
 		fmt.Printf("%s pepebot v%s\n", logo, version)
 	default:
@@ -197,6 +200,15 @@ func printHelp() {
 	fmt.Println("  status      Show pepebot status")
 	fmt.Println("  cron        Manage scheduled tasks")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
+	fmt.Println("  workflow    Manage and execute workflows")
+	fmt.Println("              Subcommands:")
+	fmt.Println("                list                        List all workflows")
+	fmt.Println("                show <name>                 Show workflow details")
+	fmt.Println("                run <name> [options]        Execute a workflow")
+	fmt.Println("                  -f, --file <path>         Run from a file instead of workspace")
+	fmt.Println("                  --var key=value           Override a workflow variable (repeatable)")
+	fmt.Println("                delete <name>               Delete a workflow")
+	fmt.Println("                validate <name> [-f <path>] Validate workflow structure")
 	fmt.Println("  version     Show version information")
 	fmt.Println("")
 }
@@ -1986,4 +1998,314 @@ func agentShowCmd() {
 		}
 	}
 	fmt.Println()
+}
+
+// =============================================================================
+// Workflow Commands
+// =============================================================================
+
+func workflowCmd() {
+	if len(os.Args) < 3 {
+		workflowHelp()
+		return
+	}
+
+	subcommand := os.Args[2]
+
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	workspace := cfg.WorkspacePath()
+
+	switch subcommand {
+	case "list":
+		workflowListCmd(workspace, cfg)
+	case "show":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: pepebot workflow show <name>")
+			return
+		}
+		workflowShowCmd(workspace, cfg, os.Args[3])
+	case "run":
+		workflowRunCmd(workspace, cfg)
+	case "delete", "remove":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: pepebot workflow delete <name>")
+			return
+		}
+		workflowDeleteCmd(workspace, cfg, os.Args[3])
+	case "validate":
+		workflowValidateCmd(workspace, cfg)
+	default:
+		fmt.Printf("Unknown workflow command: %s\n", subcommand)
+		workflowHelp()
+	}
+}
+
+func workflowHelp() {
+	fmt.Println("\nWorkflow commands:")
+	fmt.Println("  list                         List all workflows in workspace")
+	fmt.Println("  show <name>                  Show workflow details (steps, variables)")
+	fmt.Println("  run <name> [options]          Execute a workflow from workspace")
+	fmt.Println("    -f, --file <path>           Load workflow from file instead of workspace")
+	fmt.Println("    --var key=value             Override a workflow variable (repeatable)")
+	fmt.Println("  delete <name>                Delete a workflow from workspace")
+	fmt.Println("  validate <name>              Validate workflow structure")
+	fmt.Println("    -f, --file <path>           Validate a file instead of workspace workflow")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  pepebot workflow list")
+	fmt.Println("  pepebot workflow show my_workflow")
+	fmt.Println("  pepebot workflow run my_workflow")
+	fmt.Println("  pepebot workflow run my_workflow --var device=emulator-5554 --var query=hello")
+	fmt.Println("  pepebot workflow run -f /tmp/test.json")
+	fmt.Println("  pepebot workflow run -f /tmp/test.json --var key=value")
+	fmt.Println("  pepebot workflow validate my_workflow")
+	fmt.Println("  pepebot workflow validate -f /tmp/test.json")
+	fmt.Println("  pepebot workflow delete old_workflow")
+}
+
+func newWorkflowHelper(workspace string, cfg *config.Config) *tools.WorkflowHelper {
+	registry := tools.NewToolRegistry()
+	registry.Register(tools.NewReadFileTool(workspace))
+	registry.Register(tools.NewWriteFileTool(workspace))
+	registry.Register(tools.NewListDirTool(workspace))
+	registry.Register(tools.NewExecTool(workspace))
+	registry.Register(tools.NewWebSearchTool(cfg.Tools.Web.Search.APIKey, cfg.Tools.Web.Search.MaxResults))
+	registry.Register(tools.NewWebFetchTool(50000))
+
+	if adbHelper, err := tools.NewAdbHelper(workspace); err == nil {
+		registry.Register(tools.NewAdbDevicesTool(adbHelper))
+		registry.Register(tools.NewAdbShellTool(adbHelper))
+		registry.Register(tools.NewAdbTapTool(adbHelper))
+		registry.Register(tools.NewAdbInputTextTool(adbHelper))
+		registry.Register(tools.NewAdbScreenshotTool(adbHelper))
+		registry.Register(tools.NewAdbUIDumpTool(adbHelper))
+		registry.Register(tools.NewAdbSwipeTool(adbHelper))
+		registry.Register(tools.NewAdbOpenAppTool(adbHelper))
+		registry.Register(tools.NewAdbKeyEventTool(adbHelper))
+	}
+
+	helper := tools.NewWorkflowHelper(workspace, registry)
+	registry.Register(tools.NewWorkflowExecuteTool(helper))
+	registry.Register(tools.NewWorkflowSaveTool(helper))
+	registry.Register(tools.NewWorkflowListTool(helper))
+
+	return helper
+}
+
+func workflowListCmd(workspace string, cfg *config.Config) {
+	helper := newWorkflowHelper(workspace, cfg)
+	names := helper.ListWorkflows()
+
+	if len(names) == 0 {
+		fmt.Printf("No workflows found in %s\n", helper.WorkflowsDir())
+		return
+	}
+
+	fmt.Println("\nWorkflows:")
+	fmt.Println("----------")
+	for _, name := range names {
+		wf, err := helper.LoadWorkflow(name)
+		if err != nil {
+			fmt.Printf("  ✗ %-30s (error: %v)\n", name, err)
+			continue
+		}
+		desc := wf.Description
+		if desc == "" {
+			desc = "(no description)"
+		}
+		fmt.Printf("  %-30s %d steps  %s\n", name, len(wf.Steps), desc)
+	}
+	fmt.Println()
+}
+
+func workflowShowCmd(workspace string, cfg *config.Config, name string) {
+	helper := newWorkflowHelper(workspace, cfg)
+
+	wf, err := helper.LoadWorkflow(name)
+	if err != nil {
+		fmt.Printf("✗ %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n📋 Workflow: %s\n", wf.Name)
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	if wf.Description != "" {
+		fmt.Printf("  Description: %s\n", wf.Description)
+	}
+
+	if len(wf.Variables) > 0 {
+		fmt.Println("\n  Variables:")
+		for k, v := range wf.Variables {
+			fmt.Printf("    %-20s = %s\n", k, v)
+		}
+	}
+
+	fmt.Printf("\n  Steps (%d):\n", len(wf.Steps))
+	for i, step := range wf.Steps {
+		fmt.Printf("\n  [%d] %s\n", i+1, step.Name)
+		switch {
+		case step.Tool != "":
+			fmt.Printf("      type: tool → %s\n", step.Tool)
+			for k, v := range step.Args {
+				fmt.Printf("      arg  %-16s = %v\n", k, v)
+			}
+		case step.Skill != "":
+			fmt.Printf("      type: skill → %s\n", step.Skill)
+			fmt.Printf("      goal: %s\n", step.Goal)
+		case step.Agent != "":
+			fmt.Printf("      type: agent → %s\n", step.Agent)
+			fmt.Printf("      goal: %s\n", step.Goal)
+		default:
+			fmt.Printf("      type: goal\n")
+			fmt.Printf("      goal: %s\n", step.Goal)
+		}
+	}
+	fmt.Println()
+}
+
+func workflowRunCmd(workspace string, cfg *config.Config) {
+	args := os.Args[3:]
+	workflowName := ""
+	filePath := ""
+	overrideVars := map[string]string{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-f", "--file":
+			if i+1 < len(args) {
+				filePath = args[i+1]
+				i++
+			}
+		case "--var":
+			if i+1 < len(args) {
+				parts := strings.SplitN(args[i+1], "=", 2)
+				if len(parts) == 2 {
+					overrideVars[parts[0]] = parts[1]
+				} else {
+					fmt.Printf("Warning: --var %q is not in key=value format, skipping\n", args[i+1])
+				}
+				i++
+			}
+		default:
+			if workflowName == "" && !strings.HasPrefix(args[i], "-") {
+				workflowName = args[i]
+			}
+		}
+	}
+
+	if workflowName == "" && filePath == "" {
+		fmt.Println("Usage: pepebot workflow run <name> [--var key=value ...]")
+		fmt.Println("       pepebot workflow run -f <path> [--var key=value ...]")
+		return
+	}
+
+	helper := newWorkflowHelper(workspace, cfg)
+
+	if len(overrideVars) > 0 {
+		fmt.Println("Variables:")
+		for k, v := range overrideVars {
+			fmt.Printf("  %s = %s\n", k, v)
+		}
+		fmt.Println()
+	}
+
+	ctx := context.Background()
+	var result string
+	var err error
+
+	if filePath != "" {
+		fmt.Printf("Running workflow from file: %s\n\n", filePath)
+		result, err = helper.RunWorkflowFile(ctx, filePath, overrideVars)
+	} else {
+		fmt.Printf("Running workflow: %s\n\n", workflowName)
+		result, err = helper.RunWorkflow(ctx, workflowName, overrideVars)
+	}
+
+	if err != nil {
+		fmt.Printf("✗ %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(result)
+}
+
+func workflowDeleteCmd(workspace string, cfg *config.Config, name string) {
+	helper := newWorkflowHelper(workspace, cfg)
+
+	if _, err := helper.LoadWorkflow(name); err != nil {
+		fmt.Printf("✗ Workflow %q not found: %v\n", name, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Delete workflow %q? (y/n): ", name)
+	var response string
+	fmt.Scanln(&response)
+	if strings.ToLower(strings.TrimSpace(response)) != "y" {
+		fmt.Println("Aborted.")
+		return
+	}
+
+	path := filepath.Join(helper.WorkflowsDir(), name+".json")
+	if err := os.Remove(path); err != nil {
+		fmt.Printf("✗ Failed to delete: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Deleted workflow %q\n", name)
+}
+
+func workflowValidateCmd(workspace string, cfg *config.Config) {
+	args := os.Args[3:]
+	workflowName := ""
+	filePath := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-f", "--file":
+			if i+1 < len(args) {
+				filePath = args[i+1]
+				i++
+			}
+		default:
+			if workflowName == "" && !strings.HasPrefix(args[i], "-") {
+				workflowName = args[i]
+			}
+		}
+	}
+
+	if workflowName == "" && filePath == "" {
+		fmt.Println("Usage: pepebot workflow validate <name>")
+		fmt.Println("       pepebot workflow validate -f <path>")
+		return
+	}
+
+	helper := newWorkflowHelper(workspace, cfg)
+
+	var wfDef *tools.WorkflowDefinition
+	var loadErr error
+
+	if filePath != "" {
+		wfDef, loadErr = helper.LoadWorkflowFile(filePath)
+	} else {
+		wfDef, loadErr = helper.LoadWorkflow(workflowName)
+	}
+
+	if loadErr != nil {
+		fmt.Printf("✗ Failed to load: %v\n", loadErr)
+		os.Exit(1)
+	}
+
+	if err := helper.Validate(wfDef); err != nil {
+		fmt.Printf("✗ Validation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	source := workflowName
+	if filePath != "" {
+		source = filePath
+	}
+	fmt.Printf("✓ Workflow %q is valid (%d steps)\n", source, len(wfDef.Steps))
 }

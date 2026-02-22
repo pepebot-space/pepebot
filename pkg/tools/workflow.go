@@ -432,6 +432,63 @@ func validateWorkflow(workflow *WorkflowDefinition, registry ...*ToolRegistry) e
 	return nil
 }
 
+// ==================== WorkflowHelper Public API ====================
+
+// ListWorkflows returns names of all available workflows in the workspace.
+func (h *WorkflowHelper) ListWorkflows() []string {
+	return h.listWorkflowNames()
+}
+
+// WorkflowsDir returns the path to the workflows directory.
+func (h *WorkflowHelper) WorkflowsDir() string {
+	return h.workflowsDir()
+}
+
+// LoadWorkflow loads a workflow definition by name from the workspace.
+func (h *WorkflowHelper) LoadWorkflow(name string) (*WorkflowDefinition, error) {
+	return h.loadWorkflow(name)
+}
+
+// LoadWorkflowFile loads a workflow definition from an arbitrary file path.
+func (h *WorkflowHelper) LoadWorkflowFile(filePath string) (*WorkflowDefinition, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read workflow file: %w", err)
+	}
+	var workflow WorkflowDefinition
+	if err := json.Unmarshal(data, &workflow); err != nil {
+		return nil, fmt.Errorf("failed to parse workflow JSON: %w", err)
+	}
+	return &workflow, nil
+}
+
+// RunWorkflow loads a named workflow from the workspace and executes it.
+func (h *WorkflowHelper) RunWorkflow(ctx context.Context, name string, vars map[string]string) (string, error) {
+	workflow, err := h.loadWorkflow(name)
+	if err != nil {
+		available := h.listWorkflowNames()
+		if len(available) > 0 {
+			return "", fmt.Errorf("%w. Available workflows: %s", err, strings.Join(available, ", "))
+		}
+		return "", err
+	}
+	return h.executeWorkflow(ctx, workflow, vars)
+}
+
+// RunWorkflowFile loads a workflow from a file path and executes it.
+func (h *WorkflowHelper) RunWorkflowFile(ctx context.Context, filePath string, vars map[string]string) (string, error) {
+	workflow, err := h.LoadWorkflowFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return h.executeWorkflow(ctx, workflow, vars)
+}
+
+// Validate validates a workflow's structure using the tool registry.
+func (h *WorkflowHelper) Validate(workflow *WorkflowDefinition) error {
+	return validateWorkflow(workflow, h.toolRegistry)
+}
+
 // ==================== Workflow Execute Tool ====================
 
 type WorkflowExecuteTool struct {
