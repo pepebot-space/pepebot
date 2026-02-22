@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 )
@@ -1097,6 +1098,49 @@ func (gs *GatewayServer) handleRestart(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		gs.restartFunc()
 	}()
+}
+
+// handleSend publishes an outbound message directly to the bus.
+// Used by the workflow CLI to deliver messages (e.g. WhatsApp) via the running gateway.
+// POST /v1/send  {"channel":"whatsapp","chat_id":"628x@s.whatsapp.net","content":"hello","media":[]}
+func (gs *GatewayServer) handleSend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "invalid_request_error")
+		return
+	}
+
+	if gs.bus == nil {
+		writeError(w, http.StatusServiceUnavailable, "bus not available", "server_error")
+		return
+	}
+
+	var req struct {
+		Channel string   `json:"channel"`
+		ChatID  string   `json:"chat_id"`
+		Content string   `json:"content"`
+		Media   []string `json:"media,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error(), "invalid_request_error")
+		return
+	}
+	if req.Channel == "" || req.ChatID == "" {
+		writeError(w, http.StatusBadRequest, "channel and chat_id are required", "invalid_request_error")
+		return
+	}
+
+	gs.bus.PublishOutbound(bus.OutboundMessage{
+		Channel: req.Channel,
+		ChatID:  req.ChatID,
+		Content: req.Content,
+		Media:   req.Media,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"note":    "Message queued for delivery via " + req.Channel,
+	})
 }
 
 // writeError writes a JSON error response

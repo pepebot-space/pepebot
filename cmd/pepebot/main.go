@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.3"
+const version = "0.5.4"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -1191,7 +1191,7 @@ func gatewayRun(sigChan chan os.Signal) bool {
 	}
 
 	// Start HTTP API server (with restart support)
-	gatewayServer := gateway.NewGatewayServer(cfg, agentManager)
+	gatewayServer := gateway.NewGatewayServer(cfg, agentManager, msgBus)
 	gatewayServer.SetRestartFunc(restartFunc)
 	agentManager.SetRestartFunc(restartFunc)
 	if err := gatewayServer.Start(ctx); err != nil {
@@ -2119,6 +2119,16 @@ func newWorkflowHelper(workspace string, cfg *config.Config, goalProcessor workf
 	registry.Register(tools.NewExecTool(workspace))
 	registry.Register(tools.NewWebSearchTool(cfg.Tools.Web.Search.APIKey, cfg.Tools.Web.Search.MaxResults))
 	registry.Register(tools.NewWebFetchTool(50000))
+
+	// Platform messaging tools for workflow steps (direct API, no gateway required)
+	if cfg.Channels.Telegram.Token != "" {
+		registry.Register(tools.NewTelegramSendTool(cfg.Channels.Telegram.Token, workspace))
+	}
+	if cfg.Channels.Discord.Token != "" {
+		registry.Register(tools.NewDiscordSendTool(cfg.Channels.Discord.Token, workspace))
+	}
+	// WhatsApp: forwards to the running gateway via HTTP (gateway must be running for delivery)
+	registry.Register(tools.NewWhatsAppSendViaGateway(cfg.Gateway.Host, cfg.Gateway.Port, workspace))
 
 	if adbHelper, err := tools.NewAdbHelper(workspace); err == nil {
 		registry.Register(tools.NewAdbDevicesTool(adbHelper))
