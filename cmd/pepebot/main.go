@@ -7,13 +7,18 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -162,6 +167,8 @@ func main() {
 		}
 	case "workflow":
 		workflowCmd()
+	case "update":
+		updateCmd()
 	case "version", "--version", "-v":
 		fmt.Printf("%s pepebot v%s\n", logo, version)
 	default:
@@ -210,6 +217,7 @@ func printHelp() {
 	fmt.Println("                  --var key=value           Override a workflow variable (repeatable)")
 	fmt.Println("                delete <name>               Delete a workflow")
 	fmt.Println("                validate <name> [-f <path>] Validate workflow structure")
+	fmt.Println("  update      Update pepebot to the latest version")
 	fmt.Println("  version     Show version information")
 	fmt.Println("")
 }
@@ -2322,4 +2330,185 @@ func workflowValidateCmd(workspace string, cfg *config.Config) {
 		source = filePath
 	}
 	fmt.Printf("✓ Workflow %q is valid (%d steps)\n", source, len(wfDef.Steps))
+}
+
+// =============================================================================
+// Update Command
+// =============================================================================
+
+func updateCmd() {
+	// Detect current binary path
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("✗ Failed to detect binary path: %v\n", err)
+		os.Exit(1)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		fmt.Printf("✗ Failed to resolve symlinks: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Detect OS/arch for asset naming
+	osName := runtime.GOOS
+	archName := runtime.GOARCH
+	switch archName {
+	case "arm":
+		archName = "armv7"
+	}
+
+	binaryExt := ""
+	if osName == "windows" {
+		binaryExt = ".exe"
+	}
+
+	fmt.Printf("%s pepebot update\n\n", logo)
+	fmt.Printf("  Current version: v%s\n", version)
+	fmt.Printf("  Binary:          %s\n", execPath)
+	fmt.Printf("  Platform:        %s/%s\n\n", osName, archName)
+
+	// Fetch latest release info from GitHub
+	fmt.Println("Checking for updates...")
+	latestVersion, err := fetchLatestVersion()
+	if err != nil {
+		fmt.Printf("✗ Failed to check for updates: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Normalize version (strip leading 'v')
+	latestClean := strings.TrimPrefix(latestVersion, "v")
+	if latestClean == version {
+		fmt.Printf("\n✓ Already up to date (v%s)\n", version)
+		return
+	}
+
+	fmt.Printf("  Latest version:  %s\n\n", latestVersion)
+
+	// Build download URL
+	assetName := fmt.Sprintf("pepebot-%s-%s.tar.gz", osName, archName)
+	downloadURL := fmt.Sprintf("https://github.com/pepebot-space/pepebot/releases/download/%s/%s", latestVersion, assetName)
+	binaryName := fmt.Sprintf("pepebot-%s-%s%s", osName, archName, binaryExt)
+
+	fmt.Printf("Downloading %s...\n", assetName)
+
+	// Download the tar.gz
+	resp, err := http.Get(downloadURL)
+	if err != nil {
+		fmt.Printf("✗ Failed to download: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("✗ Download failed: HTTP %d\n", resp.StatusCode)
+		if resp.StatusCode == 404 {
+			fmt.Printf("  Asset not found: %s\n", assetName)
+			fmt.Printf("  Check available releases at: https://github.com/pepebot-space/pepebot/releases\n")
+		}
+		os.Exit(1)
+	}
+
+	// Extract binary from tar.gz
+	binaryData, err := extractBinaryFromTarGz(resp.Body, binaryName)
+	if err != nil {
+		fmt.Printf("✗ Failed to extract binary: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Atomic replace: write to temp file in same directory, then rename
+	dir := filepath.Dir(execPath)
+	tmpFile, err := os.CreateTemp(dir, "pepebot-update-*")
+	if err != nil {
+		fmt.Printf("✗ Failed to create temp file: %v\n", err)
+		os.Exit(1)
+	}
+	tmpPath := tmpFile.Name()
+
+	if _, err := tmpFile.Write(binaryData); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		fmt.Printf("✗ Failed to write update: %v\n", err)
+		os.Exit(1)
+	}
+	tmpFile.Close()
+
+	// Set executable permissions
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
+		fmt.Printf("✗ Failed to set permissions: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Replace the binary
+	if err := os.Rename(tmpPath, execPath); err != nil {
+		os.Remove(tmpPath)
+		fmt.Printf("✗ Failed to replace binary: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n✓ Updated pepebot: v%s → %s\n", version, latestVersion)
+}
+
+// fetchLatestVersion queries the GitHub API for the latest release tag.
+func fetchLatestVersion() (string, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/pepebot-space/pepebot/releases/latest", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if release.TagName == "" {
+		return "", fmt.Errorf("no tag_name in release response")
+	}
+
+	return release.TagName, nil
+}
+
+// extractBinaryFromTarGz reads a tar.gz stream and returns the contents of the
+// file matching binaryName.
+func extractBinaryFromTarGz(r io.Reader, binaryName string) ([]byte, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("gzip error: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("tar error: %w", err)
+		}
+
+		if header.Typeflag == tar.TypeReg && filepath.Base(header.Name) == binaryName {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				return nil, fmt.Errorf("read error: %w", err)
+			}
+			return data, nil
+		}
+	}
+
+	return nil, fmt.Errorf("binary %q not found in archive", binaryName)
 }
