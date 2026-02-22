@@ -736,6 +736,57 @@ Agent: [Calls workflow_execute]
 }
 ```
 
+### Example 4: Multichannel Notification
+
+**Workflow:** `broadcast_message.json`
+
+```json
+{
+  "name": "Broadcast Message",
+  "description": "Send a notification message to multiple chat platforms simultaneously",
+  "variables": {
+    "message": "Hello from Pepebot workflow!",
+    "telegram_chat_id": "123456789",
+    "discord_channel_id": "987654321098765432",
+    "whatsapp_jid": "62812345678@s.whatsapp.net"
+  },
+  "steps": [
+    {
+      "name": "notify_telegram",
+      "tool": "telegram_send",
+      "args": {
+        "text": "Telegram Broadcast: {{message}}",
+        "chat_id": "{{telegram_chat_id}}"
+      }
+    },
+    {
+      "name": "notify_discord",
+      "tool": "discord_send",
+      "args": {
+        "content": "Discord Broadcast: {{message}}",
+        "channel_id": "{{discord_channel_id}}"
+      }
+    },
+    {
+      "name": "notify_whatsapp",
+      "tool": "whatsapp_send",
+      "args": {
+        "text": "WhatsApp Broadcast: {{message}}",
+        "jid": "{{whatsapp_jid}}"
+      }
+    }
+  ]
+}
+```
+
+**Usage:**
+```
+# Run directly from the CLI to broadcast a message
+pepebot workflow run broadcast_message \
+  --var message="The server backup completed successfully" \
+  --var telegram_chat_id="your_admin_chat_id"
+```
+
 ---
 
 ## Advanced Patterns
