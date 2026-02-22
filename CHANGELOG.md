@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-02-22
+
+### Added
+- **LLM Support for Workflow CLI**: `goal` steps can now be executed directly from the terminal
+  - Added `cliGoalProcessor` to handle LLM calls outside the standard agent loop
+  - Uses the default provider and model configured in `config.json` (`agents.defaults.model`)
+  - Workflows containing `goal` steps no longer require running inside `pepebot agent -m ...`
+  - Integrated with `WorkflowHelper` public API for use by external tools
+
 ## [0.5.2] - 2026-02-22
 
 ### Added
