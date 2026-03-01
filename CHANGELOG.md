@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Skill MCP entries are synced automatically into MCP registry when context loads
   - Synced entries are marked with `source: "skill"` and skill name attribution
 - **Agent MCP Awareness**: MCP capability is now reflected in agent system prompt/tooling so the assistant can self-manage MCP server registry during conversations.
+- **Verbose Agent Mode**: `pepebot agent` now supports `-v, --verbose` to enable DEBUG logs in CLI mode.
+  - Shows detailed provider request/response traces (tool set, finish reason, content preview)
+  - Shows tool execution traces including called tool names and argument previews
+  - Supports positional one-shot message in agent mode: `pepebot agent "your message" --verbose`
+- **MCP Runtime Tool Loading**: Agent now attempts to load tools dynamically from enabled MCP servers at startup.
+  - Added MCP transport clients and runtime discovery flow for `stdio`, `http`, and `sse` endpoints
+  - Registers discovered MCP tools into the normal tool registry as callable tools for LLM
+  - Adds MCP startup logs (server init, tool discovery count, and warning details when a server fails)
 
 ## [0.5.4] - 2026-02-22
 

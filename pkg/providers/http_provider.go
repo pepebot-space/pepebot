@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 type HTTPProvider struct {
@@ -39,6 +40,21 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 	if p.apiBase == "" {
 		return nil, fmt.Errorf("API base not configured")
 	}
+
+	toolNames := make([]string, 0, len(tools))
+	for _, t := range tools {
+		toolNames = append(toolNames, t.Function.Name)
+	}
+
+	logger.DebugCF("provider", "HTTP chat request", map[string]interface{}{
+		"model":          model,
+		"api_base":       p.apiBase,
+		"messages":       len(messages),
+		"tools":          len(tools),
+		"tool_names":     toolNames,
+		"has_max_tokens": options["max_tokens"] != nil,
+		"temperature":    options["temperature"],
+	})
 
 	requestBody := map[string]interface{}{
 		"model":    model,
@@ -89,7 +105,25 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 		return nil, fmt.Errorf("API error: %s", string(body))
 	}
 
-	return p.parseResponse(body)
+	parsed, err := p.parseResponse(body)
+	if err != nil {
+		return nil, err
+	}
+
+	respToolNames := make([]string, 0, len(parsed.ToolCalls))
+	for _, tc := range parsed.ToolCalls {
+		respToolNames = append(respToolNames, tc.Name)
+	}
+
+	logger.DebugCF("provider", "HTTP chat response", map[string]interface{}{
+		"finish_reason":   parsed.FinishReason,
+		"content_len":     len(parsed.Content),
+		"content_preview": truncateString(parsed.Content, 120),
+		"tool_calls":      len(parsed.ToolCalls),
+		"tool_names":      respToolNames,
+	})
+
+	return parsed, nil
 }
 
 func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
@@ -355,4 +389,11 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 	}
 
 	return NewHTTPProvider(apiKey, apiBase), nil
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

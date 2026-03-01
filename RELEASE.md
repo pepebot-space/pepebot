@@ -13,6 +13,14 @@ Pepebot can now manage MCP server definitions directly from the agent using a ne
 - Remove MCP servers
 - Support for `stdio`, remote `sse`, and remote `http`
 
+### ⚙️ MCP Runtime Loading
+
+Pepebot now tries to initialize enabled MCP servers on startup and auto-register discovered MCP tools into the normal tool list used by the agent.
+
+- Dynamic `tools/list` discovery from MCP servers
+- MCP tool calls proxied into regular agent tool execution
+- Startup diagnostics for MCP init/list failures
+
 Example:
 
 ```json
@@ -35,6 +43,20 @@ When the agent loads context, those MCP definitions are synced automatically int
 `~/.pepebot/workspace/mcp/registry.json`
 
 That means a skill can bootstrap required MCP endpoints without manual setup.
+
+### 🪵 Better Verbose Logs in `agent`
+
+`pepebot agent` now supports `-v` / `--verbose` to show richer DEBUG traces:
+
+- provider request/response diagnostics
+- tool calls, tool arguments, and tool output previews
+- easier troubleshooting when MCP tool routing is missing
+
+You can now run one-shot messages with positional syntax too:
+
+```bash
+pepebot agent "pakai mcp browser untuk cari harga tiket ke japan" --verbose
+```
 
 ---
 

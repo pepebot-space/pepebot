@@ -194,7 +194,9 @@ func printHelp() {
 	fmt.Println("              Options:")
 	fmt.Println("                -a, --agent <name>    Use specific agent (default: default agent)")
 	fmt.Println("                -m, --message <text>  Send a single message")
+	fmt.Println("                [message]             Positional one-shot message")
 	fmt.Println("                -s, --session <key>   Session key for context")
+	fmt.Println("                -v, --verbose         Enable verbose logging (DEBUG)")
 	fmt.Println("              Subcommands:")
 	fmt.Println("                list                  List all registered agents")
 	fmt.Println("                register              Register a new agent")
@@ -879,6 +881,7 @@ func agentCmd() {
 	message := ""
 	sessionKey := "cli:default"
 	agentName := "" // empty = use default agent
+	verbose := false
 
 	args := os.Args[2:]
 	for i := 0; i < len(args); i++ {
@@ -888,6 +891,8 @@ func agentCmd() {
 				message = args[i+1]
 				i++
 			}
+		case "-v", "--verbose":
+			verbose = true
 		case "-s", "--session":
 			if i+1 < len(args) {
 				sessionKey = args[i+1]
@@ -898,7 +903,16 @@ func agentCmd() {
 				agentName = args[i+1]
 				i++
 			}
+		default:
+			if !strings.HasPrefix(args[i], "-") && message == "" {
+				message = args[i]
+			}
 		}
+	}
+
+	if verbose {
+		logger.SetLevel(logger.DEBUG)
+		fmt.Println("✓ Verbose logging enabled")
 	}
 
 	cfg, err := loadConfig()
@@ -1733,6 +1747,12 @@ func agentHelpCmd() {
 	fmt.Println("  disable <name>          Disable an agent")
 	fmt.Println("  show <name>             Show agent details")
 	fmt.Println("  help                    Show this help message")
+	fmt.Println("\nChat mode options:")
+	fmt.Println("  -a, --agent <name>      Use specific agent")
+	fmt.Println("  -m, --message <text>    One-shot message")
+	fmt.Println("  [message]               Positional one-shot message")
+	fmt.Println("  -s, --session <key>     Session key")
+	fmt.Println("  -v, --verbose           Enable DEBUG logs")
 	fmt.Println("\nOptions for 'register':")
 	fmt.Println("  --model <model>         Model to use (required)")
 	fmt.Println("  --provider <provider>   Provider name (optional)")
@@ -2120,6 +2140,11 @@ func newWorkflowHelper(workspace string, cfg *config.Config, goalProcessor workf
 	registry.Register(tools.NewWebSearchTool(cfg.Tools.Web.Search.APIKey, cfg.Tools.Web.Search.MaxResults))
 	registry.Register(tools.NewWebFetchTool(50000))
 	registry.Register(tools.NewManageMCPTool(workspace))
+	if _, count, err := tools.RegisterMCPTools(workspace, registry); err != nil {
+		logger.WarnCF("mcp", "Failed to register MCP tools for workflow CLI", map[string]interface{}{"error": err.Error()})
+	} else if count > 0 {
+		logger.InfoCF("mcp", "MCP tools loaded for workflow CLI", map[string]interface{}{"count": count})
+	}
 
 	// Platform messaging tools for workflow steps (direct API, no gateway required)
 	if cfg.Channels.Telegram.Token != "" {
