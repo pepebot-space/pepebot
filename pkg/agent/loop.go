@@ -18,6 +18,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/mcp"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/session"
 	"github.com/pepebot-space/pepebot/pkg/tools"
@@ -36,6 +37,7 @@ type AgentLoop struct {
 	contextBuilder *ContextBuilder
 	tools          *tools.ToolRegistry
 	workflowHelper *workflow.WorkflowHelper
+	mcpRuntime     *mcp.Runtime
 	running        bool
 	summarizing    sync.Map
 	agentName      string
@@ -82,6 +84,17 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewSendImageTool(bus, workspace))
 	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
+	toolsRegistry.Register(tools.NewManageMCPTool(workspace))
+
+	var mcpRuntime *mcp.Runtime
+	if rt, count, err := tools.RegisterMCPTools(workspace, toolsRegistry); err != nil {
+		logger.WarnCF("mcp", "Failed to register MCP tools", map[string]interface{}{"error": err.Error()})
+	} else {
+		mcpRuntime = rt
+		if count > 0 {
+			logger.InfoCF("mcp", "MCP tools ready", map[string]interface{}{"count": count})
+		}
+	}
 
 	// Platform messaging tools (direct API — no gateway required)
 	if cfg.Channels.Telegram.Token != "" {
@@ -109,6 +122,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		contextBuilder: contextBuilder,
 		tools:          toolsRegistry,
 		workflowHelper: workflowHelper,
+		mcpRuntime:     mcpRuntime,
 		running:        false,
 		summarizing:    sync.Map{},
 		agentName:      "default",
@@ -152,6 +166,17 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	toolsRegistry.Register(tools.NewSendImageTool(bus, workspace))
 	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
+	toolsRegistry.Register(tools.NewManageMCPTool(workspace))
+
+	var mcpRuntime *mcp.Runtime
+	if rt, count, err := tools.RegisterMCPTools(workspace, toolsRegistry); err != nil {
+		logger.WarnCF("mcp", "Failed to register MCP tools", map[string]interface{}{"error": err.Error()})
+	} else {
+		mcpRuntime = rt
+		if count > 0 {
+			logger.InfoCF("mcp", "MCP tools ready", map[string]interface{}{"count": count})
+		}
+	}
 
 	// Platform messaging tools (direct API — no gateway required)
 	if cfg.Channels.Telegram.Token != "" {
@@ -197,6 +222,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 		contextBuilder: contextBuilder,
 		tools:          toolsRegistry,
 		workflowHelper: workflowHelper,
+		mcpRuntime:     mcpRuntime,
 		running:        false,
 		summarizing:    sync.Map{},
 		agentName:      agentName,
@@ -236,6 +262,9 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 
 func (al *AgentLoop) Stop() {
 	al.running = false
+	if al.mcpRuntime != nil {
+		al.mcpRuntime.Close()
+	}
 }
 
 func (al *AgentLoop) ClearSession(sessionKey string) {
@@ -395,7 +424,8 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 		for _, tc := range response.ToolCalls {
 			logger.DebugCF("agent", "Executing tool (stream mode)", map[string]interface{}{
 				"tool_name": tc.Name,
-				"tool_id":   tc.ID,
+				"tool_id":   truncateString(tc.ID, 80),
+				"arguments": truncateString(mustJSON(tc.Arguments), 300),
 			})
 
 			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
@@ -495,6 +525,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		logger.DebugCF("agent", "LLM response received", map[string]interface{}{
 			"has_content":     response.Content != "",
 			"tool_calls":      len(response.ToolCalls),
+			"tool_names":      toolCallNames(response.ToolCalls),
 			"content_preview": truncateString(response.Content, 100),
 		})
 
@@ -524,7 +555,8 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		for _, tc := range response.ToolCalls {
 			logger.DebugCF("agent", "Executing tool", map[string]interface{}{
 				"tool_name": tc.Name,
-				"tool_id":   tc.ID,
+				"tool_id":   truncateString(tc.ID, 80),
+				"arguments": truncateString(mustJSON(tc.Arguments), 300),
 			})
 
 			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
@@ -537,7 +569,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			} else {
 				logger.DebugCF("agent", "Tool execution completed", map[string]interface{}{
 					"tool_name":      tc.Name,
-					"result_preview": truncateString(result, 100),
+					"result_preview": truncateString(result, 300),
 				})
 			}
 
@@ -708,4 +740,20 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+func toolCallNames(toolCalls []providers.ToolCall) []string {
+	names := make([]string, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		names = append(names, tc.Name)
+	}
+	return names
+}
+
+func mustJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(b)
 }
