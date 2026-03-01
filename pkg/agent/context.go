@@ -21,19 +21,27 @@ type ContextBuilder struct {
 
 func NewContextBuilder(workspace string) *ContextBuilder {
 	builtinSkillsDir := filepath.Join(filepath.Dir(workspace), "pepebot", "skills")
+	loader := skills.NewSkillsLoader(workspace, builtinSkillsDir)
+	if err := loader.SyncMCPRegistry(); err != nil {
+		logger.WarnCF("agent", "Failed to sync MCP servers from skills", map[string]interface{}{"error": err.Error()})
+	}
 	return &ContextBuilder{
 		workspace:    workspace,
-		skillsLoader: skills.NewSkillsLoader(workspace, builtinSkillsDir),
+		skillsLoader: loader,
 	}
 }
 
 // NewContextBuilderWithAgentDir creates a ContextBuilder that checks agent-specific dir first
 func NewContextBuilderWithAgentDir(workspace, agentPromptDir string) *ContextBuilder {
 	builtinSkillsDir := filepath.Join(filepath.Dir(workspace), "pepebot", "skills")
+	loader := skills.NewSkillsLoader(workspace, builtinSkillsDir)
+	if err := loader.SyncMCPRegistry(); err != nil {
+		logger.WarnCF("agent", "Failed to sync MCP servers from skills", map[string]interface{}{"error": err.Error()})
+	}
 	return &ContextBuilder{
 		workspace:      workspace,
 		agentPromptDir: agentPromptDir,
-		skillsLoader:   skills.NewSkillsLoader(workspace, builtinSkillsDir),
+		skillsLoader:   loader,
 	}
 }
 
@@ -56,6 +64,7 @@ You are pepebot, a helpful AI assistant. You have access to tools that allow you
 - Send files to chat channels (images, PDFs, documents, audio, video) - use send_file or send_image tools
 - View and analyze files sent by users (images, documents, PDFs, audio, video)
 - Spawn subagents for complex background tasks
+- Manage MCP server registry (stdio, remote SSE, remote HTTP) via the manage_mcp tool
 
 ## Current Time
 %s

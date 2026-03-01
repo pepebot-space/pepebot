@@ -82,6 +82,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewSendImageTool(bus, workspace))
 	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
+	toolsRegistry.Register(tools.NewManageMCPTool(workspace))
 
 	// Platform messaging tools (direct API — no gateway required)
 	if cfg.Channels.Telegram.Token != "" {
@@ -152,6 +153,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	toolsRegistry.Register(tools.NewSendImageTool(bus, workspace))
 	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
+	toolsRegistry.Register(tools.NewManageMCPTool(workspace))
 
 	// Platform messaging tools (direct API — no gateway required)
 	if cfg.Channels.Telegram.Token != "" {

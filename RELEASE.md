@@ -1,62 +1,40 @@
-# 🐸 Pepebot v0.5.4 - Platform Messaging Tools
+# 🐸 Pepebot v0.5.5 - MCP Registry Management
 
-**Release Date:** 2026-02-22
+**Release Date:** 2026-03-01
 
 ## 🎉 What's New
 
-### 📨 Direct Telegram & Discord Messaging (No Gateway Required!)
+### 🔌 Native MCP Registry Tooling
 
-Send messages, images, and files to Telegram and Discord from the agent or any workflow — even without the gateway running. Perfect for scheduled notifications and automated reports.
+Pepebot can now manage MCP server definitions directly from the agent using a new tool: `manage_mcp`.
 
-**Telegram:**
+- Add/update MCP server definitions
+- List all configured MCP servers
+- Remove MCP servers
+- Support for `stdio`, remote `sse`, and remote `http`
+
+Example:
+
 ```json
 {
-  "name": "notify",
-  "tool": "telegram_send",
-  "args": {
-    "chat_id": "123456789",
-    "text": "Daily report:\n{{fetch_data}}"
+  "action": "add",
+  "name": "my-remote-mcp",
+  "transport": "http",
+  "url": "https://mcp.example.com",
+  "headers": {
+    "Authorization": "Bearer ${MCP_TOKEN}"
   }
 }
 ```
 
-**Discord:**
-```json
-{
-  "name": "post",
-  "tool": "discord_send",
-  "args": {
-    "channel_id": "987654321",
-    "content": "Build complete! {{build_output}}"
-  }
-}
-```
+### 🧩 Skills Can Auto-Register MCP
 
-**WhatsApp** (requires gateway):
-```json
-{
-  "name": "alert",
-  "tool": "whatsapp_send",
-  "args": {
-    "jid": "628123456789@s.whatsapp.net",
-    "text": "Alert: {{message}}"
-  }
-}
-```
+Skills can now declare MCP servers in `SKILL.md` frontmatter via `mcp` entries.
+When the agent loads context, those MCP definitions are synced automatically into:
 
-**File sending** (photos, video, audio, documents):
-```json
-{
-  "tool": "telegram_send",
-  "args": {
-    "chat_id": "123456789",
-    "file_path": "/path/to/screenshot.png",
-    "caption": "Today's snapshot"
-  }
-}
-```
+`~/.pepebot/workspace/mcp/registry.json`
 
-Telegram auto-detects file type: images → `sendPhoto`, video → `sendVideo`, audio → `sendAudio`, everything else → `sendDocument`.
+That means a skill can bootstrap required MCP endpoints without manual setup.
 
 ---
 
@@ -80,19 +58,19 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.4).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.5).
 
 ## 🚀 Quick Start
 
-1. **Configure your Telegram or Discord token** in `~/.pepebot/config.json`
-2. **Use in a workflow:**
+1. Start agent:
    ```bash
-   pepebot workflow run daily_report
+   pepebot agent -m "list mcp servers"
    ```
-3. **Or from the agent:**
+2. Ask agent to add MCP:
    ```bash
-   pepebot agent -m "Send a summary to my Telegram chat 123456789"
+   pepebot agent -m "tambahkan MCP remote http bernama docs-mcp ke https://mcp.example.com"
    ```
+3. Or use it in workflow steps via `manage_mcp`.
 
 ## 📚 Documentation
 
@@ -109,8 +87,4 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 📝 Full Changelog
 
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#054---2026-02-22).
-
----
-
-**Note:** When upgrading from v0.5.3, all existing configurations, workflows, and data are preserved. No migration needed.
+For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#055---2026-03-01).

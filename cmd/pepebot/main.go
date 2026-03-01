@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.4"
+const version = "0.5.5"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -2119,6 +2119,7 @@ func newWorkflowHelper(workspace string, cfg *config.Config, goalProcessor workf
 	registry.Register(tools.NewExecTool(workspace))
 	registry.Register(tools.NewWebSearchTool(cfg.Tools.Web.Search.APIKey, cfg.Tools.Web.Search.MaxResults))
 	registry.Register(tools.NewWebFetchTool(50000))
+	registry.Register(tools.NewManageMCPTool(workspace))
 
 	// Platform messaging tools for workflow steps (direct API, no gateway required)
 	if cfg.Channels.Telegram.Token != "" {

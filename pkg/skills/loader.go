@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/pepebot-space/pepebot/pkg/mcp"
 )
 
 type SkillMetadata struct {
@@ -15,6 +17,18 @@ type SkillMetadata struct {
 	Description string             `json:"description"`
 	Always      bool               `json:"always"`
 	Requires    *SkillRequirements `json:"requires,omitempty"`
+	MCP         []SkillMCPConfig   `json:"mcp,omitempty"`
+}
+
+type SkillMCPConfig struct {
+	Name        string            `json:"name"`
+	Transport   string            `json:"transport"`
+	Description string            `json:"description,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	Command     string            `json:"command,omitempty"`
+	Args        []string          `json:"args,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
 }
 
 type SkillRequirements struct {
@@ -227,6 +241,7 @@ func (sl *SkillsLoader) getSkillMetadata(skillPath string) *SkillMetadata {
 		Description string             `json:"description"`
 		Always      bool               `json:"always"`
 		Requires    *SkillRequirements `json:"requires"`
+		MCP         []SkillMCPConfig   `json:"mcp"`
 	}
 
 	if err := json.Unmarshal([]byte(frontmatter), &metadata); err != nil {
@@ -238,7 +253,44 @@ func (sl *SkillsLoader) getSkillMetadata(skillPath string) *SkillMetadata {
 		Description: metadata.Description,
 		Always:      metadata.Always,
 		Requires:    metadata.Requires,
+		MCP:         metadata.MCP,
 	}
+}
+
+func (sl *SkillsLoader) SyncMCPRegistry() error {
+	store := mcp.NewRegistryStore(sl.workspace)
+
+	skills := sl.ListSkills(false)
+	for _, skill := range skills {
+		meta := sl.getSkillMetadata(skill.Path)
+		if meta == nil || len(meta.MCP) == 0 {
+			continue
+		}
+
+		for _, entry := range meta.MCP {
+			name := strings.TrimSpace(entry.Name)
+			if name == "" {
+				continue
+			}
+
+			def := &mcp.ServerDefinition{
+				Enabled:     true,
+				Transport:   entry.Transport,
+				Description: entry.Description,
+				URL:         entry.URL,
+				Command:     entry.Command,
+				Args:        entry.Args,
+				Env:         entry.Env,
+				Headers:     entry.Headers,
+			}
+
+			if err := store.UpsertFromSkill(skill.Name, name, def); err != nil {
+				return fmt.Errorf("failed to sync MCP '%s' from skill '%s': %w", name, skill.Name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (sl *SkillsLoader) extractFrontmatter(content string) string {
