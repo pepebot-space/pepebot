@@ -901,11 +901,11 @@ Ultra-lightweight personal AI assistant.
 MIT License - Free and open source
 
 ## Repository
-https://github.com/sipeed/pepebot
+https://github.com/pepebot-space/pepebot
 
 ## Contact
-Issues: https://github.com/sipeed/pepebot/issues
-Discussions: https://github.com/sipeed/pepebot/discussions
+Issues: https://github.com/pepebot-space/pepebot/issues
+Discussions: https://github.com/pepebot-space/pepebot/discussions
 
 ---
 
