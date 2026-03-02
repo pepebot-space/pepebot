@@ -81,6 +81,7 @@ type ProvidersConfig struct {
 	Zhipu      ZhipuConfig      `json:"zhipu"`
 	VLLM       VLLMConfig       `json:"vllm"`
 	Gemini     GeminiConfig     `json:"gemini"`
+	Vertex     VertexConfig     `json:"vertex"`
 }
 
 type MAIARouterConfig struct {
@@ -121,6 +122,12 @@ type VLLMConfig struct {
 type GeminiConfig struct {
 	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_GEMINI_API_KEY"`
 	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_GEMINI_API_BASE"`
+}
+
+type VertexConfig struct {
+	CredentialsFile string `json:"credentials_file" env:"PEPEBOT_PROVIDERS_VERTEX_CREDENTIALS_FILE"`
+	ProjectID       string `json:"project_id" env:"PEPEBOT_PROVIDERS_VERTEX_PROJECT_ID"`
+	Region          string `json:"region" env:"PEPEBOT_PROVIDERS_VERTEX_REGION"`
 }
 
 type GatewayConfig struct {
@@ -192,6 +199,9 @@ func DefaultConfig() *Config {
 			Zhipu:      ZhipuConfig{},
 			VLLM:       VLLMConfig{},
 			Gemini:     GeminiConfig{},
+			Vertex: VertexConfig{
+				Region: "global",
+			},
 		},
 		Gateway: GatewayConfig{
 			Host: "127.0.0.1",
@@ -301,6 +311,21 @@ func overlayNativeEnvVars(cfg *Config) {
 	}
 	if val := os.Getenv("GEMINI_API_BASE"); val != "" {
 		cfg.Providers.Gemini.APIBase = val
+	}
+
+	// Vertex AI (Google Cloud service account)
+	if val := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); val != "" {
+		cfg.Providers.Vertex.CredentialsFile = val
+	}
+	if val := os.Getenv("VERTEX_PROJECT_ID"); val != "" {
+		cfg.Providers.Vertex.ProjectID = val
+	} else if val := os.Getenv("GOOGLE_CLOUD_PROJECT"); val != "" {
+		cfg.Providers.Vertex.ProjectID = val
+	}
+	if val := os.Getenv("VERTEX_REGION"); val != "" {
+		cfg.Providers.Vertex.Region = val
+	} else if val := os.Getenv("GOOGLE_CLOUD_REGION"); val != "" {
+		cfg.Providers.Vertex.Region = val
 	}
 
 	// Channels - Telegram
@@ -429,6 +454,8 @@ func GetProviderEnvKey(provider string) (string, string) {
 		envVars = []string{"PEPEBOT_PROVIDERS_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"}
 	case "vllm":
 		envVars = []string{"PEPEBOT_PROVIDERS_VLLM_API_KEY", "VLLM_API_KEY"}
+	case "vertex":
+		envVars = []string{"PEPEBOT_PROVIDERS_VERTEX_CREDENTIALS_FILE", "GOOGLE_APPLICATION_CREDENTIALS"}
 	default:
 		return "", ""
 	}
@@ -463,6 +490,8 @@ func GetProviderEnvBase(provider string) (string, string) {
 		envVars = []string{"PEPEBOT_PROVIDERS_GEMINI_API_BASE", "GEMINI_API_BASE"}
 	case "vllm":
 		envVars = []string{"PEPEBOT_PROVIDERS_VLLM_API_BASE", "VLLM_API_BASE"}
+	case "vertex":
+		envVars = []string{"PEPEBOT_PROVIDERS_VERTEX_PROJECT_ID", "VERTEX_PROJECT_ID", "GOOGLE_CLOUD_PROJECT"}
 	default:
 		return "", ""
 	}

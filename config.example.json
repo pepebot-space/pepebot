@@ -73,6 +73,11 @@
     "vllm": {
       "api_key": "",
       "api_base": ""
+    },
+    "vertex": {
+      "credentials_file": "/path/to/account_services.json",
+      "project_id": "your-gcp-project-id",
+      "region": "us-central1"
     }
   },
   "tools": {

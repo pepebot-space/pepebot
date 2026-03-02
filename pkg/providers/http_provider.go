@@ -305,6 +305,13 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 	lowerModel := strings.ToLower(model)
 
 	switch {
+	case strings.HasPrefix(model, "vertex/"):
+		return NewVertexProvider(
+			cfg.Providers.Vertex.CredentialsFile,
+			cfg.Providers.Vertex.ProjectID,
+			cfg.Providers.Vertex.Region,
+		)
+
 	case strings.HasPrefix(model, "maia/"):
 		apiKey = cfg.Providers.MAIARouter.APIKey
 		if cfg.Providers.MAIARouter.APIBase != "" {
@@ -380,7 +387,7 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		}
 	}
 
-	if apiKey == "" && !strings.HasPrefix(model, "bedrock/") {
+	if apiKey == "" && !strings.HasPrefix(model, "bedrock/") && !strings.HasPrefix(model, "vertex/") {
 		return nil, fmt.Errorf("no API key configured for provider (model: %s)", model)
 	}
 
