@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.5"
+const version = "0.5.6"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -264,8 +264,9 @@ func onboard() {
 	fmt.Println("5. Google Gemini")
 	fmt.Println("6. Groq")
 	fmt.Println("7. Zhipu (GLM)")
-	fmt.Println("8. Skip (configure later)")
-	fmt.Print("\nSelect provider [1-8] (default: 1): ")
+	fmt.Println("8. Google Vertex AI (Service Account)")
+	fmt.Println("9. Skip (configure later)")
+	fmt.Print("\nSelect provider [1-9] (default: 1): ")
 
 	providerChoice, _ := reader.ReadString('\n')
 	providerChoice = strings.TrimSpace(providerChoice)
@@ -321,6 +322,11 @@ func onboard() {
 		fmt.Println("\n✓ Zhipu (GLM) selected")
 		fmt.Printf("  Get your API key at: %s\n", providerURL)
 	case "8":
+		selectedProvider = "vertex"
+		defaultModel = "gemini-3-pro-preview"
+		fmt.Println("\n✓ Google Vertex AI selected")
+		fmt.Println("  Setup via Google Cloud Console: https://console.cloud.google.com")
+	case "9":
 		fmt.Println("\n⊙ Skipped provider configuration")
 		selectedProvider = ""
 	default:
@@ -330,8 +336,92 @@ func onboard() {
 		providerURL = "https://maiarouter.ai"
 	}
 
-	// Step 2: API Key
-	if selectedProvider != "" {
+	// Step 2: API Key / Credentials
+	if selectedProvider == "vertex" {
+		// Vertex AI uses service account credentials instead of API key
+		fmt.Println("\nStep 2/5: Vertex AI Credentials")
+		fmt.Println("──────────────────────────────────")
+
+		// Check GOOGLE_APPLICATION_CREDENTIALS env var
+		envCredFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		var credFile string
+
+		if envCredFile != "" {
+			fmt.Printf("✓ Found GOOGLE_APPLICATION_CREDENTIALS=%s\n", envCredFile)
+			fmt.Print("Use this credentials file? (Y/n): ")
+			useEnv, _ := reader.ReadString('\n')
+			useEnv = strings.ToLower(strings.TrimSpace(useEnv))
+			if useEnv != "n" && useEnv != "no" {
+				credFile = envCredFile
+			}
+		}
+
+		if credFile == "" {
+			fmt.Print("Path to service account JSON file: ")
+			credFile, _ = reader.ReadString('\n')
+			credFile = strings.TrimSpace(credFile)
+		}
+
+		if credFile != "" {
+			// Expand ~ to home directory
+			if strings.HasPrefix(credFile, "~/") {
+				if home, err := os.UserHomeDir(); err == nil {
+					credFile = filepath.Join(home, credFile[2:])
+				}
+			}
+
+			// Verify file exists
+			if _, err := os.Stat(credFile); os.IsNotExist(err) {
+				fmt.Printf("⚠ File not found: %s\n", credFile)
+				fmt.Println("  You can fix this later in config.json")
+			} else {
+				fmt.Println("✓ Credentials file found")
+			}
+
+			cfg.Providers.Vertex.CredentialsFile = credFile
+
+			// Project ID
+			envProjectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+			if envProjectID == "" {
+				envProjectID = os.Getenv("VERTEX_PROJECT_ID")
+			}
+
+			var projectID string
+			if envProjectID != "" {
+				fmt.Printf("✓ Found Project ID: %s\n", envProjectID)
+				fmt.Print("Use this project ID? (Y/n): ")
+				useEnv, _ := reader.ReadString('\n')
+				useEnv = strings.ToLower(strings.TrimSpace(useEnv))
+				if useEnv != "n" && useEnv != "no" {
+					projectID = envProjectID
+				}
+			}
+
+			if projectID == "" {
+				fmt.Print("Project ID: ")
+				projectID, _ = reader.ReadString('\n')
+				projectID = strings.TrimSpace(projectID)
+			}
+
+			if projectID != "" {
+				cfg.Providers.Vertex.ProjectID = projectID
+			}
+
+			// Region
+			fmt.Print("Region (default: global): ")
+			region, _ := reader.ReadString('\n')
+			region = strings.TrimSpace(region)
+			if region != "" {
+				cfg.Providers.Vertex.Region = region
+			}
+
+			cfg.Agents.Defaults.Model = defaultModel
+			cfg.Agents.Defaults.Provider = "vertex"
+			fmt.Println("✓ Vertex AI configured")
+		} else {
+			fmt.Println("⊙ Skipped Vertex AI credentials (you can add them later in config.json)")
+		}
+	} else if selectedProvider != "" {
 		fmt.Println("\nStep 2/5: API Key")
 		fmt.Println("──────────────────────────────────")
 
@@ -811,11 +901,11 @@ Ultra-lightweight personal AI assistant.
 MIT License - Free and open source
 
 ## Repository
-https://github.com/sipeed/pepebot
+https://github.com/pepebot-space/pepebot
 
 ## Contact
-Issues: https://github.com/sipeed/pepebot/issues
-Discussions: https://github.com/sipeed/pepebot/discussions
+Issues: https://github.com/pepebot-space/pepebot/issues
+Discussions: https://github.com/pepebot-space/pepebot/discussions
 
 ---
 

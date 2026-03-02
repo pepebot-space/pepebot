@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-03-02
+
+### Added
+- **Google Vertex AI Provider**: Native support for Google Cloud Vertex AI using service account credentials
+  - Authenticates via OAuth2 service account JSON file (`account_services.json`)
+  - Configure with `credentials_file`, `project_id`, and `region` fields
+  - Supports both regional endpoints (`us-central1-aiplatform.googleapis.com`) and global endpoint (`aiplatform.googleapis.com`)
+  - Full `Chat()` and `ChatStream()` support with Vertex AI Gemini format
+  - Tool calling (function declarations) fully supported
+  - Usage: set model to `vertex/gemini-2.0-flash` or use explicit provider option
+  - Environment variables: `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`
+  - New file: `pkg/providers/vertex_provider.go`
+- **Explicit Provider Option**: New optional `provider` field in agent defaults config
+  - Overrides automatic provider detection from model name prefix
+  - Allows using any model name with any provider (e.g., `model: "gemini-2.0-flash"` + `provider: "vertex"`)
+  - Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`
+  - Environment variable: `PEPEBOT_AGENTS_DEFAULTS_PROVIDER`
+- **Expanded `manage_agent` tool actions**
+  - `remove`: remove an agent from `workspace/agents/registry.json` with optional `remove_files` directory cleanup
+  - `call`: send a direct message to a named agent and return that agent's response
+  - `assign_skill`: persist skill assignment into per-agent memory at `<agent_dir>/memory/MEMORY.md`
+  - `register` now accepts optional `provider`, enabling per-agent provider/model combos (e.g. Vertex/OpenRouter/Anthropic per agent)
+
+### Changed
+- **Provider Config**: Added `VertexConfig` to `ProvidersConfig` with `credentials_file`, `project_id`, `region` fields
+- **CreateProvider()**: Now checks explicit `provider` option first before falling back to model prefix auto-detection
+- Updated `config.example.json`, `.env.example` with Vertex AI configuration examples
+- **Agent runtime wiring**: `AgentManager` now injects runtime caller into `manage_agent` so `call` action can delegate cross-agent messages in gateway mode
+- **Prompt guidance**: clarified workflow-vs-agent behavior to avoid accidental workflow creation on normal "call/switch/use agent" requests
+
+### Technical Details
+- Added dependency: `golang.org/x/oauth2 v0.35.0`, `cloud.google.com/go/compute/metadata v0.3.0`
+- New file: `pkg/providers/vertex_provider.go` (~575 lines): OAuth2 token management, Vertex AI Gemini format conversion, streaming support
+- Modified: `pkg/config/config.go` (VertexConfig struct, env var overlays, provider env key lookups)
+- Modified: `pkg/providers/http_provider.go` (vertex/ routing, explicit provider switch)
+- Modified: `config.example.json`, `.env.example` (Vertex AI + provider option examples)
+
 ## [0.5.5] - 2026-03-01
 
 ### Added

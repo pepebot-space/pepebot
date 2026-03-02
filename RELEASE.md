@@ -1,62 +1,77 @@
-# 🐸 Pepebot v0.5.5 - MCP Registry Management
+# 🐸 Pepebot v0.5.6 - Google Vertex AI Support
 
-**Release Date:** 2026-03-01
+**Release Date:** 2026-03-02
 
 ## 🎉 What's New
 
-### 🔌 Native MCP Registry Tooling
+### ☁️ Google Vertex AI Provider
 
-Pepebot can now manage MCP server definitions directly from the agent using a new tool: `manage_mcp`.
+Pepebot now supports **Google Cloud Vertex AI** natively using service account credentials (no API key needed).
 
-- Add/update MCP server definitions
-- List all configured MCP servers
-- Remove MCP servers
-- Support for `stdio`, remote `sse`, and remote `http`
+- Authenticate via service account JSON file (`account_services.json`)
+- Configure `credentials_file`, `project_id`, and `region`
+- Full Chat and Streaming support with Gemini models
+- Tool calling (function declarations) fully supported
+- Supports both regional and global endpoints
 
-### ⚙️ MCP Runtime Loading
-
-Pepebot now tries to initialize enabled MCP servers on startup and auto-register discovered MCP tools into the normal tool list used by the agent.
-
-- Dynamic `tools/list` discovery from MCP servers
-- MCP tool calls proxied into regular agent tool execution
-- Startup diagnostics for MCP init/list failures
-
-Example:
+**Quick Setup:**
 
 ```json
 {
-  "action": "add",
-  "name": "my-remote-mcp",
-  "transport": "http",
-  "url": "https://mcp.example.com",
-  "headers": {
-    "Authorization": "Bearer ${MCP_TOKEN}"
+  "agents": {
+    "defaults": {
+      "model": "vertex/gemini-2.0-flash",
+      "provider": "vertex"
+    }
+  },
+  "providers": {
+    "vertex": {
+      "credentials_file": "~/.config/service-accounts.json",
+      "project_id": "your-gcp-project-id",
+      "region": "global"
+    }
   }
 }
 ```
 
-### 🧩 Skills Can Auto-Register MCP
-
-Skills can now declare MCP servers in `SKILL.md` frontmatter via `mcp` entries.
-When the agent loads context, those MCP definitions are synced automatically into:
-
-`~/.pepebot/workspace/mcp/registry.json`
-
-That means a skill can bootstrap required MCP endpoints without manual setup.
-
-### 🪵 Better Verbose Logs in `agent`
-
-`pepebot agent` now supports `-v` / `--verbose` to show richer DEBUG traces:
-
-- provider request/response diagnostics
-- tool calls, tool arguments, and tool output previews
-- easier troubleshooting when MCP tool routing is missing
-
-You can now run one-shot messages with positional syntax too:
+Or via environment variables:
 
 ```bash
-pepebot agent "pakai mcp browser untuk cari harga tiket ke japan" --verbose
+export PEPEBOT_PROVIDERS_VERTEX_CREDENTIALS_FILE=~/.config/service-accounts.json
+export PEPEBOT_PROVIDERS_VERTEX_PROJECT_ID=your-gcp-project-id
+export PEPEBOT_PROVIDERS_VERTEX_REGION=global
+export PEPEBOT_AGENTS_DEFAULTS_MODEL=vertex/gemini-2.0-flash
 ```
+
+### 🎯 Explicit Provider Option
+
+New optional `provider` field in agent config — override automatic provider detection from model name prefix.
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "gemini-2.0-flash",
+      "provider": "vertex"
+    }
+  }
+}
+```
+
+Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`
+
+Environment variable: `PEPEBOT_AGENTS_DEFAULTS_PROVIDER`
+
+### 🤖 Better Multi-Agent Controls (`manage_agent`)
+
+`manage_agent` is now more complete for agent lifecycle and delegation:
+
+- `remove` action to delete an agent from registry (optional file cleanup with `remove_files`)
+- `call` action to directly invoke another named agent and get its response
+- `assign_skill` action to persist skill assignments into per-agent memory (`<agent_dir>/memory/MEMORY.md`)
+- `register` now supports optional `provider`, so each agent can use different provider/model settings
+
+Prompt behavior has also been tightened so normal requests like "panggil agent" are less likely to be misinterpreted as workflow creation.
 
 ---
 
@@ -80,19 +95,21 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.5).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.6).
 
 ## 🚀 Quick Start
 
-1. Start agent:
+1. Create a service account at [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts)
+2. Download the JSON key file
+3. Configure Pepebot:
    ```bash
-   pepebot agent -m "list mcp servers"
+   pepebot onboard
+   # Or manually set environment variables
    ```
-2. Ask agent to add MCP:
+4. Start chatting:
    ```bash
-   pepebot agent -m "tambahkan MCP remote http bernama docs-mcp ke https://mcp.example.com"
+   pepebot agent -m "Hello from Vertex AI!"
    ```
-3. Or use it in workflow steps via `manage_mcp`.
 
 ## 📚 Documentation
 
@@ -109,4 +126,4 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 📝 Full Changelog
 
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#055---2026-03-01).
+For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#056---2026-03-02).

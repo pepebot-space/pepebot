@@ -48,6 +48,17 @@ func (al *AgentLoop) WorkflowHelper() *workflow.WorkflowHelper {
 	return al.workflowHelper
 }
 
+// SetManageAgentCaller wires the manage_agent tool with a caller implementation.
+func (al *AgentLoop) SetManageAgentCaller(caller tools.AgentCaller) {
+	tool, ok := al.tools.Get("manage_agent")
+	if !ok {
+		return
+	}
+	if manageAgentTool, ok := tool.(*tools.ManageAgentTool); ok {
+		manageAgentTool.SetAgentCaller(caller)
+	}
+}
+
 func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
 	workspace := cfg.WorkspacePath()
 	os.MkdirAll(workspace, 0755)
