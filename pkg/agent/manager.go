@@ -84,8 +84,29 @@ func (am *AgentManager) GetOrCreateAgent(agentName string) (*AgentLoop, error) {
 		return nil, fmt.Errorf("agent '%s' is disabled", agentName)
 	}
 
+	// Determine if agent needs its own provider (different model or provider from defaults)
+	agentProvider := am.provider
+	if agentDef.Provider != "" || agentDef.Model != am.config.Agents.Defaults.Model {
+		p, err := providers.CreateProviderWithOverrides(am.config, agentDef.Model, agentDef.Provider)
+		if err != nil {
+			logger.WarnCF("agent", "Failed to create per-agent provider, using global", map[string]interface{}{
+				"name":     agentName,
+				"model":    agentDef.Model,
+				"provider": agentDef.Provider,
+				"error":    err.Error(),
+			})
+		} else {
+			agentProvider = p
+			logger.InfoCF("agent", "Created per-agent provider", map[string]interface{}{
+				"name":     agentName,
+				"model":    agentDef.Model,
+				"provider": agentDef.Provider,
+			})
+		}
+	}
+
 	// Create new agent loop
-	agentLoop := NewAgentLoopWithDefinition(am.config, am.bus, am.provider, agentName, agentDef)
+	agentLoop := NewAgentLoopWithDefinition(am.config, am.bus, agentProvider, agentName, agentDef)
 	agentLoop.WorkflowHelper().SetAgentProcessor(am)
 	am.agents[agentName] = agentLoop
 

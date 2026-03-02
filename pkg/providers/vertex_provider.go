@@ -261,9 +261,18 @@ func (p *VertexProvider) buildEndpointURL(model string, stream bool) string {
 	if stream {
 		action = "streamGenerateContent?alt=sse"
 	}
+
+	// For "global" region, use the base hostname without region prefix
+	var host string
+	if p.region == "global" {
+		host = "aiplatform.googleapis.com"
+	} else {
+		host = fmt.Sprintf("%s-aiplatform.googleapis.com", p.region)
+	}
+
 	return fmt.Sprintf(
-		"https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:%s",
-		p.region, p.projectID, p.region, model, action,
+		"https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:%s",
+		host, p.projectID, p.region, model, action,
 	)
 }
 

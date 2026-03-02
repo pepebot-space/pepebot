@@ -18,7 +18,7 @@ Pepebot is an ultra-lightweight and efficient personal AI agent. Pepebot is desi
 
 ## ✨ Key Features
 
-- 🤖 **Multi-Provider LLM**: Support for various AI providers including Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, MAIA Router and vLLM
+- 🤖 **Multi-Provider LLM**: Support for various AI providers including Anthropic, OpenAI, OpenRouter, Groq, Zhipu, Gemini, Google Vertex AI, MAIA Router and vLLM
 - 💬 **Multi-Channel**: Integration with Telegram, Discord, WhatsApp, MaixCam, and Feishu
 - 🛠️ **Tools System**: Filesystem operations, shell execution, web search, and more
 - 📱 **Android Automation**: ADB tools for device control and UI automation
@@ -249,6 +249,7 @@ nano ~/.pepebot/config.json
     "defaults": {
       "workspace": "~/.pepebot/workspace",
       "model": "maia/gemini-3-pro-preview",
+      "provider": "",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -258,6 +259,8 @@ nano ~/.pepebot/config.json
 ```
 
 The default model is set to `maia/gemini-3-pro-preview` which uses MAIA Router. You can change this to any supported model from the providers below.
+
+**Provider Option**: Set `provider` to explicitly choose a provider instead of auto-detecting from the model name. Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`.
 
 #### Provider Configuration
 
@@ -352,6 +355,31 @@ Popular models available:
   }
 }
 ```
+
+**Google Vertex AI (Service Account)**
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "gemini-2.0-flash",
+      "provider": "vertex"
+    }
+  },
+  "providers": {
+    "vertex": {
+      "credentials_file": "/path/to/account_services.json",
+      "project_id": "your-gcp-project-id",
+      "region": "global"
+    }
+  }
+}
+```
+
+To set up Vertex AI:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts)
+2. Create a service account with Vertex AI permissions
+3. Download the JSON key file
+4. Set `credentials_file` to the path of the JSON key file
 
 #### Channel Configuration
 
@@ -500,6 +528,7 @@ Pepebot supports configuration via environment variables. You can use either `PE
 #### Agent Configuration
 ```bash
 export PEPEBOT_AGENTS_DEFAULTS_MODEL="claude-3-5-sonnet-20241022"
+export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="anthropic"  # Optional: explicit provider
 export PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS=8192
 export PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE=0.7
 export PEPEBOT_AGENTS_DEFAULTS_WORKSPACE="~/my-workspace"

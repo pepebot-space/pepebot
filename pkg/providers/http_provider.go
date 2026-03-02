@@ -298,8 +298,20 @@ func (p *HTTPProvider) GetDefaultModel() string {
 }
 
 func CreateProvider(cfg *config.Config) (LLMProvider, error) {
+	return CreateProviderWithOverrides(cfg, "", "")
+}
+
+// CreateProviderWithOverrides creates a provider with optional model and provider overrides.
+// If overrideModel/overrideProvider are empty, falls back to config defaults.
+func CreateProviderWithOverrides(cfg *config.Config, overrideModel, overrideProvider string) (LLMProvider, error) {
 	model := cfg.Agents.Defaults.Model
+	if overrideModel != "" {
+		model = overrideModel
+	}
 	provider := strings.ToLower(cfg.Agents.Defaults.Provider)
+	if overrideProvider != "" {
+		provider = strings.ToLower(overrideProvider)
+	}
 
 	var apiKey, apiBase string
 
