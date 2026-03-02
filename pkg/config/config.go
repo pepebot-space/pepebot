@@ -25,6 +25,7 @@ type AgentsConfig struct {
 type AgentDefaults struct {
 	Workspace         string  `json:"workspace" env:"PEPEBOT_AGENTS_DEFAULTS_WORKSPACE"`
 	Model             string  `json:"model" env:"PEPEBOT_AGENTS_DEFAULTS_MODEL"`
+	Provider          string  `json:"provider,omitempty" env:"PEPEBOT_AGENTS_DEFAULTS_PROVIDER"`
 	MaxTokens         int     `json:"max_tokens" env:"PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS"`
 	Temperature       float64 `json:"temperature" env:"PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE"`
 	MaxToolIterations int     `json:"max_tool_iterations" env:"PEPEBOT_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`

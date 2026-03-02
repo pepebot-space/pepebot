@@ -299,11 +299,82 @@ func (p *HTTPProvider) GetDefaultModel() string {
 
 func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 	model := cfg.Agents.Defaults.Model
+	provider := strings.ToLower(cfg.Agents.Defaults.Provider)
 
 	var apiKey, apiBase string
 
 	lowerModel := strings.ToLower(model)
 
+	// If provider is explicitly set, use it directly instead of model prefix detection
+	if provider != "" {
+		switch provider {
+		case "vertex":
+			return NewVertexProvider(
+				cfg.Providers.Vertex.CredentialsFile,
+				cfg.Providers.Vertex.ProjectID,
+				cfg.Providers.Vertex.Region,
+			)
+		case "maiarouter", "maia":
+			apiKey = cfg.Providers.MAIARouter.APIKey
+			if cfg.Providers.MAIARouter.APIBase != "" {
+				apiBase = cfg.Providers.MAIARouter.APIBase
+			} else {
+				apiBase = "https://api.maiarouter.ai/v1"
+			}
+		case "openrouter":
+			apiKey = cfg.Providers.OpenRouter.APIKey
+			if cfg.Providers.OpenRouter.APIBase != "" {
+				apiBase = cfg.Providers.OpenRouter.APIBase
+			} else {
+				apiBase = "https://openrouter.ai/api/v1"
+			}
+		case "anthropic":
+			apiKey = cfg.Providers.Anthropic.APIKey
+			apiBase = cfg.Providers.Anthropic.APIBase
+			if apiBase == "" {
+				apiBase = "https://api.anthropic.com/v1"
+			}
+		case "openai":
+			apiKey = cfg.Providers.OpenAI.APIKey
+			apiBase = cfg.Providers.OpenAI.APIBase
+			if apiBase == "" {
+				apiBase = "https://api.openai.com/v1"
+			}
+		case "gemini":
+			apiKey = cfg.Providers.Gemini.APIKey
+			apiBase = cfg.Providers.Gemini.APIBase
+			if apiBase == "" {
+				apiBase = "https://generativelanguage.googleapis.com/v1beta"
+			}
+		case "zhipu":
+			apiKey = cfg.Providers.Zhipu.APIKey
+			apiBase = cfg.Providers.Zhipu.APIBase
+			if apiBase == "" {
+				apiBase = "https://open.bigmodel.cn/api/paas/v4"
+			}
+		case "groq":
+			apiKey = cfg.Providers.Groq.APIKey
+			apiBase = cfg.Providers.Groq.APIBase
+			if apiBase == "" {
+				apiBase = "https://api.groq.com/openai/v1"
+			}
+		case "vllm":
+			apiKey = cfg.Providers.VLLM.APIKey
+			apiBase = cfg.Providers.VLLM.APIBase
+		default:
+			return nil, fmt.Errorf("unknown provider: %s", provider)
+		}
+
+		if apiKey == "" {
+			return nil, fmt.Errorf("no API key configured for provider: %s", provider)
+		}
+		if apiBase == "" {
+			return nil, fmt.Errorf("no API base configured for provider: %s", provider)
+		}
+		return NewHTTPProvider(apiKey, apiBase), nil
+	}
+
+	// Fallback: auto-detect provider from model prefix/name
 	switch {
 	case strings.HasPrefix(model, "vertex/"):
 		return NewVertexProvider(

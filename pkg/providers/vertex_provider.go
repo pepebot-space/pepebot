@@ -357,7 +357,7 @@ func (p *VertexProvider) buildGenerateContentRequest(messages []Message, tools [
 					},
 				},
 			})
-		} else if msg.ToolCalls != nil && len(msg.ToolCalls) > 0 {
+		} else if len(msg.ToolCalls) > 0 {
 			// Handle assistant messages with tool calls
 			contentStr := getMessageContentString(msg.Content)
 			if contentStr != "" {
@@ -440,7 +440,7 @@ func (p *VertexProvider) buildGenerateContentRequest(messages []Message, tools [
 				"name":        tool.Function.Name,
 				"description": tool.Function.Description,
 			}
-			if tool.Function.Parameters != nil && len(tool.Function.Parameters) > 0 {
+			if len(tool.Function.Parameters) > 0 {
 				fn["parameters"] = tool.Function.Parameters
 			}
 			vertexFunctions = append(vertexFunctions, fn)

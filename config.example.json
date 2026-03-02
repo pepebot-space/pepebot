@@ -3,6 +3,7 @@
     "defaults": {
       "workspace": "~/.pepebot/workspace",
       "model": "maia/gemini-3-pro-preview",
+      "provider": "",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
