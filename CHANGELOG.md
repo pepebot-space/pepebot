@@ -22,11 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Allows using any model name with any provider (e.g., `model: "gemini-2.0-flash"` + `provider: "vertex"`)
   - Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`
   - Environment variable: `PEPEBOT_AGENTS_DEFAULTS_PROVIDER`
+- **Expanded `manage_agent` tool actions**
+  - `remove`: remove an agent from `workspace/agents/registry.json` with optional `remove_files` directory cleanup
+  - `call`: send a direct message to a named agent and return that agent's response
+  - `assign_skill`: persist skill assignment into per-agent memory at `<agent_dir>/memory/MEMORY.md`
+  - `register` now accepts optional `provider`, enabling per-agent provider/model combos (e.g. Vertex/OpenRouter/Anthropic per agent)
 
 ### Changed
 - **Provider Config**: Added `VertexConfig` to `ProvidersConfig` with `credentials_file`, `project_id`, `region` fields
 - **CreateProvider()**: Now checks explicit `provider` option first before falling back to model prefix auto-detection
 - Updated `config.example.json`, `.env.example` with Vertex AI configuration examples
+- **Agent runtime wiring**: `AgentManager` now injects runtime caller into `manage_agent` so `call` action can delegate cross-agent messages in gateway mode
+- **Prompt guidance**: clarified workflow-vs-agent behavior to avoid accidental workflow creation on normal "call/switch/use agent" requests
 
 ### Technical Details
 - Added dependency: `golang.org/x/oauth2 v0.35.0`, `cloud.google.com/go/compute/metadata v0.3.0`

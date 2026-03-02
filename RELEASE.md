@@ -62,6 +62,17 @@ Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `
 
 Environment variable: `PEPEBOT_AGENTS_DEFAULTS_PROVIDER`
 
+### 🤖 Better Multi-Agent Controls (`manage_agent`)
+
+`manage_agent` is now more complete for agent lifecycle and delegation:
+
+- `remove` action to delete an agent from registry (optional file cleanup with `remove_files`)
+- `call` action to directly invoke another named agent and get its response
+- `assign_skill` action to persist skill assignments into per-agent memory (`<agent_dir>/memory/MEMORY.md`)
+- `register` now supports optional `provider`, so each agent can use different provider/model settings
+
+Prompt behavior has also been tightened so normal requests like "panggil agent" are less likely to be misinterpreted as workflow creation.
+
 ---
 
 ## 📦 Installation

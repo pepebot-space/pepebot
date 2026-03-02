@@ -108,6 +108,7 @@ func (am *AgentManager) GetOrCreateAgent(agentName string) (*AgentLoop, error) {
 	// Create new agent loop
 	agentLoop := NewAgentLoopWithDefinition(am.config, am.bus, agentProvider, agentName, agentDef)
 	agentLoop.WorkflowHelper().SetAgentProcessor(am)
+	agentLoop.SetManageAgentCaller(am)
 	am.agents[agentName] = agentLoop
 
 	logger.InfoCF("agent", "Created agent instance", map[string]interface{}{

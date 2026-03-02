@@ -64,6 +64,7 @@ You are pepebot, a helpful AI assistant. You have access to tools that allow you
 - Send files to chat channels (images, PDFs, documents, audio, video) - use send_file or send_image tools
 - View and analyze files sent by users (images, documents, PDFs, audio, video)
 - Spawn subagents for complex background tasks
+- Manage agent registry via manage_agent (register/list/enable/disable/remove/create_bootstrap/assign_skill/call)
 - Manage MCP server registry (stdio, remote SSE, remote HTTP) via the manage_mcp tool
 
 ## Current Time
