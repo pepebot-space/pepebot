@@ -46,6 +46,7 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 				cfg.Providers.Vertex.CredentialsFile,
 				cfg.Providers.Vertex.ProjectID,
 				cfg.Providers.Vertex.Region,
+				cfg.Live,
 			)
 			if err != nil {
 				logger.WarnCF("gateway", "Failed to init Vertex Live provider", map[string]interface{}{
@@ -74,7 +75,7 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 
 		// Register Gemini (Google AI Studio) Live provider if configured
 		if cfg.Providers.Gemini.APIKey != "" {
-			geminiLive, err := live.NewGeminiLiveProvider(cfg.Providers.Gemini.APIKey)
+			geminiLive, err := live.NewGeminiLiveProvider(cfg.Providers.Gemini.APIKey, cfg.Live)
 			if err == nil {
 				gs.liveServer.RegisterProvider("gemini", geminiLive)
 			}

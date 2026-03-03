@@ -96,6 +96,25 @@
   "live": {
     "enabled": false,
     "provider": "vertex",
-    "model": "gemini-live-2.5-flash-native-audio"
+    "model": "gemini-live-2.5-flash-native-audio",
+    "generation_config": {
+      "responseModalities": [
+        "AUDIO"
+      ],
+      "speechConfig": {
+        "voiceConfig": {
+          "prebuiltVoiceConfig": {
+            "voiceName": "Aoede"
+          }
+        }
+      }
+    },
+    "realtime_input_config": {
+      "automaticActivityDetection": {
+        "disabled": false,
+        "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+        "endOfSpeechSensitivity": "END_SENSITIVITY_LOW"
+      }
+    }
   }
 }

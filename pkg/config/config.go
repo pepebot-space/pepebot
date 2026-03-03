@@ -138,9 +138,11 @@ type GatewayConfig struct {
 }
 
 type LiveConfig struct {
-	Enabled  bool   `json:"enabled" env:"PEPEBOT_LIVE_ENABLED"`
-	Provider string `json:"provider" env:"PEPEBOT_LIVE_PROVIDER"`
-	Model    string `json:"model" env:"PEPEBOT_LIVE_MODEL"`
+	Enabled             bool                   `json:"enabled" env:"PEPEBOT_LIVE_ENABLED"`
+	Provider            string                 `json:"provider" env:"PEPEBOT_LIVE_PROVIDER"`
+	Model               string                 `json:"model" env:"PEPEBOT_LIVE_MODEL"`
+	GenerationConfig    map[string]interface{} `json:"generation_config,omitempty"`
+	RealtimeInputConfig map[string]interface{} `json:"realtime_input_config,omitempty"`
 }
 
 type WebSearchConfig struct {
@@ -219,6 +221,23 @@ func DefaultConfig() *Config {
 			Enabled:  false,
 			Provider: "vertex",
 			Model:    "gemini-live-2.5-flash-native-audio",
+			GenerationConfig: map[string]interface{}{
+				"responseModalities": []interface{}{"AUDIO"},
+				"speechConfig": map[string]interface{}{
+					"voiceConfig": map[string]interface{}{
+						"prebuiltVoiceConfig": map[string]interface{}{
+							"voiceName": "Aoede",
+						},
+					},
+				},
+			},
+			RealtimeInputConfig: map[string]interface{}{
+				"automaticActivityDetection": map[string]interface{}{
+					"disabled":                 false,
+					"startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+					"endOfSpeechSensitivity":   "END_SENSITIVITY_LOW",
+				},
+			},
 		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{

@@ -7,11 +7,13 @@ package live
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"sync"
 
+	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -21,20 +23,21 @@ import (
 type VertexLiveProvider struct {
 	projectID   string
 	region      string
+	liveConfig  config.LiveConfig
 	tokenSource oauth2.TokenSource
 	mu          sync.Mutex
 }
 
 // NewVertexLiveProvider creates a Vertex AI Live provider from config
-func NewVertexLiveProvider(credentialsFile, projectID, region string) (*VertexLiveProvider, error) {
+func NewVertexLiveProvider(credentialsFile, projectID, region string, liveCfg config.LiveConfig) (*VertexLiveProvider, error) {
 	if credentialsFile == "" {
 		return nil, fmt.Errorf("vertex live: credentials_file is required")
 	}
 	if projectID == "" {
 		return nil, fmt.Errorf("vertex live: project_id is required")
 	}
-	if region == "" {
-		region = "us-central1"
+	if region == "" || region == "global" {
+		region = "us-central1" // Live API requires a regional endpoint
 	}
 
 	credBytes, err := os.ReadFile(credentialsFile)
@@ -57,6 +60,7 @@ func NewVertexLiveProvider(credentialsFile, projectID, region string) (*VertexLi
 	return &VertexLiveProvider{
 		projectID:   projectID,
 		region:      region,
+		liveConfig:  liveCfg,
 		tokenSource: creds.TokenSource,
 	}, nil
 }
@@ -69,20 +73,62 @@ func (p *VertexLiveProvider) Name() string {
 // BuildUpstreamURL constructs the Vertex AI Live API WebSocket endpoint
 //
 // Format: wss://{region}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent
-// Special case: "global" region uses aiplatform.googleapis.com without region prefix
 func (p *VertexLiveProvider) BuildUpstreamURL(model string) string {
-	var host string
-	if p.region == "global" {
-		host = "aiplatform.googleapis.com"
-	} else {
-		host = fmt.Sprintf("%s-aiplatform.googleapis.com", p.region)
+	host := fmt.Sprintf("%s-aiplatform.googleapis.com", p.region)
+
+	return fmt.Sprintf(
+		"wss://%s/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent",
+		host,
+	)
+}
+
+// SetupMessage returns the BidiGenerateContentSetup message.
+// Uses generation_config and realtime_input_config from config.json if set, otherwise uses defaults.
+func (p *VertexLiveProvider) SetupMessage(model string) []byte {
+	modelResource := fmt.Sprintf(
+		"projects/%s/locations/%s/publishers/google/models/%s",
+		p.projectID, p.region, model,
+	)
+
+	setupInner := map[string]interface{}{
+		"model": modelResource,
 	}
 
-	// The model is passed as a query parameter in the URL
-	return fmt.Sprintf(
-		"wss://%s/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent?key=%s",
-		host, "",
-	)
+	// Use config-provided generationConfig, or defaults
+	if p.liveConfig.GenerationConfig != nil {
+		setupInner["generationConfig"] = p.liveConfig.GenerationConfig
+	} else {
+		setupInner["generationConfig"] = map[string]interface{}{
+			"responseModalities": []string{"AUDIO"},
+			"speechConfig": map[string]interface{}{
+				"voiceConfig": map[string]interface{}{
+					"prebuiltVoiceConfig": map[string]interface{}{
+						"voiceName": "Aoede",
+					},
+				},
+			},
+		}
+	}
+
+	// Use config-provided realtimeInputConfig, or defaults
+	if p.liveConfig.RealtimeInputConfig != nil {
+		setupInner["realtimeInputConfig"] = p.liveConfig.RealtimeInputConfig
+	} else {
+		setupInner["realtimeInputConfig"] = map[string]interface{}{
+			"automaticActivityDetection": map[string]interface{}{
+				"disabled":                 false,
+				"startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+				"endOfSpeechSensitivity":   "END_SENSITIVITY_LOW",
+			},
+		}
+	}
+
+	setup := map[string]interface{}{
+		"setup": setupInner,
+	}
+
+	data, _ := json.Marshal(setup)
+	return data
 }
 
 // AuthHeaders returns OAuth2 Bearer token headers for the WebSocket upgrade request

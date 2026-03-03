@@ -24,6 +24,9 @@ type LiveProvider interface {
 	BuildUpstreamURL(model string) string
 	// AuthHeaders returns headers needed to authenticate with upstream
 	AuthHeaders() (http.Header, error)
+	// SetupMessage returns the initial setup message to send to upstream after connecting.
+	// Return nil if no setup message is needed (e.g. OpenAI handles setup via URL params).
+	SetupMessage(model string) []byte
 	// Name returns the provider name (e.g. "vertex")
 	Name() string
 }
@@ -202,15 +205,19 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		"model":    model,
 	})
 
-	// Step 5: If the first message was NOT a setup message, forward it to upstream
-	if setupMsg.Setup.Provider == "" && setupMsg.Setup.Model == "" {
-		// The raw message was actual data, forward it
-		if err := upstreamConn.WriteMessage(websocket.TextMessage, rawMsg); err != nil {
-			logger.ErrorCF("live", "Failed to forward initial message", map[string]interface{}{
+	// Step 5: Send provider-specific setup message to upstream (e.g. BidiGenerateContentSetup for Vertex)
+	if setupData := provider.SetupMessage(model); setupData != nil {
+		if err := upstreamConn.WriteMessage(websocket.TextMessage, setupData); err != nil {
+			logger.ErrorCF("live", "Failed to send upstream setup message", map[string]interface{}{
 				"error": err.Error(),
 			})
+			ls.sendError(clientConn, "Upstream setup failed: "+err.Error())
 			return
 		}
+		logger.InfoCF("live", "Sent upstream setup message", map[string]interface{}{
+			"provider": providerName,
+			"model":    model,
+		})
 	}
 
 	// Step 6: Create session and start bidirectional proxy

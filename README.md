@@ -478,6 +478,31 @@ To set up Vertex AI:
 }
 ```
 
+#### Live API (Real-time WebSocket) Configuration
+
+```json
+{
+  "live": {
+    "enabled": true,
+    "provider": "vertex",
+    "model": "gemini-live-2.5-flash-native-audio"
+  }
+}
+```
+
+Pepebot includes a WebSocket proxy for real-time multimodal streaming (audio, video, text) using the Gemini Live API or OpenAI Realtime API. 
+The WebSocket endpoint is available at `ws://localhost:18790/v1/live`.
+
+Supported providers:
+- `vertex` (Vertex AI Live API)
+- `openai` (OpenAI Realtime API)
+- `gemini` (Google AI Studio Live API)
+- `maiarouter` (MAIA Router Realtime API)
+
+Check out the demo clients in the `examples/live-api/` directory:
+- `client.py` - A Python console audio streaming client
+- `index.html` - A complete HTML5/JS/Tailwind browser web client using the Web Audio API
+
 ## 🚀 Usage
 
 ### CLI Mode (Interactive)

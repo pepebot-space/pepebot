@@ -6,19 +6,22 @@
 package live
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 // GeminiLiveProvider implements LiveProvider for Google AI Studio Gemini Live API
 type GeminiLiveProvider struct {
-	apiKey string
+	apiKey     string
+	liveConfig config.LiveConfig
 }
 
 // NewGeminiLiveProvider creates a Google AI Studio Live API provider
-func NewGeminiLiveProvider(apiKey string) (*GeminiLiveProvider, error) {
+func NewGeminiLiveProvider(apiKey string, liveCfg config.LiveConfig) (*GeminiLiveProvider, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("gemini live: api_key is required")
 	}
@@ -26,7 +29,8 @@ func NewGeminiLiveProvider(apiKey string) (*GeminiLiveProvider, error) {
 	logger.InfoC("live", "Google AI Studio Gemini Live provider initialized")
 
 	return &GeminiLiveProvider{
-		apiKey: apiKey,
+		apiKey:     apiKey,
+		liveConfig: liveCfg,
 	}, nil
 }
 
@@ -47,6 +51,37 @@ func (p *GeminiLiveProvider) BuildUpstreamURL(model string) string {
 // AuthHeaders returns HTTP headers (none needed for Gemini, API key is in query string)
 func (p *GeminiLiveProvider) AuthHeaders() (http.Header, error) {
 	headers := http.Header{}
-	// Empty headers, auth is handled via the query parameter in BuildUpstreamURL
 	return headers, nil
+}
+
+// SetupMessage returns a BidiGenerateContentSetup message for Gemini Live API
+func (p *GeminiLiveProvider) SetupMessage(model string) []byte {
+	setupInner := map[string]interface{}{
+		"model": "models/" + model,
+	}
+
+	if p.liveConfig.GenerationConfig != nil {
+		setupInner["generationConfig"] = p.liveConfig.GenerationConfig
+	} else {
+		setupInner["generationConfig"] = map[string]interface{}{
+			"responseModalities": []string{"AUDIO"},
+			"speechConfig": map[string]interface{}{
+				"voiceConfig": map[string]interface{}{
+					"prebuiltVoiceConfig": map[string]interface{}{
+						"voiceName": "Aoede",
+					},
+				},
+			},
+		}
+	}
+
+	if p.liveConfig.RealtimeInputConfig != nil {
+		setupInner["realtimeInputConfig"] = p.liveConfig.RealtimeInputConfig
+	}
+
+	setup := map[string]interface{}{
+		"setup": setupInner,
+	}
+	data, _ := json.Marshal(setup)
+	return data
 }

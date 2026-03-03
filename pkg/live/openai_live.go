@@ -72,3 +72,8 @@ func (p *OpenAILiveProvider) AuthHeaders() (http.Header, error) {
 	headers.Set("OpenAI-Beta", "realtime=v1")
 	return headers, nil
 }
+
+// SetupMessage returns nil — OpenAI uses URL params for model selection, no setup frame needed
+func (p *OpenAILiveProvider) SetupMessage(model string) []byte {
+	return nil
+}
