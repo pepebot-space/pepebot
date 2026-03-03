@@ -56,6 +56,30 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 			}
 		}
 
+		// Register OpenAI Live provider if configured
+		if cfg.Providers.OpenAI.APIKey != "" {
+			openaiLive, err := live.NewOpenAILiveProvider("openai", cfg.Providers.OpenAI.APIBase, cfg.Providers.OpenAI.APIKey)
+			if err == nil {
+				gs.liveServer.RegisterProvider("openai", openaiLive)
+			}
+		}
+
+		// Register MAIA Router Live provider if configured
+		if cfg.Providers.MAIARouter.APIKey != "" {
+			maiaLive, err := live.NewOpenAILiveProvider("maiarouter", cfg.Providers.MAIARouter.APIBase, cfg.Providers.MAIARouter.APIKey)
+			if err == nil {
+				gs.liveServer.RegisterProvider("maiarouter", maiaLive)
+			}
+		}
+
+		// Register Gemini (Google AI Studio) Live provider if configured
+		if cfg.Providers.Gemini.APIKey != "" {
+			geminiLive, err := live.NewGeminiLiveProvider(cfg.Providers.Gemini.APIKey)
+			if err == nil {
+				gs.liveServer.RegisterProvider("gemini", geminiLive)
+			}
+		}
+
 		logger.InfoC("gateway", "Live API enabled on /v1/live")
 	}
 
