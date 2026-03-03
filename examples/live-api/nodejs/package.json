@@ -1,0 +1,15 @@
+{
+  "name": "pepebot-live-api-nodejs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js live client based on examples/live-api/index.html",
+  "main": "client.js",
+  "scripts": {
+    "start": "node client.js"
+  },
+  "dependencies": {
+    "mic": "^2.1.2",
+    "speaker": "^0.5.4",
+    "ws": "^8.18.0"
+  }
+}

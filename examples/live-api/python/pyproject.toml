@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "pepebot-live-api-python"
+version = "0.1.0"
+description = "Python live client based on examples/live-api/index.html"
+authors = ["Pepebot Contributors"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+websockets = "^13.1"
+pyaudio = "^0.2.14"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"

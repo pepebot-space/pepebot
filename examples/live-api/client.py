@@ -22,6 +22,7 @@ FORMAT = pyaudio.paInt16
 # Smaller chunks improve responsiveness and smoothness.
 INPUT_CHUNK = 2048
 OUTPUT_CHUNK = 4096
+OUTPUT_PREBUFFER_CHUNKS = 3
 
 URL = "ws://localhost:18790/v1/live"
 
@@ -37,6 +38,10 @@ NOISE_GATE_HANGOVER = 3
 # Raw binary frames may contain non-audio envelopes on some backends.
 ENABLE_RAW_BINARY_AUDIO = False
 MIN_BINARY_PCM_BYTES = 640
+
+# Duplex control: prevent mic from interrupting while bot audio is playing.
+ENABLE_BARGE_IN = False
+BOT_SPEAKING_HOLD_SEC = 0.8
 
 
 class NoiseGate:
@@ -135,7 +140,8 @@ async def main():
     signal.signal(signal.SIGINT, lambda *_: stop_event.set())
 
     p = pyaudio.PyAudio()
-    output_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=64)
+    output_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=256)
+    bot_speaking_until = 0.0
 
     stream_out = p.open(
         format=FORMAT,
@@ -155,19 +161,68 @@ async def main():
 
     noise_gate = NoiseGate()
 
+    async def enqueue_audio(pcm: bytes):
+        nonlocal bot_speaking_until
+        if not pcm:
+            return
+        # PCM16 must be even-length
+        if len(pcm) % 2 != 0:
+            pcm = pcm[:-1]
+        if not pcm:
+            return
+
+        try:
+            await asyncio.wait_for(output_queue.put(pcm), timeout=0.5)
+            bot_speaking_until = max(
+                bot_speaking_until, loop.time() + BOT_SPEAKING_HOLD_SEC
+            )
+        except asyncio.TimeoutError:
+            # Drop newest packet only when playback is heavily backlogged
+            pass
+
     async def playback_worker():
+        bytes_per_out_chunk = OUTPUT_CHUNK * SAMPLE_WIDTH
+        prebuffer_target = OUTPUT_PREBUFFER_CHUNKS * bytes_per_out_chunk
+        pending = bytearray()
+        started = False
+
         while not stop_event.is_set():
             try:
-                pcm = await asyncio.wait_for(output_queue.get(), timeout=0.2)
+                pcm = await asyncio.wait_for(output_queue.get(), timeout=0.02)
+                pending.extend(pcm)
             except asyncio.TimeoutError:
-                continue
+                pass
+
+            if not started:
+                if len(pending) < prebuffer_target:
+                    continue
+                started = True
+
+            # Keep output clock continuous: write fixed-size frames, pad with silence
+            # when network/audio chunks arrive late, to reduce audible stutter.
+            if len(pending) >= bytes_per_out_chunk:
+                frame = bytes(pending[:bytes_per_out_chunk])
+                del pending[:bytes_per_out_chunk]
+            else:
+                frame = bytes(pending) + (
+                    b"\x00" * (bytes_per_out_chunk - len(pending))
+                )
+                pending.clear()
 
             try:
-                await asyncio.to_thread(stream_out.write, pcm)
+                await asyncio.to_thread(stream_out.write, frame)
             except Exception as e:
                 if not stop_event.is_set():
                     print(f"Playback error: {e}")
                 return
+
+            # Flush tail while stopping
+            if stop_event.is_set() and pending:
+                try:
+                    await asyncio.to_thread(stream_out.write, bytes(pending))
+                except Exception:
+                    pass
+                pending.clear()
 
     try:
         async with websockets.connect(
@@ -225,6 +280,10 @@ async def main():
             async def sender():
                 while not stop_event.is_set():
                     try:
+                        if (not ENABLE_BARGE_IN) and (loop.time() < bot_speaking_until):
+                            await asyncio.sleep(0.02)
+                            continue
+
                         data = await asyncio.to_thread(
                             stream_in.read,
                             INPUT_CHUNK,
@@ -284,12 +343,7 @@ async def main():
                                 and len(audio_inline) >= 2
                                 and len(audio_inline) % 2 == 0
                             ):
-                                if output_queue.full():
-                                    try:
-                                        output_queue.get_nowait()
-                                    except asyncio.QueueEmpty:
-                                        pass
-                                await output_queue.put(audio_inline)
+                                await enqueue_audio(audio_inline)
                             continue
 
                         if ENABLE_RAW_BINARY_AUDIO:
@@ -297,12 +351,7 @@ async def main():
                                 len(message) >= MIN_BINARY_PCM_BYTES
                                 and len(message) % 2 == 0
                             ):
-                                if output_queue.full():
-                                    try:
-                                        output_queue.get_nowait()
-                                    except asyncio.QueueEmpty:
-                                        pass
-                                await output_queue.put(message)
+                                await enqueue_audio(message)
                         continue
 
                     parsed = try_parse_json(message)
@@ -319,12 +368,7 @@ async def main():
                     audio_inline = extract_inline_audio(parsed)
                     if audio_inline:
                         if len(audio_inline) >= 2 and len(audio_inline) % 2 == 0:
-                            if output_queue.full():
-                                try:
-                                    output_queue.get_nowait()
-                                except asyncio.QueueEmpty:
-                                    pass
-                            await output_queue.put(audio_inline)
+                            await enqueue_audio(audio_inline)
 
                     # Optional text print
                     model_turn = parsed.get("serverContent", {}).get("modelTurn", {})

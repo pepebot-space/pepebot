@@ -531,6 +531,8 @@ Supported providers:
 Check out the demo clients in the `examples/live-api/` directory:
 - `client.py` - A Python console audio streaming client
 - `index.html` - A complete HTML5/JS/Tailwind browser web client using the Web Audio API
+- `python/` - Python live client (Poetry) based on the browser implementation
+- `nodejs/` - Node.js live client based on the browser implementation
 
 ## 🚀 Usage
 
