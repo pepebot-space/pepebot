@@ -97,6 +97,7 @@
     "enabled": false,
     "provider": "vertex",
     "model": "gemini-live-2.5-flash-native-audio",
+    "language": "id-ID",
     "generation_config": {
       "responseModalities": [
         "AUDIO"
@@ -113,7 +114,9 @@
       "automaticActivityDetection": {
         "disabled": false,
         "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
-        "endOfSpeechSensitivity": "END_SENSITIVITY_LOW"
+        "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
+        "prefixPaddingMs": 80,
+        "silenceDurationMs": 1400
       }
     }
   }

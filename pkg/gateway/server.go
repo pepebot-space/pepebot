@@ -39,6 +39,9 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 	// Initialize Live API server if enabled
 	if cfg.Live.Enabled {
 		gs.liveServer = live.NewLiveServer(cfg)
+		if agentManager != nil {
+			gs.liveServer.SetToolExecutor(agentManager)
+		}
 
 		// Register Vertex AI Live provider if configured
 		if cfg.Providers.Vertex.CredentialsFile != "" && cfg.Providers.Vertex.ProjectID != "" {

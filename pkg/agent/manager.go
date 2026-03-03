@@ -217,6 +217,34 @@ func (am *AgentManager) ProcessDirect(ctx context.Context, content string, media
 	return agentLoop.ProcessDirect(ctx, content, media, sessionKey)
 }
 
+// GetToolDefinitions returns tool definitions for the selected agent.
+func (am *AgentManager) GetToolDefinitions(agentName string) ([]map[string]interface{}, error) {
+	if agentName == "" {
+		agentName = am.defaultAgent
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		return nil, err
+	}
+
+	return agentLoop.ToolDefinitions(), nil
+}
+
+// ExecuteTool executes a tool using the selected agent's tool registry.
+func (am *AgentManager) ExecuteTool(ctx context.Context, agentName, toolName string, args map[string]interface{}) (string, error) {
+	if agentName == "" {
+		agentName = am.defaultAgent
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		return "", err
+	}
+
+	return agentLoop.ExecuteTool(ctx, toolName, args)
+}
+
 // ClearSession clears a session on the specified agent
 func (am *AgentManager) ClearSession(sessionKey, agentName string) {
 	if agentName == "" {

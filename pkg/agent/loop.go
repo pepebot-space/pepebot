@@ -294,6 +294,16 @@ func (al *AgentLoop) Sessions() *session.SessionManager {
 	return al.sessions
 }
 
+// ToolDefinitions returns tool schemas registered on this agent.
+func (al *AgentLoop) ToolDefinitions() []map[string]interface{} {
+	return al.tools.GetDefinitions()
+}
+
+// ExecuteTool executes a registered tool by name.
+func (al *AgentLoop) ExecuteTool(ctx context.Context, name string, args map[string]interface{}) (string, error) {
+	return al.tools.Execute(ctx, name, args)
+}
+
 func (al *AgentLoop) ProcessDirect(ctx context.Context, content string, media []string, sessionKey string) (string, error) {
 	msg := bus.InboundMessage{
 		Channel:    "cli",

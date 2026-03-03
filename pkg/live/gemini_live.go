@@ -63,15 +63,20 @@ func (p *GeminiLiveProvider) SetupMessage(model string) []byte {
 	if p.liveConfig.GenerationConfig != nil {
 		setupInner["generationConfig"] = p.liveConfig.GenerationConfig
 	} else {
-		setupInner["generationConfig"] = map[string]interface{}{
-			"responseModalities": []string{"AUDIO"},
-			"speechConfig": map[string]interface{}{
-				"voiceConfig": map[string]interface{}{
-					"prebuiltVoiceConfig": map[string]interface{}{
-						"voiceName": "Aoede",
-					},
+		speechConfig := map[string]interface{}{
+			"voiceConfig": map[string]interface{}{
+				"prebuiltVoiceConfig": map[string]interface{}{
+					"voiceName": "Aoede",
 				},
 			},
+		}
+		if p.liveConfig.Language != "" {
+			speechConfig["languageCode"] = p.liveConfig.Language
+		}
+
+		setupInner["generationConfig"] = map[string]interface{}{
+			"responseModalities": []string{"AUDIO"},
+			"speechConfig":       speechConfig,
 		}
 	}
 

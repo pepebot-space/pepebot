@@ -1,378 +1,396 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pepebot Live API</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pepebot Live API</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
+<body class="min-h-screen bg-slate-950 text-slate-100 p-4">
+  <div class="max-w-2xl mx-auto">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold">Pepebot Live Voice Demo</h1>
+          <p class="text-xs text-slate-400">Vertex/Gemini Live - stable 16k input, 24k output</p>
+        </div>
+        <div id="status" class="text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300">Disconnected</div>
+      </div>
 
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
-
-    <div class="max-w-md w-full bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-700">
-        <!-- Header -->
-        <div class="p-6 border-b border-gray-700 flex justify-between items-center">
-            <div>
-                <h1
-                    class="text-2xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
-                    Pepebot Live</h1>
-                <p class="text-sm text-gray-400 mt-1">Vertex AI Gemini Voice Demo</p>
-            </div>
-            <div class="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center">
-                <i class="fas fa-robot text-green-400 text-xl"></i>
-            </div>
+      <div class="p-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button id="connectBtn" class="py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition">Connect</button>
+          <button id="disconnectBtn" class="py-2.5 rounded-lg bg-rose-700 hover:bg-rose-600 transition">Disconnect</button>
         </div>
 
-        <!-- Status & Logs -->
-        <div class="p-6 space-y-4">
-            <div id="statusBadge"
-                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-300 border border-gray-600">
-                <span id="statusIndicator" class="h-2 w-2 rounded-full bg-gray-500 mr-2"></span>
-                <span id="statusText">Disconnected</span>
-            </div>
-
-            <div class="bg-black/50 rounded-lg p-3 h-48 overflow-y-auto font-mono text-xs text-gray-400" id="logs">
-                <div class="text-gray-500">System ready. Waiting to connect...</div>
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button id="startMicBtn" class="py-2.5 rounded-lg bg-blue-700 hover:bg-blue-600 transition">Start Mic</button>
+          <button id="stopMicBtn" class="py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition">Stop Mic</button>
         </div>
 
-        <!-- Controls -->
-        <div class="p-6 bg-gray-750 border-t border-gray-700 flex flex-col space-y-4">
-
-            <!-- Text Input -->
-            <div id="textInputArea" class="hidden flex space-x-2">
-                <input type="text" id="textInput" placeholder="Type a message..."
-                    class="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 text-sm"
-                    onkeydown="if(event.key==='Enter')sendTextMessage()">
-                <button onclick="sendTextMessage()"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </div>
-
-            <!-- Connection Controls -->
-            <button id="connectBtn"
-                class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors duration-200 flex items-center justify-center shadow-lg shadow-blue-500/20 ring-1 ring-blue-500/50">
-                <i class="fas fa-plug mr-2"></i> Connect to Server
-            </button>
-            <button id="disconnectBtn"
-                class="hidden w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors duration-200 flex items-center justify-center shadow-lg shadow-red-500/20 ring-1 ring-red-500/50">
-                <i class="fas fa-power-off mr-2"></i> Disconnect
-            </button>
-
-            <!-- Mic Controls -->
-            <div id="micControls" class="opacity-50 pointer-events-none flex space-x-3 transition-opacity duration-300">
-                <button id="startMicBtn"
-                    class="flex-1 py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200 flex items-center justify-center shadow-lg shadow-green-500/20 relative overflow-hidden group">
-                    <div
-                        class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                    </div>
-                    <i class="fas fa-microphone mr-2"></i> Start Talking
-                </button>
-                <button id="stopMicBtn"
-                    class="hidden flex-1 py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-medium transition-all duration-200 flex items-center justify-center border border-gray-600">
-                    <i class="fas fa-microphone-slash mr-2"></i> Stop Mic
-                </button>
-            </div>
+        <div class="rounded-lg border border-slate-800 p-3 bg-slate-950/50">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm text-slate-300">
+              <input id="noiseGateToggle" type="checkbox" class="mr-1 align-middle" checked />
+              Noise gate
+            </label>
+            <span id="noiseGateValue" class="text-xs text-slate-400">x1.8</span>
+          </div>
+          <input id="noiseGateSlider" type="range" min="1.1" max="3.5" step="0.1" value="1.8" class="w-full" />
+          <p class="text-xs text-slate-500 mt-2">Lower = more sensitive mic, higher = more noise resistant.</p>
         </div>
+
+        <div class="flex gap-2">
+          <input id="textInput" class="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm" placeholder="Type message..." />
+          <button id="sendBtn" class="rounded-lg px-4 bg-indigo-700 hover:bg-indigo-600">Send</button>
+        </div>
+
+        <div id="logs" class="h-72 overflow-y-auto rounded-lg bg-black/40 border border-slate-800 p-3 font-mono text-xs text-slate-300"></div>
+      </div>
     </div>
+  </div>
 
-    <script>
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        const startMicBtn = document.getElementById('startMicBtn');
-        const stopMicBtn = document.getElementById('stopMicBtn');
-        const micControls = document.getElementById('micControls');
-        const textInputArea = document.getElementById('textInputArea');
-        const textInput = document.getElementById('textInput');
-        const statusIndicator = document.getElementById('statusIndicator');
-        const statusText = document.getElementById('statusText');
-        const logs = document.getElementById('logs');
+  <script>
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const startMicBtn = document.getElementById('startMicBtn');
+    const stopMicBtn = document.getElementById('stopMicBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const textInput = document.getElementById('textInput');
+    const logs = document.getElementById('logs');
+    const statusEl = document.getElementById('status');
 
-        let ws = null;
-        let audioContext = null;
-        let micStream = null;
-        let audioProcessor = null;
-        let nextAudioSourceTime = 0;
+    const noiseGateToggle = document.getElementById('noiseGateToggle');
+    const noiseGateSlider = document.getElementById('noiseGateSlider');
+    const noiseGateValue = document.getElementById('noiseGateValue');
 
-        function log(message, type = 'info') {
-            const el = document.createElement('div');
-            el.className = `mb-1 ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : ''}`;
-            const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            el.innerHTML = `<span class="text-gray-600">[${time}]</span> ${message}`;
-            logs.appendChild(el);
-            logs.scrollTop = logs.scrollHeight;
-            console.log(message);
+    let ws = null;
+    let playbackCtx = null; // 24k output
+    let captureCtx = null;  // 16k input
+    let micStream = null;
+    let micSource = null;
+    let micProcessor = null;
+    let nextPlayTime = 0;
+
+    // Must follow Vertex docs
+    const INPUT_SAMPLE_RATE = 16000;
+    const OUTPUT_SAMPLE_RATE = 24000;
+    const INPUT_MIME = 'audio/pcm;rate=16000';
+
+    let noiseFloor = 0.008;
+    let gateHangover = 0;
+    const NOISE_ALPHA = 0.95;
+    const NOISE_MIN = 0.008;
+    const NOISE_HANGOVER_FRAMES = 3;
+    let noiseMultiplier = 1.8;
+
+    function log(msg, type = 'info') {
+      const time = new Date().toLocaleTimeString([], { hour12: false });
+      const row = document.createElement('div');
+      const color = type === 'error' ? 'text-rose-400' : type === 'ok' ? 'text-emerald-400' : 'text-slate-300';
+      row.className = color;
+      row.textContent = `[${time}] ${msg}`;
+      logs.appendChild(row);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function setStatus(value) {
+      statusEl.textContent = value;
+      if (value === 'Connected') {
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-emerald-900/60 text-emerald-300';
+      } else if (value === 'Connecting') {
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-amber-900/60 text-amber-300';
+      } else {
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300';
+      }
+    }
+
+    async function ensurePlaybackContext() {
+      if (!playbackCtx) {
+        playbackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: OUTPUT_SAMPLE_RATE });
+        log(`Playback context: ${playbackCtx.sampleRate}Hz`, 'ok');
+      }
+      if (playbackCtx.state === 'suspended') await playbackCtx.resume();
+    }
+
+    function pcm16ToFloat32(pcm16) {
+      const f = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) f[i] = pcm16[i] / 32768;
+      return f;
+    }
+
+    function playPCMBuffer(arrayBuffer) {
+      if (!playbackCtx) return;
+      const len = arrayBuffer.byteLength || 0;
+      if (len < 2 || len % 2 !== 0) return;
+
+      const pcm16 = new Int16Array(arrayBuffer);
+      if (!pcm16.length) return;
+
+      const f32 = pcm16ToFloat32(pcm16);
+      const buffer = playbackCtx.createBuffer(1, f32.length, OUTPUT_SAMPLE_RATE);
+      buffer.getChannelData(0).set(f32);
+
+      const src = playbackCtx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(playbackCtx.destination);
+
+      const now = playbackCtx.currentTime;
+      if (nextPlayTime < now) nextPlayTime = now;
+      src.start(nextPlayTime);
+      nextPlayTime += buffer.duration;
+    }
+
+    function decodeBase64Audio(base64String) {
+      let s = (base64String || '').replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4 !== 0) s += '=';
+      const bin = atob(s);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes.buffer;
+    }
+
+    function computeRMS(frame) {
+      if (!frame || !frame.length) return 0;
+      let sum = 0;
+      for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
+      return Math.sqrt(sum / frame.length);
+    }
+
+    function shouldSendFrame(frame) {
+      if (!noiseGateToggle.checked) return true;
+
+      const rms = computeRMS(frame);
+      if (rms < noiseFloor * 1.5) {
+        noiseFloor = NOISE_ALPHA * noiseFloor + (1 - NOISE_ALPHA) * rms;
+      }
+
+      const threshold = Math.max(NOISE_MIN, noiseFloor * noiseMultiplier);
+      const speech = rms >= threshold;
+
+      if (speech) {
+        gateHangover = NOISE_HANGOVER_FRAMES;
+        return true;
+      }
+      if (gateHangover > 0) {
+        gateHangover -= 1;
+        return true;
+      }
+      return false;
+    }
+
+    function sendText() {
+      const text = textInput.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({
+        clientContent: {
+          turns: [{ role: 'user', parts: [{ text }] }],
+          turnComplete: true,
+        },
+      }));
+      log(`You: ${text}`);
+      textInput.value = '';
+    }
+
+    function tryParseTextFrame(str) {
+      try {
+        const data = JSON.parse(str);
+
+        if (data.status === 'connected') {
+          setStatus('Connecting');
+          log(`Proxy connected: ${data.provider} -> ${data.model}`, 'ok');
+          return;
         }
 
-        function setStatus(status) {
-            if (status === 'connected') {
-                statusIndicator.className = 'h-2 w-2 rounded-full mr-2 bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse';
-                statusText.innerText = 'Connected to Pepebot';
-                connectBtn.classList.add('hidden');
-                disconnectBtn.classList.remove('hidden');
-                micControls.classList.remove('opacity-50', 'pointer-events-none');
-                textInputArea.classList.remove('hidden');
-            } else if (status === 'connecting') {
-                statusIndicator.className = 'h-2 w-2 rounded-full mr-2 bg-yellow-400 animate-pulse';
-                statusText.innerText = 'Connecting...';
-            } else {
-                statusIndicator.className = 'h-2 w-2 rounded-full mr-2 bg-gray-500';
-                statusText.innerText = 'Disconnected';
-                connectBtn.classList.remove('hidden');
-                disconnectBtn.classList.add('hidden');
-                micControls.classList.add('opacity-50', 'pointer-events-none');
-                textInputArea.classList.add('hidden');
-                stopMic();
+        if (data.setupComplete !== undefined) {
+          setStatus('Connected');
+          log('Live session ready', 'ok');
+          return;
+        }
+
+        if (data.serverContent) {
+          const c = data.serverContent;
+          if (c.turnComplete) log('turn complete');
+          if (c.modelTurn && Array.isArray(c.modelTurn.parts)) {
+            for (const part of c.modelTurn.parts) {
+              if (part.text) log(`Bot: ${part.text}`, 'ok');
+              if (part.inlineData && part.inlineData.data) {
+                playPCMBuffer(decodeBase64Audio(part.inlineData.data));
+              }
             }
+          }
+          return;
         }
 
-        async function connect() {
-            setStatus('connecting');
-            log('Initializing WebSocket connection...');
+        if (data.error) {
+          log(`Error: ${data.error}`, 'error');
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
 
-            ws = new WebSocket('ws://localhost:18790/v1/live');
-            ws.binaryType = 'arraybuffer'; // Receive binary data as ArrayBuffer, not Blob
+    function tryParseBinaryFrame(buf) {
+      // Some providers may deliver JSON as binary frame.
+      try {
+        const txt = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buf));
+        const first = txt.indexOf('{');
+        const last = txt.lastIndexOf('}');
+        if (first >= 0 && last > first) {
+          const body = txt.slice(first, last + 1);
+          tryParseTextFrame(body);
+          return true;
+        }
+      } catch (_) {
+        // ignore
+      }
+      return false;
+    }
 
-            ws.onopen = () => {
-                log('WebSocket opened. Sending setup config...', 'success');
-                ws.send(JSON.stringify({
-                    setup: {
-                        provider: "vertex",
-                        model: "gemini-live-2.5-flash-native-audio"
-                    }
-                }));
-            };
+    async function connect() {
+      if (ws && ws.readyState === WebSocket.OPEN) return;
 
-            ws.onmessage = async (event) => {
-                try {
-                    // Handle binary messages (raw audio from upstream)
-                    if (event.data instanceof ArrayBuffer) {
-                        playAudioPCM(event.data);
-                        return;
-                    }
+      setStatus('Connecting');
+      await ensurePlaybackContext();
 
-                    // Handle text/JSON messages
-                    const text = typeof event.data === 'string' ? event.data : await event.data.text();
-                    const data = JSON.parse(text);
+      ws = new WebSocket('ws://localhost:18790/v1/live');
+      ws.binaryType = 'arraybuffer';
 
-                    // Pepebot connection confirmation
-                    if (data.status === 'connected') {
-                        log(`Pepebot proxy ready: ${data.provider} → ${data.model}`, 'success');
-                        await initAudioOutput();
-                        return;
-                    }
+      ws.onopen = () => {
+        log('WebSocket open, sending setup', 'ok');
+        ws.send(JSON.stringify({
+          setup: {
+            provider: 'vertex',
+            model: 'gemini-live-2.5-flash-native-audio',
+            agent: 'default',
+            enable_tools: true,
+          },
+        }));
+      };
 
-                    // Vertex AI setupComplete
-                    if (data.setupComplete !== undefined) {
-                        setStatus('connected');
-                        log('✅ Vertex AI session ready!', 'success');
-                        return;
-                    }
-
-                    // Vertex AI server content (audio/text response)
-                    if (data.serverContent) {
-                        const content = data.serverContent;
-
-                        if (content.turnComplete) {
-                            log('  [turn complete]');
-                            return;
-                        }
-
-                        if (content.modelTurn && content.modelTurn.parts) {
-                            for (const part of content.modelTurn.parts) {
-                                if (part.text) {
-                                    log(`🤖 ${part.text}`, 'success');
-                                }
-                                if (part.inlineData && part.inlineData.data) {
-                                    playAudioBase64(part.inlineData.data);
-                                }
-                            }
-                        }
-                    }
-
-                    // Error from server
-                    if (data.error) {
-                        log(`Error: ${data.error}`, 'error');
-                    }
-
-                } catch (e) {
-                    // Silently ignore non-JSON frames
-                    console.warn('Non-JSON message received:', e.message);
-                }
-            };
-
-            ws.onerror = () => {
-                log('WebSocket error. Is Pepebot running?', 'error');
-                setStatus('disconnected');
-            };
-
-            ws.onclose = () => {
-                log('Connection closed.');
-                setStatus('disconnected');
-            };
+      ws.onmessage = async (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          if (tryParseBinaryFrame(event.data)) return;
+          // raw PCM fallback (some backends)
+          playPCMBuffer(event.data);
+          return;
         }
 
-        function disconnect() {
-            if (ws) { ws.close(); ws = null; }
-            setStatus('disconnected');
+        const txt = typeof event.data === 'string' ? event.data : await event.data.text();
+        tryParseTextFrame(txt);
+      };
+
+      ws.onerror = () => {
+        setStatus('Disconnected');
+        log('WebSocket error', 'error');
+      };
+
+      ws.onclose = () => {
+        setStatus('Disconnected');
+        log('WebSocket closed');
+      };
+    }
+
+    async function startMic() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('Connect first', 'error');
+        return;
+      }
+
+      await ensurePlaybackContext();
+
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: INPUT_SAMPLE_RATE,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      captureCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: INPUT_SAMPLE_RATE });
+      if (captureCtx.state === 'suspended') await captureCtx.resume();
+
+      micSource = captureCtx.createMediaStreamSource(micStream);
+      micProcessor = captureCtx.createScriptProcessor(4096, 1, 1);
+
+      micProcessor.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const input = e.inputBuffer.getChannelData(0);
+        if (!shouldSendFrame(input)) return;
+
+        const pcm16 = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
         }
 
-        // ==========================================
-        //  TEXT INPUT
-        // ==========================================
-        function sendTextMessage() {
-            const text = textInput.value.trim();
-            if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
 
-            // Send as clientContent (text turn)
-            ws.send(JSON.stringify({
-                clientContent: {
-                    turns: [{
-                        role: "user",
-                        parts: [{ text: text }]
-                    }],
-                    turnComplete: true
-                }
-            }));
+        ws.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{
+              mimeType: INPUT_MIME,
+              data: b64,
+            }],
+          },
+        }));
+      };
 
-            log(`You: ${text}`);
-            textInput.value = '';
-        }
+      micSource.connect(micProcessor);
+      micProcessor.connect(captureCtx.destination);
+      log('Mic started', 'ok');
+    }
 
-        // ==========================================
-        //  AUDIO OUTPUT (Playing Gemini's voice)
-        // ==========================================
-        async function initAudioOutput() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-                log("Audio output initialized (24kHz)");
-            }
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-        }
+    function stopMic() {
+      if (micProcessor) {
+        micProcessor.disconnect();
+        micProcessor = null;
+      }
+      if (micSource) {
+        micSource.disconnect();
+        micSource = null;
+      }
+      if (micStream) {
+        micStream.getTracks().forEach((t) => t.stop());
+        micStream = null;
+      }
+      if (captureCtx && captureCtx.state !== 'closed') {
+        captureCtx.close();
+      }
+      captureCtx = null;
+      log('Mic stopped');
+    }
 
-        function playAudioBase64(base64String) {
-            try {
-                const binaryString = atob(base64String);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
-                playAudioPCM(bytes.buffer);
-            } catch (e) {
-                console.error("Audio decode error:", e);
-            }
-        }
+    function disconnect() {
+      stopMic();
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      setStatus('Disconnected');
+    }
 
-        function playAudioPCM(arrayBuffer) {
-            if (!audioContext) return;
-            try {
-                const pcm16 = new Int16Array(arrayBuffer);
-                if (pcm16.length === 0) return;
+    connectBtn.addEventListener('click', connect);
+    disconnectBtn.addEventListener('click', disconnect);
+    startMicBtn.addEventListener('click', startMic);
+    stopMicBtn.addEventListener('click', stopMic);
+    sendBtn.addEventListener('click', sendText);
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendText();
+    });
 
-                const float32 = new Float32Array(pcm16.length);
-                for (let i = 0; i < pcm16.length; i++) {
-                    float32[i] = pcm16[i] / 32768.0;
-                }
+    noiseGateSlider.addEventListener('input', () => {
+      noiseMultiplier = Number(noiseGateSlider.value);
+      noiseGateValue.textContent = `x${noiseMultiplier.toFixed(1)}`;
+    });
 
-                const buffer = audioContext.createBuffer(1, float32.length, 24000);
-                buffer.getChannelData(0).set(float32);
-
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContext.destination);
-
-                const currentTime = audioContext.currentTime;
-                if (nextAudioSourceTime < currentTime) {
-                    nextAudioSourceTime = currentTime;
-                }
-                source.start(nextAudioSourceTime);
-                nextAudioSourceTime += buffer.duration;
-            } catch (e) {
-                console.error("Audio playback error:", e);
-            }
-        }
-
-        // ==========================================
-        //  AUDIO INPUT (Sending mic to Gemini)
-        // ==========================================
-        async function startMic() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                log('Must be connected first.', 'error');
-                return;
-            }
-
-            try {
-                await initAudioOutput();
-
-                micStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
-                });
-
-                const source = audioContext.createMediaStreamSource(micStream);
-                audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-
-                audioProcessor.onaudioprocess = (e) => {
-                    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-                    const inputData = e.inputBuffer.getChannelData(0);
-
-                    // Float32 → PCM16
-                    const pcm16 = new Int16Array(inputData.length);
-                    for (let i = 0; i < inputData.length; i++) {
-                        let s = Math.max(-1, Math.min(1, inputData[i]));
-                        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                    }
-
-                    // PCM16 → Base64
-                    const uint8 = new Uint8Array(pcm16.buffer);
-                    let binaryStr = '';
-                    for (let i = 0; i < uint8.byteLength; i++) {
-                        binaryStr += String.fromCharCode(uint8[i]);
-                    }
-                    const base64Audio = btoa(binaryStr);
-
-                    // Send as realtimeInput (correct Vertex AI streaming format)
-                    ws.send(JSON.stringify({
-                        realtimeInput: {
-                            mediaChunks: [{
-                                mimeType: "audio/pcm;rate=16000",
-                                data: base64Audio
-                            }]
-                        }
-                    }));
-                };
-
-                source.connect(audioProcessor);
-                audioProcessor.connect(audioContext.destination);
-
-                log('🎤 Microphone started. Speak now!', 'success');
-                startMicBtn.classList.add('hidden');
-                stopMicBtn.classList.remove('hidden');
-
-            } catch (e) {
-                log(`Mic access error: ${e.message}`, 'error');
-            }
-        }
-
-        function stopMic() {
-            if (audioProcessor) { audioProcessor.disconnect(); audioProcessor = null; }
-            if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-            startMicBtn.classList.remove('hidden');
-            stopMicBtn.classList.add('hidden');
-            log('Microphone stopped.');
-        }
-
-        // Event Listeners
-        connectBtn.addEventListener('click', connect);
-        disconnectBtn.addEventListener('click', disconnect);
-        startMicBtn.addEventListener('click', startMic);
-        stopMicBtn.addEventListener('click', stopMic);
-    </script>
+    log('Ready. Click Connect.');
+  </script>
 </body>
-
 </html>
