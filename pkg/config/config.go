@@ -14,6 +14,7 @@ type Config struct {
 	Channels  ChannelsConfig  `json:"channels"`
 	Providers ProvidersConfig `json:"providers"`
 	Gateway   GatewayConfig   `json:"gateway"`
+	Live      LiveConfig      `json:"live"`
 	Tools     ToolsConfig     `json:"tools"`
 	mu        sync.RWMutex
 }
@@ -136,6 +137,12 @@ type GatewayConfig struct {
 	Port int    `json:"port" env:"PEPEBOT_GATEWAY_PORT"`
 }
 
+type LiveConfig struct {
+	Enabled  bool   `json:"enabled" env:"PEPEBOT_LIVE_ENABLED"`
+	Provider string `json:"provider" env:"PEPEBOT_LIVE_PROVIDER"`
+	Model    string `json:"model" env:"PEPEBOT_LIVE_MODEL"`
+}
+
 type WebSearchConfig struct {
 	APIKey     string `json:"api_key" env:"PEPEBOT_TOOLS_WEB_SEARCH_API_KEY"`
 	MaxResults int    `json:"max_results" env:"PEPEBOT_TOOLS_WEB_SEARCH_MAX_RESULTS"`
@@ -207,6 +214,11 @@ func DefaultConfig() *Config {
 		Gateway: GatewayConfig{
 			Host: "127.0.0.1",
 			Port: 18790,
+		},
+		Live: LiveConfig{
+			Enabled:  false,
+			Provider: "vertex",
+			Model:    "gemini-live-2.5-flash-native-audio",
 		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{

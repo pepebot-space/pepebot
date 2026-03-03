@@ -92,5 +92,10 @@
   "gateway": {
     "host": "127.0.0.1",
     "port": 18790
+  },
+  "live": {
+    "enabled": false,
+    "provider": "vertex",
+    "model": "gemini-live-2.5-flash-native-audio"
   }
 }

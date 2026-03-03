@@ -9,6 +9,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/agent"
 	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/config"
+	"github.com/pepebot-space/pepebot/pkg/live"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
@@ -18,6 +19,7 @@ type GatewayServer struct {
 	agentManager *agent.AgentManager
 	bus          *bus.MessageBus
 	httpServer   *http.Server
+	liveServer   *live.LiveServer
 	restartFunc  func() // called to trigger graceful restart
 }
 
@@ -28,11 +30,36 @@ func (gs *GatewayServer) SetRestartFunc(fn func()) {
 
 // NewGatewayServer creates a new gateway HTTP server
 func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgBus *bus.MessageBus) *GatewayServer {
-	return &GatewayServer{
+	gs := &GatewayServer{
 		config:       cfg,
 		agentManager: agentManager,
 		bus:          msgBus,
 	}
+
+	// Initialize Live API server if enabled
+	if cfg.Live.Enabled {
+		gs.liveServer = live.NewLiveServer(cfg)
+
+		// Register Vertex AI Live provider if configured
+		if cfg.Providers.Vertex.CredentialsFile != "" && cfg.Providers.Vertex.ProjectID != "" {
+			vertexLive, err := live.NewVertexLiveProvider(
+				cfg.Providers.Vertex.CredentialsFile,
+				cfg.Providers.Vertex.ProjectID,
+				cfg.Providers.Vertex.Region,
+			)
+			if err != nil {
+				logger.WarnCF("gateway", "Failed to init Vertex Live provider", map[string]interface{}{
+					"error": err.Error(),
+				})
+			} else {
+				gs.liveServer.RegisterProvider("vertex", vertexLive)
+			}
+		}
+
+		logger.InfoC("gateway", "Live API enabled on /v1/live")
+	}
+
+	return gs
 }
 
 // Start starts the HTTP server
@@ -53,6 +80,11 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/config", gs.corsMiddleware(gs.handleConfig))
 	mux.HandleFunc("/v1/restart", gs.corsMiddleware(gs.handleRestart))
 	mux.HandleFunc("/v1/send", gs.corsMiddleware(gs.handleSend))
+
+	// Live API WebSocket endpoint
+	if gs.liveServer != nil {
+		mux.HandleFunc("/v1/live", gs.liveServer.HandleWebSocket)
+	}
 
 	addr := fmt.Sprintf("%s:%d", gs.config.Gateway.Host, gs.config.Gateway.Port)
 	gs.httpServer = &http.Server{
