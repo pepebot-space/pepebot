@@ -76,6 +76,16 @@
     const INPUT_SAMPLE_RATE = 16000;
     const OUTPUT_SAMPLE_RATE = 24000;
     const INPUT_MIME = 'audio/pcm;rate=16000';
+    const SESSION_STORAGE_KEY = 'pepebot_live_session_key';
+
+    function getOrCreateClientSessionKey() {
+      let key = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!key) {
+        key = `web-live:${Date.now()}`;
+        localStorage.setItem(SESSION_STORAGE_KEY, key);
+      }
+      return key;
+    }
 
     let noiseFloor = 0.008;
     let gateHangover = 0;
@@ -198,7 +208,7 @@
 
         if (data.status === 'connected') {
           setStatus('Connecting');
-          log(`Proxy connected: ${data.provider} -> ${data.model}`, 'ok');
+          log(`Proxy connected: ${data.provider} -> ${data.model} (${data.session || 'no-session'})`, 'ok');
           return;
         }
 
@@ -263,6 +273,7 @@
             provider: 'vertex',
             model: 'gemini-live-2.5-flash-native-audio',
             agent: 'default',
+            session_key: getOrCreateClientSessionKey(),
             enable_tools: true,
           },
         }));

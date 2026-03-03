@@ -442,6 +442,7 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 		}
 		messages = append(messages, assistantMsg)
 
+		toolExecCtx := tools.WithSessionKey(ctx, msg.SessionKey)
 		for _, tc := range response.ToolCalls {
 			logger.DebugCF("agent", "Executing tool (stream mode)", map[string]interface{}{
 				"tool_name": tc.Name,
@@ -449,7 +450,7 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 				"arguments": truncateString(mustJSON(tc.Arguments), 300),
 			})
 
-			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
+			result, err := al.tools.Execute(toolExecCtx, tc.Name, tc.Arguments)
 			if err != nil {
 				result = fmt.Sprintf("Error: %v", err)
 			}
@@ -573,6 +574,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		}
 		messages = append(messages, assistantMsg)
 
+		toolExecCtx := tools.WithSessionKey(ctx, msg.SessionKey)
 		for _, tc := range response.ToolCalls {
 			logger.DebugCF("agent", "Executing tool", map[string]interface{}{
 				"tool_name": tc.Name,
@@ -580,7 +582,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 				"arguments": truncateString(mustJSON(tc.Arguments), 300),
 			})
 
-			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
+			result, err := al.tools.Execute(toolExecCtx, tc.Name, tc.Arguments)
 			if err != nil {
 				logger.ErrorCF("agent", "Tool execution failed", map[string]interface{}{
 					"tool_name": tc.Name,

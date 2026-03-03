@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/tools"
 )
 
 // LiveProvider abstracts a real-time streaming AI backend (e.g. Vertex AI Live API)
@@ -48,6 +49,8 @@ type SetupConfig struct {
 	Model    string `json:"model,omitempty"`
 	Provider string `json:"provider,omitempty"`
 	Agent    string `json:"agent,omitempty"`
+	// SessionKey controls persistent context keys for downstream tool calls.
+	SessionKey string `json:"session_key,omitempty"`
 	// EnableTools controls whether gateway-side tool execution is enabled for the session.
 	// Defaults to true when omitted.
 	EnableTools *bool `json:"enable_tools,omitempty"`
@@ -71,6 +74,7 @@ type LiveSession struct {
 	provider     string
 	model        string
 	agent        string
+	sessionKey   string
 	enableTools  bool
 	createdAt    time.Time
 	upstreamMu   sync.Mutex
@@ -183,10 +187,16 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		enableTools = *setupMsg.Setup.EnableTools
 	}
 
+	sessionKey := strings.TrimSpace(setupMsg.Setup.SessionKey)
+	if sessionKey == "" {
+		sessionKey = fmt.Sprintf("live:%s:%s:%d", providerName, agentName, time.Now().UnixNano())
+	}
+
 	logger.InfoCF("live", "Session setup", map[string]interface{}{
 		"provider": providerName,
 		"model":    model,
 		"agent":    agentName,
+		"session":  sessionKey,
 		"tools":    enableTools,
 	})
 
@@ -277,6 +287,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		provider:     providerName,
 		model:        model,
 		agent:        agentName,
+		sessionKey:   sessionKey,
 		enableTools:  enableTools,
 		createdAt:    time.Now(),
 	}
@@ -289,6 +300,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		"status":   "connected",
 		"provider": providerName,
 		"model":    model,
+		"session":  sessionKey,
 	})
 	clientConn.WriteMessage(websocket.TextMessage, confirmMsg)
 
@@ -413,6 +425,7 @@ func (ls *LiveServer) handleUpstreamToolCalls(ctx context.Context, session *Live
 		}
 
 		toolCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		toolCtx = tools.WithSessionKey(toolCtx, session.sessionKey)
 		result, err := ls.tools.ExecuteTool(toolCtx, session.agent, name, args)
 		cancel()
 
