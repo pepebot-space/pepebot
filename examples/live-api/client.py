@@ -28,7 +28,7 @@ URL = "ws://localhost:18790/v1/live"
 
 
 # Lightweight noise gate for mic input (optional)
-ENABLE_NOISE_GATE = False
+ENABLE_NOISE_GATE = True
 NOISE_FLOOR_ALPHA = 0.95
 NOISE_GATE_MULTIPLIER = 2.0
 NOISE_GATE_MIN_RMS = 180
