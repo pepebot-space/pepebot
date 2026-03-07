@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pepebot Live API (Auto Mic/Speaker)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 p-4">
+  <div class="max-w-2xl mx-auto">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold">Pepebot Live Voice Demo (Auto Mic/Speaker)</h1>
+          <p class="text-xs text-slate-400">Connect sekali: WebSocket + speaker + microphone langsung aktif</p>
+        </div>
+        <div id="status" class="text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300">Disconnected</div>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button id="connectBtn" class="py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition">Connect (Auto Mic)</button>
+          <button id="disconnectBtn" class="py-2.5 rounded-lg bg-rose-700 hover:bg-rose-600 transition">Disconnect</button>
+        </div>
+
+        <div class="flex gap-2">
+          <input id="textInput" class="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm" placeholder="Type message..." />
+          <button id="sendBtn" class="rounded-lg px-4 bg-indigo-700 hover:bg-indigo-600">Send</button>
+        </div>
+
+        <div id="logs" class="h-72 overflow-y-auto rounded-lg bg-black/40 border border-slate-800 p-3 font-mono text-xs text-slate-300"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const textInput = document.getElementById('textInput');
+    const logs = document.getElementById('logs');
+    const statusEl = document.getElementById('status');
+
+    let ws = null;
+    let playbackCtx = null;
+    let captureCtx = null;
+    let micStream = null;
+    let micSource = null;
+    let micProcessor = null;
+    let nextPlayTime = 0;
+    let setupReady = false;
+    let micSuspendedUntil = 0;
+
+    const INPUT_SAMPLE_RATE = 16000;
+    const OUTPUT_SAMPLE_RATE = 24000;
+    const INPUT_MIME = 'audio/pcm;rate=16000';
+    const SESSION_STORAGE_KEY = 'pepebot_live_session_key';
+
+    function getOrCreateClientSessionKey() {
+      let key = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!key) {
+        key = `web-live:${Date.now()}`;
+        localStorage.setItem(SESSION_STORAGE_KEY, key);
+      }
+      return key;
+    }
+
+    function log(msg, type = 'info') {
+      const time = new Date().toLocaleTimeString([], { hour12: false });
+      const row = document.createElement('div');
+      const color = type === 'error' ? 'text-rose-400' : type === 'ok' ? 'text-emerald-400' : 'text-slate-300';
+      row.className = color;
+      row.textContent = `[${time}] ${msg}`;
+      logs.appendChild(row);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function setStatus(value) {
+      statusEl.textContent = value;
+      if (value === 'Connected') {
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-emerald-900/60 text-emerald-300';
+      } else if (value === 'Connecting') {
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-amber-900/60 text-amber-300';
+      } else {
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300';
+      }
+    }
+
+    async function ensurePlaybackContext() {
+      if (!playbackCtx) {
+        playbackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: OUTPUT_SAMPLE_RATE });
+        log(`Playback context: ${playbackCtx.sampleRate}Hz`, 'ok');
+      }
+      if (playbackCtx.state === 'suspended') {
+        await playbackCtx.resume();
+      }
+    }
+
+    function pcm16ToFloat32(pcm16) {
+      const f = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) f[i] = pcm16[i] / 32768;
+      return f;
+    }
+
+    function playPCMBuffer(arrayBuffer) {
+      if (!playbackCtx) return;
+      const len = arrayBuffer.byteLength || 0;
+      if (len < 2 || len % 2 !== 0) return;
+
+      const pcm16 = new Int16Array(arrayBuffer);
+      if (!pcm16.length) return;
+
+      const f32 = pcm16ToFloat32(pcm16);
+      const buffer = playbackCtx.createBuffer(1, f32.length, OUTPUT_SAMPLE_RATE);
+      buffer.getChannelData(0).set(f32);
+
+      const src = playbackCtx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(playbackCtx.destination);
+
+      const now = playbackCtx.currentTime;
+      if (nextPlayTime < now) nextPlayTime = now;
+      src.start(nextPlayTime);
+      nextPlayTime += buffer.duration;
+    }
+
+    function decodeBase64Audio(base64String) {
+      let s = (base64String || '').replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4 !== 0) s += '=';
+      const bin = atob(s);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes.buffer;
+    }
+
+    function sendText() {
+      const text = textInput.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      micSuspendedUntil = Date.now() + 1500;
+      ws.send(JSON.stringify({
+        clientContent: {
+          turns: [{ role: 'user', parts: [{ text }] }],
+          turnComplete: true,
+        },
+      }));
+      log(`You: ${text}`);
+      textInput.value = '';
+    }
+
+    function tryParseTextFrame(str) {
+      try {
+        const data = JSON.parse(str);
+
+        if (data.status === 'connected') {
+          setStatus('Connecting');
+          log(`Proxy connected: ${data.provider} -> ${data.model} (${data.session || 'no-session'})`, 'ok');
+          return;
+        }
+
+        if (data.setupComplete !== undefined) {
+          setupReady = true;
+          setStatus('Connected');
+          log('Live session ready', 'ok');
+          startMic().catch((err) => {
+            log(`Mic permission/error: ${err?.message || err}`, 'error');
+          });
+          return;
+        }
+
+        if (data.serverContent) {
+          const c = data.serverContent;
+          if (c.modelTurn && Array.isArray(c.modelTurn.parts)) {
+            for (const part of c.modelTurn.parts) {
+              if (part.text) log(`Bot: ${part.text}`, 'ok');
+              if (part.inlineData && part.inlineData.data) {
+                playPCMBuffer(decodeBase64Audio(part.inlineData.data));
+              }
+            }
+          }
+          return;
+        }
+
+        if (data.error) {
+          log(`Error: ${data.error}`, 'error');
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function tryParseBinaryFrame(buf) {
+      try {
+        const txt = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buf));
+        const first = txt.indexOf('{');
+        const last = txt.lastIndexOf('}');
+        if (first >= 0 && last > first) {
+          tryParseTextFrame(txt.slice(first, last + 1));
+          return true;
+        }
+      } catch (_) {
+        // ignore
+      }
+      return false;
+    }
+
+    async function startMic() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('Connect first', 'error');
+        return;
+      }
+      if (micStream) return;
+
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: INPUT_SAMPLE_RATE,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      captureCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: INPUT_SAMPLE_RATE });
+      if (captureCtx.state === 'suspended') await captureCtx.resume();
+
+      micSource = captureCtx.createMediaStreamSource(micStream);
+      micProcessor = captureCtx.createScriptProcessor(4096, 1, 1);
+
+      micProcessor.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN || !setupReady) return;
+        if (Date.now() < micSuspendedUntil) return;
+
+        const input = e.inputBuffer.getChannelData(0);
+        const pcm16 = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
+
+        ws.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{
+              mimeType: INPUT_MIME,
+              data: b64,
+            }],
+          },
+        }));
+      };
+
+      micSource.connect(micProcessor);
+      micProcessor.connect(captureCtx.destination);
+      log('Mic started automatically', 'ok');
+    }
+
+    function stopMic() {
+      if (micProcessor) {
+        micProcessor.disconnect();
+        micProcessor = null;
+      }
+      if (micSource) {
+        micSource.disconnect();
+        micSource = null;
+      }
+      if (micStream) {
+        micStream.getTracks().forEach((t) => t.stop());
+        micStream = null;
+      }
+      if (captureCtx && captureCtx.state !== 'closed') {
+        captureCtx.close();
+      }
+      captureCtx = null;
+    }
+
+    async function connect() {
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+
+      setStatus('Connecting');
+      await ensurePlaybackContext();
+
+      ws = new WebSocket('ws://localhost:18790/v1/live');
+      ws.binaryType = 'arraybuffer';
+      setupReady = false;
+
+      ws.onopen = () => {
+        log('WebSocket open, sending setup', 'ok');
+        ws.send(JSON.stringify({
+          setup: {
+            provider: 'vertex',
+            model: 'gemini-live-2.5-flash-native-audio',
+            agent: 'default',
+            session_key: getOrCreateClientSessionKey(),
+            enable_tools: true,
+          },
+        }));
+      };
+
+      ws.onmessage = async (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          if (tryParseBinaryFrame(event.data)) return;
+          playPCMBuffer(event.data);
+          return;
+        }
+        const txt = typeof event.data === 'string' ? event.data : await event.data.text();
+        tryParseTextFrame(txt);
+      };
+
+      ws.onerror = () => {
+        setStatus('Disconnected');
+        log('WebSocket error', 'error');
+      };
+
+      ws.onclose = () => {
+        stopMic();
+        setStatus('Disconnected');
+        log('WebSocket closed');
+      };
+    }
+
+    function disconnect() {
+      setupReady = false;
+      stopMic();
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      setStatus('Disconnected');
+    }
+
+    connectBtn.addEventListener('click', connect);
+    disconnectBtn.addEventListener('click', disconnect);
+    sendBtn.addEventListener('click', sendText);
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendText();
+    });
+
+    log('Ready. Click Connect: speaker + microphone will start automatically.');
+  </script>
+</body>
+</html>

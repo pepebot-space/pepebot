@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-03-03
+
+### Added
+- **Gemini Live API & OpenAI Realtime (WebSocket proxy)**: Real-time multimodal streaming via WebSocket proxy
+  - New endpoint: `ws://localhost:18790/v1/live` — bidirectional WebSocket proxy
+  - Supported Live Providers:
+    - **Vertex AI** (`vertex`) - handles OAuth2 service account token injection automatically
+    - **OpenAI Realtime** (`openai`) - injects standard Bearer token and `OpenAI-Beta` headers
+    - **Google AI Studio** (`gemini`) - injects standard API key query parameter
+    - **MAIA Router** (`maiarouter`) - LiteLLM compatible Realtime API proxy
+  - Supports audio, video, and text streaming in real-time
+  - Client sends setup message with model/provider selection, then streams data bidirectionally
+  - `LiveProvider` interface for future extensibility
+  - Default configured model: `gemini-live-2.5-flash-native-audio` (Vertex default)
+  - New config: `live.enabled`, `live.provider`, `live.model`
+  - Env vars: `PEPEBOT_LIVE_ENABLED`, `PEPEBOT_LIVE_PROVIDER`, `PEPEBOT_LIVE_MODEL`
+  - New package: `pkg/live/` with `live.go` (WebSocket server), `vertex_live.go`, `openai_live.go`, `gemini_live.go`
+
+### Technical Details
+- New files: `pkg/live/live.go` (~290 lines), `pkg/live/vertex_live.go` (~110 lines)
+- Modified: `pkg/gateway/server.go` (LiveServer init + `/v1/live` route)
+- Modified: `pkg/config/config.go` (LiveConfig struct + defaults)
+- Modified: `config.example.json`, `.env.example` (live API config examples)
+- Promoted `gorilla/websocket` from indirect to direct dependency
+- Architecture: WebSocket proxy (same approach as Google's official Python demo)
+
 ## [0.5.6] - 2026-03-02
 
 ### Added

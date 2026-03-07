@@ -7,6 +7,7 @@ require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/chzyer/readline v1.5.1
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	go.mau.fi/whatsmeow v0.0.0-20260211193157-7b33f6289f98
 	golang.org/x/oauth2 v0.35.0
@@ -22,7 +23,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/elliotchance/orderedmap/v3 v3.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect

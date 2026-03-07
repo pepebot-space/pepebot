@@ -294,6 +294,16 @@ func (al *AgentLoop) Sessions() *session.SessionManager {
 	return al.sessions
 }
 
+// ToolDefinitions returns tool schemas registered on this agent.
+func (al *AgentLoop) ToolDefinitions() []map[string]interface{} {
+	return al.tools.GetDefinitions()
+}
+
+// ExecuteTool executes a registered tool by name.
+func (al *AgentLoop) ExecuteTool(ctx context.Context, name string, args map[string]interface{}) (string, error) {
+	return al.tools.Execute(ctx, name, args)
+}
+
 func (al *AgentLoop) ProcessDirect(ctx context.Context, content string, media []string, sessionKey string) (string, error) {
 	msg := bus.InboundMessage{
 		Channel:    "cli",
@@ -432,6 +442,7 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 		}
 		messages = append(messages, assistantMsg)
 
+		toolExecCtx := tools.WithSessionKey(ctx, msg.SessionKey)
 		for _, tc := range response.ToolCalls {
 			logger.DebugCF("agent", "Executing tool (stream mode)", map[string]interface{}{
 				"tool_name": tc.Name,
@@ -439,7 +450,7 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 				"arguments": truncateString(mustJSON(tc.Arguments), 300),
 			})
 
-			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
+			result, err := al.tools.Execute(toolExecCtx, tc.Name, tc.Arguments)
 			if err != nil {
 				result = fmt.Sprintf("Error: %v", err)
 			}
@@ -563,6 +574,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		}
 		messages = append(messages, assistantMsg)
 
+		toolExecCtx := tools.WithSessionKey(ctx, msg.SessionKey)
 		for _, tc := range response.ToolCalls {
 			logger.DebugCF("agent", "Executing tool", map[string]interface{}{
 				"tool_name": tc.Name,
@@ -570,7 +582,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 				"arguments": truncateString(mustJSON(tc.Arguments), 300),
 			})
 
-			result, err := al.tools.Execute(ctx, tc.Name, tc.Arguments)
+			result, err := al.tools.Execute(toolExecCtx, tc.Name, tc.Arguments)
 			if err != nil {
 				logger.ErrorCF("agent", "Tool execution failed", map[string]interface{}{
 					"tool_name": tc.Name,

@@ -478,6 +478,62 @@ To set up Vertex AI:
 }
 ```
 
+#### Live API (Real-time WebSocket) Configuration
+
+```json
+{
+  "live": {
+    "enabled": true,
+    "provider": "vertex",
+    "model": "gemini-live-2.5-flash-native-audio",
+    "language": "id-ID",
+    "realtime_input_config": {
+      "automaticActivityDetection": {
+        "disabled": false,
+        "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+        "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
+        "prefixPaddingMs": 80,
+        "silenceDurationMs": 1400
+      }
+    }
+  }
+}
+```
+
+For voice sessions, `realtime_input_config.automaticActivityDetection` helps reduce false turn detection/noise triggers:
+- `language`: preferred speech language code for default live speech config (example: `id-ID`, `en-US`).
+- `startOfSpeechSensitivity` / `endOfSpeechSensitivity`: lower sensitivity reduces accidental activation.
+- `prefixPaddingMs`: keeps a small amount of leading audio before VAD start.
+- `silenceDurationMs`: waits longer silence before closing a turn (prevents rapid auto-replies).
+
+Pepebot includes a WebSocket proxy for real-time multimodal streaming (audio, video, text) using the Gemini Live API or OpenAI Realtime API. 
+The WebSocket endpoint is available at `ws://localhost:18790/v1/live`.
+
+For Vertex/Gemini Live sessions, Pepebot can now expose and execute local agent tools automatically (same tool registry used by normal agent mode). You can select the target agent directly in the setup message:
+
+```json
+{
+  "setup": {
+    "provider": "vertex",
+    "model": "gemini-live-2.5-flash-native-audio",
+    "agent": "default",
+    "enable_tools": true
+  }
+}
+```
+
+Supported providers:
+- `vertex` (Vertex AI Live API)
+- `openai` (OpenAI Realtime API)
+- `gemini` (Google AI Studio Live API)
+- `maiarouter` (MAIA Router Realtime API)
+
+Check out the demo clients in the `examples/live-api/` directory:
+- `client.py` - A Python console audio streaming client
+- `index.html` - A complete HTML5/JS/Tailwind browser web client using the Web Audio API
+- `python/` - Python live client (Poetry) based on the browser implementation
+- `nodejs/` - Node.js live client based on the browser implementation
+
 ## 🚀 Usage
 
 ### CLI Mode (Interactive)

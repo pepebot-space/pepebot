@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // AgentCaller delegates a message to a named agent.
@@ -538,7 +537,11 @@ func (t *ManageAgentTool) callAgent(ctx context.Context, args map[string]interfa
 
 	sessionKey, _ := args["session_key"].(string)
 	if strings.TrimSpace(sessionKey) == "" {
-		sessionKey = fmt.Sprintf("tool:manage_agent:call:%s:%d", name, time.Now().UnixNano())
+		parentSessionKey := SessionKeyFromContext(ctx)
+		if parentSessionKey == "" {
+			parentSessionKey = "default"
+		}
+		sessionKey = fmt.Sprintf("%s:tool:manage_agent:call:%s", parentSessionKey, name)
 	}
 
 	response, err := t.agentCaller.ProcessDirect(ctx, message, nil, sessionKey, name)
