@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import os
 import signal
 import sys
 from typing import Optional
@@ -9,7 +10,7 @@ import pyaudio
 import websockets
 
 
-URL = "ws://localhost:18790/v1/live"
+URL = os.environ.get("PEPEBOT_LIVE_URL", sys.argv[1] if len(sys.argv) > 1 else "ws://localhost:18790/v1/live")
 INPUT_SAMPLE_RATE = 16000
 OUTPUT_SAMPLE_RATE = 24000
 INPUT_MIME = "audio/pcm;rate=16000"

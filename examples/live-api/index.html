@@ -263,7 +263,10 @@
       setStatus('Connecting');
       await ensurePlaybackContext();
 
-      ws = new WebSocket('ws://localhost:18790/v1/live');
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = location.hostname || 'localhost';
+      const wsPort = location.port || '18790';
+      ws = new WebSocket(`${wsProto}//${wsHost}:${wsPort}/v1/live`);
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = () => {
