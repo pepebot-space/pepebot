@@ -1,18 +1,22 @@
-# 🐸 Pepebot v0.5.6 - Google Vertex AI Support
+# 🐸 Pepebot v0.5.8 - OpenCode Go Provider
 
-**Release Date:** 2026-03-02
+**Release Date:** 2026-03-13
 
 ## 🎉 What's New
 
-### ☁️ Google Vertex AI Provider
+### 🚀 OpenCode Go Provider
 
-Pepebot now supports **Google Cloud Vertex AI** natively using service account credentials (no API key needed).
+Pepebot now supports **OpenCode Go** — a low-cost subscription for open coding models hosted globally (US, EU, Singapore).
 
-- Authenticate via service account JSON file (`account_services.json`)
-- Configure `credentials_file`, `project_id`, and `region`
-- Full Chat and Streaming support with Gemini models
-- Tool calling (function declarations) fully supported
-- Supports both regional and global endpoints
+- **Affordable:** $5 first month, then $10/month
+- **Global:** Models hosted in US, EU, Singapore for stable international access
+- **High Limits:** Generous usage limits (up to 100K requests/month for minimax-m2.5)
+- **Default Model:** `minimax-m2.5` (recommended)
+
+**Available Models:**
+- `minimax-m2.5` — Best value, high volume limit
+- `kimi-k2.5`
+- `glm-5`
 
 **Quick Setup:**
 
@@ -20,58 +24,29 @@ Pepebot now supports **Google Cloud Vertex AI** natively using service account c
 {
   "agents": {
     "defaults": {
-      "model": "vertex/gemini-2.0-flash",
-      "provider": "vertex"
+      "model": "minimax-m2.5",
+      "provider": "opencodego"
     }
   },
   "providers": {
-    "vertex": {
-      "credentials_file": "~/.config/service-accounts.json",
-      "project_id": "your-gcp-project-id",
-      "region": "global"
+    "opencodego": {
+      "api_key": "your-opencode-api-key"
     }
   }
 }
 ```
 
-Or via environment variables:
+**Important:** Always set `provider: "opencodego"` to avoid conflicts with other providers.
+
+Or via environment:
 
 ```bash
-export PEPEBOT_PROVIDERS_VERTEX_CREDENTIALS_FILE=~/.config/service-accounts.json
-export PEPEBOT_PROVIDERS_VERTEX_PROJECT_ID=your-gcp-project-id
-export PEPEBOT_PROVIDERS_VERTEX_REGION=global
-export PEPEBOT_AGENTS_DEFAULTS_MODEL=vertex/gemini-2.0-flash
+export OPENCODEGO_API_KEY="your-api-key"
+export PEPEBOT_AGENTS_DEFAULTS_MODEL="minimax-m2.5"
+export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="opencodego"
 ```
 
-### 🎯 Explicit Provider Option
-
-New optional `provider` field in agent config — override automatic provider detection from model name prefix.
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": "gemini-2.0-flash",
-      "provider": "vertex"
-    }
-  }
-}
-```
-
-Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`
-
-Environment variable: `PEPEBOT_AGENTS_DEFAULTS_PROVIDER`
-
-### 🤖 Better Multi-Agent Controls (`manage_agent`)
-
-`manage_agent` is now more complete for agent lifecycle and delegation:
-
-- `remove` action to delete an agent from registry (optional file cleanup with `remove_files`)
-- `call` action to directly invoke another named agent and get its response
-- `assign_skill` action to persist skill assignments into per-agent memory (`<agent_dir>/memory/MEMORY.md`)
-- `register` now supports optional `provider`, so each agent can use different provider/model settings
-
-Prompt behavior has also been tightened so normal requests like "panggil agent" are less likely to be misinterpreted as workflow creation.
+Get your API key at [opencode.ai/auth](https://opencode.ai/auth)
 
 ---
 

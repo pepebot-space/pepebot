@@ -84,6 +84,7 @@ type ProvidersConfig struct {
 	VLLM       VLLMConfig       `json:"vllm"`
 	Gemini     GeminiConfig     `json:"gemini"`
 	Vertex     VertexConfig     `json:"vertex"`
+	OpenCodeGo OpenCodeGoConfig `json:"opencodego"`
 }
 
 type MAIARouterConfig struct {
@@ -130,6 +131,11 @@ type VertexConfig struct {
 	CredentialsFile string `json:"credentials_file" env:"PEPEBOT_PROVIDERS_VERTEX_CREDENTIALS_FILE"`
 	ProjectID       string `json:"project_id" env:"PEPEBOT_PROVIDERS_VERTEX_PROJECT_ID"`
 	Region          string `json:"region" env:"PEPEBOT_PROVIDERS_VERTEX_REGION"`
+}
+
+type OpenCodeGoConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_OPENCODEGO_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_OPENCODEGO_API_BASE"`
 }
 
 type GatewayConfig struct {
@@ -213,6 +219,7 @@ func DefaultConfig() *Config {
 			Vertex: VertexConfig{
 				Region: "global",
 			},
+			OpenCodeGo: OpenCodeGoConfig{},
 		},
 		Gateway: GatewayConfig{
 			Host: "127.0.0.1",
@@ -362,6 +369,14 @@ func overlayNativeEnvVars(cfg *Config) {
 		cfg.Providers.Vertex.Region = val
 	}
 
+	// OpenCode Go
+	if val := os.Getenv("OPENCODEGO_API_KEY"); val != "" {
+		cfg.Providers.OpenCodeGo.APIKey = val
+	}
+	if val := os.Getenv("OPENCODEGO_API_BASE"); val != "" {
+		cfg.Providers.OpenCodeGo.APIBase = val
+	}
+
 	// Channels - Telegram
 	if val := os.Getenv("TELEGRAM_BOT_TOKEN"); val != "" {
 		cfg.Channels.Telegram.Token = val
@@ -490,6 +505,8 @@ func GetProviderEnvKey(provider string) (string, string) {
 		envVars = []string{"PEPEBOT_PROVIDERS_VLLM_API_KEY", "VLLM_API_KEY"}
 	case "vertex":
 		envVars = []string{"PEPEBOT_PROVIDERS_VERTEX_CREDENTIALS_FILE", "GOOGLE_APPLICATION_CREDENTIALS"}
+	case "opencodego":
+		envVars = []string{"PEPEBOT_PROVIDERS_OPENCODEGO_API_KEY", "OPENCODEGO_API_KEY"}
 	default:
 		return "", ""
 	}
@@ -526,6 +543,8 @@ func GetProviderEnvBase(provider string) (string, string) {
 		envVars = []string{"PEPEBOT_PROVIDERS_VLLM_API_BASE", "VLLM_API_BASE"}
 	case "vertex":
 		envVars = []string{"PEPEBOT_PROVIDERS_VERTEX_PROJECT_ID", "VERTEX_PROJECT_ID", "GOOGLE_CLOUD_PROJECT"}
+	case "opencodego":
+		envVars = []string{"PEPEBOT_PROVIDERS_OPENCODEGO_API_BASE", "OPENCODEGO_API_BASE"}
 	default:
 		return "", ""
 	}

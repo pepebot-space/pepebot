@@ -260,7 +260,7 @@ nano ~/.pepebot/config.json
 
 The default model is set to `maia/gemini-3-pro-preview` which uses MAIA Router. You can change this to any supported model from the providers below.
 
-**Provider Option**: Set `provider` to explicitly choose a provider instead of auto-detecting from the model name. Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`.
+**Provider Option**: Set `provider` to explicitly choose a provider instead of auto-detecting from the model name. Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`, `opencodego`.
 
 #### Provider Configuration
 
@@ -380,6 +380,44 @@ To set up Vertex AI:
 2. Create a service account with Vertex AI permissions
 3. Download the JSON key file
 4. Set `credentials_file` to the path of the JSON key file
+
+**OpenCode Go**
+[OpenCode Go](https://opencode.ai/docs/go) provides low-cost access to open coding models hosted globally (US, EU, Singapore). Uses Anthropic Messages API format.
+
+**Important:** Set the `provider` field to `opencodego` when using OpenCode Go models to avoid conflicts with other providers.
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "minimax-m2.5",
+      "provider": "opencodego"
+    }
+  },
+  "providers": {
+    "opencodego": {
+      "api_key": "YOUR_OPENCODE_API_KEY"
+    }
+  }
+}
+```
+
+To get your API key:
+1. Visit [opencode.ai/auth](https://opencode.ai/auth)
+2. Subscribe to OpenCode Go ($5 first month, then $10/month)
+3. Copy your API key
+
+Available models:
+- `minimax-m2.5` (Recommended, high volume limit)
+- `kimi-k2.5`
+- `glm-5`
+
+Environment variables:
+```bash
+export OPENCODEGO_API_KEY="your-api-key"
+export PEPEBOT_AGENTS_DEFAULTS_MODEL="minimax-m2.5"
+export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="opencodego"
+```
 
 #### Channel Configuration
 

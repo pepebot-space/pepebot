@@ -1051,6 +1051,8 @@ func (p *CustomProvider) GenerateResponse(
 | **Groq** | Llama 3, Mixtral | Fast inference, open models |
 | **Gemini** | Gemini 2.0, 1.5 | Vision, tools, long context |
 | **Zhipu** | GLM-4 | Chinese language optimized |
+| **Vertex AI** | Gemini, Gemma | Google Cloud, service account auth |
+| **OpenCode Go** | minimax-m2.5, kimi-k2.5, glm-5 | Low-cost, global hosting |
 | **vLLM** | Local models | Self-hosted, any model |
 
 ---

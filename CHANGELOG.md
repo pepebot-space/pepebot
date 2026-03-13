@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-03-13
+
+### Added
+- **OpenCode Go Provider**: New provider support for OpenCode Go API (opencode.ai/docs/go)
+  - Low-cost subscription for open coding models ($5 first month, then $10/month)
+  - Models hosted globally (US, EU, Singapore) for stable international access
+  - Uses Anthropic Messages API format (`/v1/messages` endpoint)
+  - Default model: `minimax-m2.5`
+  - Available models:
+    - `minimax-m2.5` (Recommended, high volume limit)
+    - `kimi-k2.5`
+    - `glm-5`
+  - **Important**: Set `provider: "opencodego"` explicitly to avoid conflicts
+  - Environment variables: `OPENCODEGO_API_KEY`, `PEPEBOT_PROVIDERS_OPENCODEGO_API_KEY`
+  - Onboarding option 9 with API key setup
+  - New file: `pkg/providers/opencode_provider.go` (Anthropic Messages API implementation)
+
+### Technical Details
+- New `OpenCodeGoConfig` struct in `pkg/config/config.go`
+- New `OpenCodeProvider` implementing `LLMProvider` interface
+- Provider detection: explicit `provider: "opencodego"` setting required
+- Default API base: `https://opencode.ai/zen/go`
+- Updated documentation: README.md, config.example.json, .env.example
+
 ## [0.5.7] - 2026-03-03
 
 ### Added

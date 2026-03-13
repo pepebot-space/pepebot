@@ -77,7 +77,7 @@ func (t *ManageAgentTool) Parameters() map[string]interface{} {
 			},
 			"provider": map[string]interface{}{
 				"type":        "string",
-				"description": "Provider override for register (optional, e.g. 'vertex', 'openrouter', 'anthropic')",
+				"description": "Provider override for register (optional, e.g. 'vertex', 'openrouter', 'anthropic', 'opencodego')",
 			},
 			"description": map[string]interface{}{
 				"type":        "string",

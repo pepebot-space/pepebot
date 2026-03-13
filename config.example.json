@@ -30,7 +30,7 @@
     },
     "whatsapp": {
       "enabled": false,
-      "bridge_url": "ws://localhost:3001",
+      "db_path": "~/.pepebot/whatsapp.db",
       "allow_from": []
     },
     "feishu": {
@@ -79,6 +79,10 @@
       "credentials_file": "/path/to/account_services.json",
       "project_id": "your-gcp-project-id",
       "region": "us-central1"
+    },
+    "opencodego": {
+      "api_key": "YOUR_OPENCODE_API_KEY",
+      "api_base": ""
     }
   },
   "tools": {

@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.7"
+const version = "0.5.8"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -265,8 +265,9 @@ func onboard() {
 	fmt.Println("6. Groq")
 	fmt.Println("7. Zhipu (GLM)")
 	fmt.Println("8. Google Vertex AI (Service Account)")
-	fmt.Println("9. Skip (configure later)")
-	fmt.Print("\nSelect provider [1-9] (default: 1): ")
+	fmt.Println("9. OpenCode Go - minimax-m2.5, kimi-k2.5, glm-5")
+	fmt.Println("10. Skip (configure later)")
+	fmt.Print("\nSelect provider [1-10] (default: 1): ")
 
 	providerChoice, _ := reader.ReadString('\n')
 	providerChoice = strings.TrimSpace(providerChoice)
@@ -327,6 +328,13 @@ func onboard() {
 		fmt.Println("\n✓ Google Vertex AI selected")
 		fmt.Println("  Setup via Google Cloud Console: https://console.cloud.google.com")
 	case "9":
+		selectedProvider = "opencodego"
+		defaultModel = "minimax-m2.5"
+		providerURL = "https://opencode.ai/auth"
+		fmt.Println("\n✓ OpenCode Go selected")
+		fmt.Println("  Default model: minimax-m2.5")
+		fmt.Printf("  Get your API key at: %s\n", providerURL)
+	case "10":
 		fmt.Println("\n⊙ Skipped provider configuration")
 		selectedProvider = ""
 	default:
@@ -508,6 +516,11 @@ func onboard() {
 				if apiBase != "" {
 					cfg.Providers.Zhipu.APIBase = apiBase
 				}
+			case "opencodego":
+				cfg.Providers.OpenCodeGo.APIKey = apiKey
+				if apiBase != "" {
+					cfg.Providers.OpenCodeGo.APIBase = apiBase
+				}
 			}
 			cfg.Agents.Defaults.Model = defaultModel
 			fmt.Println("✓ API key configured")
@@ -683,7 +696,7 @@ func onboard() {
 		fmt.Println("  • Install skills:  pepebot skills install-builtin")
 	}
 
-	if selectedProvider != "" && (selectedProvider == "maiarouter" || selectedProvider == "anthropic" || selectedProvider == "openai") {
+	if selectedProvider != "" && (selectedProvider == "maiarouter" || selectedProvider == "anthropic" || selectedProvider == "openai" || selectedProvider == "opencodego") {
 		fmt.Println("\n💡 Tips:")
 		if selectedProvider == "maiarouter" {
 			fmt.Println("  • MAIA Router offers 52+ free models!")
