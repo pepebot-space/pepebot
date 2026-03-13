@@ -373,6 +373,11 @@ func CreateProviderWithOverrides(cfg *config.Config, overrideModel, overrideProv
 		case "vllm":
 			apiKey = cfg.Providers.VLLM.APIKey
 			apiBase = cfg.Providers.VLLM.APIBase
+		case "opencodego":
+			return NewOpenCodeProvider(
+				cfg.Providers.OpenCodeGo.APIKey,
+				cfg.Providers.OpenCodeGo.APIBase,
+			), nil
 		default:
 			return nil, fmt.Errorf("unknown provider: %s", provider)
 		}
