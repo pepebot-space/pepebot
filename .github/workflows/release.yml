@@ -374,3 +374,22 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.VERSION }}
             BUILD_TIME=${{ github.event.repository.updated_at }}
+
+  trigger-android:
+    name: Trigger Android Release
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Trigger pepebot-android release
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.ANDROID_REPO_TOKEN }}
+          repository: pepebot-space/pepebot-android
+          event-type: pepebot-release
+          client-payload: '{"version": "${{ steps.version.outputs.VERSION }}"}'
