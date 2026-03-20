@@ -35,7 +35,21 @@ Explicit video support is currently available for:
 - `vertex`
 - `gemini`
 
-For those providers, enabling `live.video=true` also auto-ensures `generation_config.responseModalities` contains `VIDEO`.
+For those providers, `live.video=true` is used as a capability toggle for client camera streaming flow.
+
+### 🧪 New Video Examples (Copied and Extended)
+
+To keep existing demos stable, we added separate video variants instead of modifying old files:
+
+- `examples/live-api/index-video.html` (HTML5 mic + webcam)
+- `examples/live-api/client-video.py` (Python mic + optional webcam via OpenCV)
+
+### 🔊 OpenAI Realtime Examples
+
+Added dedicated OpenAI protocol examples (separate files, existing demos untouched):
+
+- `examples/live-api/index-openai.html`
+- `examples/live-api/client-openai.py`
 
 If `live.video=true` is used with a non-video provider, session still runs for audio/text and a warning is logged.
 

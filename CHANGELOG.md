@@ -10,10 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Live API Video Toggle**: Added `live.video` config flag (and `PEPEBOT_LIVE_VIDEO`) so clients can enable camera/video mode via a single config switch.
 - **Live Session Video Capability Metadata**: `/v1/live` connected response now includes `video.requested`, `video.supported`, and `video.enabled` for client-side capability handling.
+- **Video demo clients**: added `examples/live-api/index-video.html` and `examples/live-api/client-video.py` by copying existing audio demos and extending them for webcam JPEG frame streaming.
+- **OpenAI Realtime demo clients**: added `examples/live-api/index-openai.html` and `examples/live-api/client-openai.py` with OpenAI event flow (`session.update`, `input_audio_buffer.append`, `response.audio.delta`).
 
 ### Changed
 - **Video support check for realtime providers**: explicit video support is now reported for `vertex` and `gemini`; non-video providers still work for audio/text with warning log when `live.video=true`.
-- **Generation config behavior**: for `vertex`/`gemini`, enabling `live.video` now auto-ensures `generation_config.responseModalities` includes `VIDEO`.
+- **Live video behavior**: `live.video` acts as a capability toggle for client camera streaming; generation config remains model-driven.
 - Updated docs/config samples: `config.example.json`, `.env.example`, `README.md`, and `docs/live-api.md`.
 
 ## [0.5.8] - 2026-03-13

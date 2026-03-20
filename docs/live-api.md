@@ -101,8 +101,8 @@ Saat koneksi `/v1/live` berhasil, server akan mengirim metadata video di pesan `
 - `video.supported`: apakah provider sesi saat ini punya dukungan video explicit
 - `video.enabled`: `true` jika `requested && supported`
 
-Untuk provider `vertex` dan `gemini`, `live.video=true` akan memastikan
-`generationConfig.responseModalities` berisi `VIDEO` (otomatis, termasuk saat `generation_config` diisi manual).
+Untuk provider `vertex` dan `gemini`, `live.video=true` digunakan sebagai capability flag agar client dapat mengaktifkan stream kamera.
+`generationConfig.responseModalities` tetap mengikuti konfigurasi model yang Anda pakai.
 
 Provider dengan dukungan video explicit saat ini:
 - `vertex`
@@ -169,4 +169,8 @@ Untuk provider OpenAI (serta proxy MAIA Router yang kompatibel dengan protokol O
   *(Pastikan klien Anda memonitor event stream lain seperti `session.update`, `response.create`, dll sesuai dokumentasi resmi OpenAI Realtime).*
 
 
-> 💡 **Tip Implementasi Klien:** Anda dapat melihat kode lengkap (*source code*) integrasi Web HTML, Python, dan ekosistem terkait Live API ini di bagian direktori [examples/live-api/](../examples/live-api/).
+> 💡 **Tip Implementasi Klien:** Anda dapat melihat kode lengkap (*source code*) integrasi Web HTML, Python, dan ekosistem terkait Live API ini di bagian direktori [examples/live-api/](../examples/live-api/) termasuk contoh video `index-video.html` dan `client-video.py`.
+
+Untuk varian OpenAI Realtime event protocol, gunakan contoh:
+- `examples/live-api/index-openai.html`
+- `examples/live-api/client-openai.py`

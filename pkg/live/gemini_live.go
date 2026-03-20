@@ -61,13 +61,8 @@ func (p *GeminiLiveProvider) SetupMessage(model string) []byte {
 	}
 
 	if p.liveConfig.GenerationConfig != nil {
-		setupInner["generationConfig"] = withVideoResponseModalities(p.liveConfig.GenerationConfig, p.liveConfig.Video)
+		setupInner["generationConfig"] = p.liveConfig.GenerationConfig
 	} else {
-		responseModalities := []string{"AUDIO"}
-		if p.liveConfig.Video {
-			responseModalities = []string{"AUDIO", "VIDEO"}
-		}
-
 		speechConfig := map[string]interface{}{
 			"voiceConfig": map[string]interface{}{
 				"prebuiltVoiceConfig": map[string]interface{}{
@@ -80,7 +75,7 @@ func (p *GeminiLiveProvider) SetupMessage(model string) []byte {
 		}
 
 		setupInner["generationConfig"] = map[string]interface{}{
-			"responseModalities": responseModalities,
+			"responseModalities": []string{"AUDIO"},
 			"speechConfig":       speechConfig,
 		}
 	}

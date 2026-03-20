@@ -542,7 +542,7 @@ export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="opencodego"
 For voice sessions, `realtime_input_config.automaticActivityDetection` helps reduce false turn detection/noise triggers:
 - `language`: preferred speech language code for default live speech config (example: `id-ID`, `en-US`).
 - `video`: enable live video mode hint in session metadata (`video.enabled`) so clients can auto-enable camera stream when provider supports it.
-- when `video: true` on `vertex`/`gemini`, Pepebot ensures `generation_config.responseModalities` includes `VIDEO` automatically.
+- `video` enables live video capability flag for session metadata and client-side camera streaming flow.
 - `startOfSpeechSensitivity` / `endOfSpeechSensitivity`: lower sensitivity reduces accidental activation.
 - `prefixPaddingMs`: keeps a small amount of leading audio before VAD start.
 - `silenceDurationMs`: waits longer silence before closing a turn (prevents rapid auto-replies).
@@ -580,7 +580,11 @@ When enabled, `/v1/live` connection confirmation includes:
 
 Check out the demo clients in the `examples/live-api/` directory:
 - `client.py` - A Python console audio streaming client
+- `client-video.py` - A Python console audio + webcam JPEG streaming client
+- `client-openai.py` - A Python console client for OpenAI Realtime event protocol
 - `index.html` - A complete HTML5/JS/Tailwind browser web client using the Web Audio API
+- `index-video.html` - HTML5 voice + camera demo (sends JPEG frames over realtimeInput)
+- `index-openai.html` - HTML5 OpenAI Realtime demo (`input_audio_buffer.append`, `response.audio.delta`)
 - `python/` - Python live client (Poetry) based on the browser implementation
 - `nodejs/` - Node.js live client based on the browser implementation
 
