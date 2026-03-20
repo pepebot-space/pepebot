@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.8"
+const version = "0.5.9"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {

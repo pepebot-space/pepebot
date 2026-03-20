@@ -524,6 +524,7 @@ export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="opencodego"
     "enabled": true,
     "provider": "vertex",
     "model": "gemini-live-2.5-flash-native-audio",
+    "video": false,
     "language": "id-ID",
     "realtime_input_config": {
       "automaticActivityDetection": {
@@ -540,6 +541,8 @@ export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="opencodego"
 
 For voice sessions, `realtime_input_config.automaticActivityDetection` helps reduce false turn detection/noise triggers:
 - `language`: preferred speech language code for default live speech config (example: `id-ID`, `en-US`).
+- `video`: enable live video mode hint in session metadata (`video.enabled`) so clients can auto-enable camera stream when provider supports it.
+- when `video: true` on `vertex`/`gemini`, Pepebot ensures `generation_config.responseModalities` includes `VIDEO` automatically.
 - `startOfSpeechSensitivity` / `endOfSpeechSensitivity`: lower sensitivity reduces accidental activation.
 - `prefixPaddingMs`: keeps a small amount of leading audio before VAD start.
 - `silenceDurationMs`: waits longer silence before closing a turn (prevents rapid auto-replies).
@@ -565,6 +568,15 @@ Supported providers:
 - `openai` (OpenAI Realtime API)
 - `gemini` (Google AI Studio Live API)
 - `maiarouter` (MAIA Router Realtime API)
+
+Live video input support (`live.video=true`) is explicitly available for:
+- `vertex`
+- `gemini`
+
+When enabled, `/v1/live` connection confirmation includes:
+- `video.requested`
+- `video.supported`
+- `video.enabled`
 
 Check out the demo clients in the `examples/live-api/` directory:
 - `client.py` - A Python console audio streaming client

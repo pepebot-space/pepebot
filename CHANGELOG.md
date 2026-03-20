@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.9] - 2026-03-20
+
+### Added
+- **Live API Video Toggle**: Added `live.video` config flag (and `PEPEBOT_LIVE_VIDEO`) so clients can enable camera/video mode via a single config switch.
+- **Live Session Video Capability Metadata**: `/v1/live` connected response now includes `video.requested`, `video.supported`, and `video.enabled` for client-side capability handling.
+
+### Changed
+- **Video support check for realtime providers**: explicit video support is now reported for `vertex` and `gemini`; non-video providers still work for audio/text with warning log when `live.video=true`.
+- **Generation config behavior**: for `vertex`/`gemini`, enabling `live.video` now auto-ensures `generation_config.responseModalities` includes `VIDEO`.
+- Updated docs/config samples: `config.example.json`, `.env.example`, `README.md`, and `docs/live-api.md`.
+
 ## [0.5.8] - 2026-03-13
 
 ### Added

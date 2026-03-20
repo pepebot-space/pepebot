@@ -147,6 +147,7 @@ type LiveConfig struct {
 	Enabled             bool                   `json:"enabled" env:"PEPEBOT_LIVE_ENABLED"`
 	Provider            string                 `json:"provider" env:"PEPEBOT_LIVE_PROVIDER"`
 	Model               string                 `json:"model" env:"PEPEBOT_LIVE_MODEL"`
+	Video               bool                   `json:"video,omitempty" env:"PEPEBOT_LIVE_VIDEO"`
 	Language            string                 `json:"language,omitempty" env:"PEPEBOT_LIVE_LANGUAGE"`
 	GenerationConfig    map[string]interface{} `json:"generation_config,omitempty"`
 	RealtimeInputConfig map[string]interface{} `json:"realtime_input_config,omitempty"`
@@ -229,6 +230,7 @@ func DefaultConfig() *Config {
 			Enabled:  false,
 			Provider: "vertex",
 			Model:    "gemini-live-2.5-flash-native-audio",
+			Video:    false,
 			Language: "",
 			GenerationConfig: map[string]interface{}{
 				"responseModalities": []interface{}{"AUDIO"},
