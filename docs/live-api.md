@@ -19,6 +19,10 @@ PEPEBOT_LIVE_PROVIDER=vertex
 # Contoh Model OpenAI: gpt-4o-realtime-preview
 PEPEBOT_LIVE_MODEL=gemini-live-2.5-flash-native-audio
 
+# Hint aktivasi mode video pada sesi live
+# Dukungan video explicit: vertex, gemini
+PEPEBOT_LIVE_VIDEO=false
+
 # Bahasa default untuk Live API (opsional)
 PEPEBOT_LIVE_LANGUAGE=id-ID
 ```
@@ -79,6 +83,30 @@ Fitur unggulan di Live API adalah **Integrasi Agent**, di mana alur *real-time v
 - **`agent`** *(string)*: Nama agen dari workspace tempat instruksi / persona disimpan (misalnya `default`, atau nama file spesifik agen Anda). Pepebot secara otomatis akan menarik *system prompt* agen ini dan menyuntikkannya ke dalam instruksi *upstream* API suara.
 - **`session_key`** *(string)*: Kunci unik untuk *state* sesi. Digunakan Pepebot unuk memanjangkan obrolan *(Chat History)* pada sesi yang berlanjut.
 - **`enable_tools`** *(boolean)*: Set ke `true` jika Anda menghendaki agen di dalam percakapan suara ini diizinkan untuk memanggil ekstensi tools (misalnya web search, scraping, dll).
+
+### Konfigurasi `live.video`
+
+Anda bisa mengaktifkan hint mode video langsung dari config:
+
+```json
+{
+  "live": {
+    "video": true
+  }
+}
+```
+
+Saat koneksi `/v1/live` berhasil, server akan mengirim metadata video di pesan `connected`:
+- `video.requested`: nilai dari config (`live.video`)
+- `video.supported`: apakah provider sesi saat ini punya dukungan video explicit
+- `video.enabled`: `true` jika `requested && supported`
+
+Untuk provider `vertex` dan `gemini`, `live.video=true` digunakan sebagai capability flag agar client dapat mengaktifkan stream kamera.
+`generationConfig.responseModalities` tetap mengikuti konfigurasi model yang Anda pakai.
+
+Provider dengan dukungan video explicit saat ini:
+- `vertex`
+- `gemini`
 
 Jika koneksi dan inisialisasi berhasil, Pepebot Server akan membalas dengan status konfirmasi, misalnya:
 - Untuk Vertex/Gemini: `{"setupComplete": true}` atau respon ekuivalen yang menandakan Live session siap.
@@ -141,5 +169,8 @@ Untuk provider OpenAI (serta proxy MAIA Router yang kompatibel dengan protokol O
   *(Pastikan klien Anda memonitor event stream lain seperti `session.update`, `response.create`, dll sesuai dokumentasi resmi OpenAI Realtime).*
 
 
-> 💡 **Tip Implementasi Klien:** Anda dapat melihat kode lengkap (*source code*) integrasi Web HTML, Python, dan ekosistem terkait Live API ini di bagian direktori [examples/live-api/](../examples/live-api/).
+> 💡 **Tip Implementasi Klien:** Anda dapat melihat kode lengkap (*source code*) integrasi Web HTML, Python, dan ekosistem terkait Live API ini di bagian direktori [examples/live-api/](../examples/live-api/) termasuk contoh video `index-video.html` dan `client-video.py`.
 
+Untuk varian OpenAI Realtime event protocol, gunakan contoh:
+- `examples/live-api/index-openai.html`
+- `examples/live-api/client-openai.py`

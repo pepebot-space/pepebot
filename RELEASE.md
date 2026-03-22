@@ -1,52 +1,57 @@
-# 🐸 Pepebot v0.5.8 - OpenCode Go Provider
+# 🐸 Pepebot v0.5.9 - Live API Video Toggle
 
-**Release Date:** 2026-03-13
+**Release Date:** 2026-03-20
 
 ## 🎉 What's New
 
-### 🚀 OpenCode Go Provider
+### 🎥 Live API Video Toggle (`live.video`)
 
-Pepebot now supports **OpenCode Go** — a low-cost subscription for open coding models hosted globally (US, EU, Singapore).
-
-- **Affordable:** $5 first month, then $10/month
-- **Global:** Models hosted in US, EU, Singapore for stable international access
-- **High Limits:** Generous usage limits (up to 100K requests/month for minimax-m2.5)
-- **Default Model:** `minimax-m2.5` (recommended)
-
-**Available Models:**
-- `minimax-m2.5` — Best value, high volume limit
-- `kimi-k2.5`
-- `glm-5`
-
-**Quick Setup:**
+Live realtime sessions now support a simple config switch for video mode:
 
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": "minimax-m2.5",
-      "provider": "opencodego"
-    }
-  },
-  "providers": {
-    "opencodego": {
-      "api_key": "your-opencode-api-key"
-    }
+  "live": {
+    "video": true
   }
 }
 ```
 
-**Important:** Always set `provider: "opencodego"` to avoid conflicts with other providers.
-
-Or via environment:
+You can also set it via environment variable:
 
 ```bash
-export OPENCODEGO_API_KEY="your-api-key"
-export PEPEBOT_AGENTS_DEFAULTS_MODEL="minimax-m2.5"
-export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="opencodego"
+export PEPEBOT_LIVE_VIDEO=true
 ```
 
-Get your API key at [opencode.ai/auth](https://opencode.ai/auth)
+### ✅ Provider Video Capability Check
+
+When connecting to `/v1/live`, the server now includes video capability metadata in the connected payload:
+
+- `video.requested`
+- `video.supported`
+- `video.enabled`
+
+Explicit video support is currently available for:
+
+- `vertex`
+- `gemini`
+
+For those providers, `live.video=true` is used as a capability toggle for client camera streaming flow.
+
+### 🧪 New Video Examples (Copied and Extended)
+
+To keep existing demos stable, we added separate video variants instead of modifying old files:
+
+- `examples/live-api/index-video.html` (HTML5 mic + webcam)
+- `examples/live-api/client-video.py` (Python mic + optional webcam via OpenCV)
+
+### 🔊 OpenAI Realtime Examples
+
+Added dedicated OpenAI protocol examples (separate files, existing demos untouched):
+
+- `examples/live-api/index-openai.html`
+- `examples/live-api/client-openai.py`
+
+If `live.video=true` is used with a non-video provider, session still runs for audio/text and a warning is logged.
 
 ---
 
@@ -70,25 +75,17 @@ docker run -it --rm pepebot:latest
 ```
 
 ### Manual Download
-Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases/tag/v0.5.6).
+Download the appropriate binary for your platform from the [releases page](https://github.com/pepebot-space/pepebot/releases).
 
 ## 🚀 Quick Start
 
-1. Create a service account at [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts)
-2. Download the JSON key file
-3. Configure Pepebot:
-   ```bash
-   pepebot onboard
-   # Or manually set environment variables
-   ```
-4. Start chatting:
-   ```bash
-   pepebot agent -m "Hello from Vertex AI!"
-   ```
+1. Enable live mode and video toggle in config or env
+2. Start gateway: `pepebot gateway`
+3. Connect WebSocket client to `ws://localhost:18790/v1/live`
 
 ## 📚 Documentation
 
-- [Workflow Documentation](https://github.com/pepebot-space/pepebot/blob/main/docs/workflows.md)
+- [Live API Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/live-api.md)
 - [Installation Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/install.md)
 - [Full Changelog](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md)
 
@@ -98,7 +95,3 @@ Download the appropriate binary for your platform from the [releases page](https
 - **Documentation**: https://github.com/pepebot-space/pepebot/tree/main/docs
 - **Issues**: https://github.com/pepebot-space/pepebot/issues
 - **Discussions**: https://github.com/pepebot-space/pepebot/discussions
-
-## 📝 Full Changelog
-
-For a complete list of changes, see [CHANGELOG.md](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md#056---2026-03-02).

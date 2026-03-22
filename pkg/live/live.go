@@ -80,6 +80,15 @@ type LiveSession struct {
 	upstreamMu   sync.Mutex
 }
 
+func supportsLiveVideo(provider string) bool {
+	switch provider {
+	case "vertex", "gemini":
+		return true
+	default:
+		return false
+	}
+}
+
 // NewLiveServer creates a new live API server
 func NewLiveServer(cfg *config.Config) *LiveServer {
 	return &LiveServer{
@@ -209,6 +218,16 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		return
 	}
 
+	videoRequested := ls.config.Live.Video
+	videoSupported := supportsLiveVideo(providerName)
+	videoEnabled := videoRequested && videoSupported
+	if videoRequested && !videoSupported {
+		logger.WarnCF("live", "Video requested but provider has no explicit video support", map[string]interface{}{
+			"provider": providerName,
+			"model":    model,
+		})
+	}
+
 	// Step 3: Get auth headers
 	headers, err := provider.AuthHeaders()
 	if err != nil {
@@ -301,6 +320,11 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		"provider": providerName,
 		"model":    model,
 		"session":  sessionKey,
+		"video": map[string]interface{}{
+			"requested": videoRequested,
+			"supported": videoSupported,
+			"enabled":   videoEnabled,
+		},
 	})
 	clientConn.WriteMessage(websocket.TextMessage, confirmMsg)
 

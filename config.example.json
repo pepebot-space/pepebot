@@ -101,6 +101,7 @@
     "enabled": false,
     "provider": "vertex",
     "model": "gemini-live-2.5-flash-native-audio",
+    "video": false,
     "language": "id-ID",
     "generation_config": {
       "responseModalities": [
