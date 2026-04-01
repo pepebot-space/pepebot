@@ -73,7 +73,7 @@ func (t *ManageAgentTool) Parameters() map[string]interface{} {
 			},
 			"model": map[string]interface{}{
 				"type":        "string",
-				"description": "Model to use (required for register, e.g. 'maia/gemini-3-pro-preview')",
+				"description": "Model to use (required for register, e.g. 'maia/gemini-2.5-flash')",
 			},
 			"provider": map[string]interface{}{
 				"type":        "string",

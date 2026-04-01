@@ -171,7 +171,7 @@ const sendMessage = async () => {
     }
 
     const payload = {
-      model: currentAgent.value.model || "maia/gemini-3-pro-preview",
+      model: currentAgent.value.model || "maia/gemini-2.5-flash",
       messages: [{ role: "user", content: userText }],
       stream: true
     }

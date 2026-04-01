@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.9"
+const version = "0.5.10"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -282,7 +282,7 @@ func onboard() {
 	switch providerChoice {
 	case "1":
 		selectedProvider = "maiarouter"
-		defaultModel = "maia/gemini-3-pro-preview"
+		defaultModel = "maia/gemini-2.5-flash"
 		providerURL = "https://maiarouter.ai"
 		fmt.Println("\n✓ MAIA Router selected")
 		fmt.Printf("  Get your API key at: %s\n", providerURL)
@@ -340,7 +340,7 @@ func onboard() {
 	default:
 		fmt.Println("\n✓ Using default: MAIA Router")
 		selectedProvider = "maiarouter"
-		defaultModel = "maia/gemini-3-pro-preview"
+		defaultModel = "maia/gemini-2.5-flash"
 		providerURL = "https://maiarouter.ai"
 	}
 

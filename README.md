@@ -248,7 +248,7 @@ nano ~/.pepebot/config.json
   "agents": {
     "defaults": {
       "workspace": "~/.pepebot/workspace",
-      "model": "maia/gemini-3-pro-preview",
+      "model": "maia/gemini-2.5-flash",
       "provider": "",
       "max_tokens": 8192,
       "temperature": 0.7,
@@ -258,7 +258,7 @@ nano ~/.pepebot/config.json
 }
 ```
 
-The default model is set to `maia/gemini-3-pro-preview` which uses MAIA Router. You can change this to any supported model from the providers below.
+The default model is set to `maia/gemini-2.5-flash` which uses MAIA Router. You can change this to any supported model from the providers below.
 
 **Provider Option**: Set `provider` to explicitly choose a provider instead of auto-detecting from the model name. Supported values: `vertex`, `maiarouter`, `openrouter`, `anthropic`, `openai`, `gemini`, `zhipu`, `groq`, `vllm`, `opencodego`.
 
@@ -272,7 +272,7 @@ The default model is set to `maia/gemini-3-pro-preview` which uses MAIA Router. 
 {
   "agents": {
     "defaults": {
-      "model": "maia/gemini-3-pro-preview"
+      "model": "maia/gemini-2.5-flash"
     }
   },
   "providers": {
@@ -290,7 +290,7 @@ To get your API key:
 3. Generate your API key from the dashboard
 
 Popular models available:
-- `maia/gemini-3-pro-preview` (Recommended, free tier available)
+- `maia/gemini-2.5-flash` (Recommended, free tier available)
 - `maia/gemini-2.5-flash`
 - `maia/claude-3-5-sonnet`
 - `maia/gpt-4o`

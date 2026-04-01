@@ -22,7 +22,7 @@ services:
     # Environment variables (override .env if needed)
     environment:
       # Agent Configuration
-      - PEPEBOT_AGENTS_DEFAULTS_MODEL=${PEPEBOT_AGENTS_DEFAULTS_MODEL:-maia/gemini-3-pro-preview}
+      - PEPEBOT_AGENTS_DEFAULTS_MODEL=${PEPEBOT_AGENTS_DEFAULTS_MODEL:-maia/gemini-2.5-flash}
       - PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS=${PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS:-8192}
       - PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE=${PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE:-0.7}
 
@@ -78,7 +78,7 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "pepebot", "status"]
+      test: [ "CMD", "pepebot", "status" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -100,7 +100,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
   # Optional: Add a lightweight web UI (future)
   # pepebot-ui:
   #   image: pepebot-ui:latest
