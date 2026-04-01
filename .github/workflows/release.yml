@@ -380,8 +380,17 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    
+    env:
+      ANDROID_REPO_TOKEN: ${{ secrets.ANDROID_REPO_TOKEN || vars.ANDROID_REPO_TOKEN }}
+     
     steps:
+      - name: Validate Android repo token
+        run: |
+          if [ -z "$ANDROID_REPO_TOKEN" ]; then
+            echo "::error::ANDROID_REPO_TOKEN is empty. Set it as an Actions secret (recommended) or repository variable."
+            exit 1
+          fi
+
       - name: Get version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
@@ -389,7 +398,7 @@ jobs:
       - name: Trigger pepebot-android release
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.ANDROID_REPO_TOKEN }}
+          token: ${{ env.ANDROID_REPO_TOKEN }}
           repository: pepebot-space/pepebot-android
           event-type: pepebot-release
           client-payload: '{"version": "${{ steps.version.outputs.VERSION }}"}'
