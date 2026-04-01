@@ -171,7 +171,7 @@ func DefaultConfig() *Config {
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
 				Workspace:         "~/.pepebot/workspace",
-				Model:             "maia/gemini-3-pro-preview",
+				Model:             "maia/gemini-2.5-flash",
 				MaxTokens:         8192,
 				Temperature:       0.7,
 				MaxToolIterations: 20,

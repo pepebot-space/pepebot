@@ -269,7 +269,7 @@ Perfect for running Telegram bot on Android:
 - `maia/llama-3.3-70b`
 
 **Balanced:**
-- `maia/gemini-3-pro-preview`
+- `maia/gemini-2.5-flash`
 - `maia/claude-3-5-haiku`
 
 **High Quality:**

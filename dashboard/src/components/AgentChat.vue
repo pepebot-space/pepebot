@@ -188,7 +188,7 @@ async function sendMessage() {
 
   try {
     const payload = {
-      model: "maia/gemini-3-pro-preview",
+      model: "maia/gemini-2.5-flash",
       messages: [
         { role: "system", content: systemPrompt.value },
         { role: "user", content: userText }

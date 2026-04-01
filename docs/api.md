@@ -128,7 +128,7 @@ X-Session-Key: web:default (optional, session routing, default: "web:<agent>")
 **Request Body:**
 ```json
 {
-  "model": "maia/gemini-3-pro-preview",
+  "model": "maia/gemini-2.5-flash",
   "messages": [
     {"role": "user", "content": "Hello!"}
   ],
@@ -144,7 +144,7 @@ X-Session-Key: web:default (optional, session routing, default: "web:<agent>")
   "id": "chatcmpl-1708278123456789",
   "object": "chat.completion",
   "created": 1708278123,
-  "model": "maia/gemini-3-pro-preview",
+  "model": "maia/gemini-2.5-flash",
   "choices": [
     {
       "index": 0,
@@ -187,7 +187,7 @@ data: [DONE]
 curl -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "maia/gemini-3-pro-preview",
+    "model": "maia/gemini-2.5-flash",
     "messages": [{"role": "user", "content": "What is 2+2?"}],
     "stream": false
   }'
@@ -199,7 +199,7 @@ curl -N -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "X-Agent: default" \
   -d '{
-    "model": "maia/gemini-3-pro-preview",
+    "model": "maia/gemini-2.5-flash",
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'
@@ -234,7 +234,7 @@ List available models from enabled agents.
   "object": "list",
   "data": [
     {
-      "id": "maia/gemini-3-pro-preview",
+      "id": "maia/gemini-2.5-flash",
       "object": "model",
       "created": 1708278123,
       "owned_by": "pepebot"
@@ -269,7 +269,7 @@ Returns raw `registry.json` content from `~/.pepebot/workspace/agents/registry.j
   "agents": {
     "default": {
       "enabled": true,
-      "model": "maia/gemini-3-pro-preview",
+      "model": "maia/gemini-2.5-flash",
       "provider": "",
       "description": "Default general-purpose agent",
       "temperature": 0.7,
@@ -661,7 +661,7 @@ Returns the current `~/.pepebot/config.json` with sensitive fields (API keys, to
   "agents": {
     "defaults": {
       "workspace": "~/.pepebot/workspace",
-      "model": "maia/gemini-3-pro-preview",
+      "model": "maia/gemini-2.5-flash",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -1264,7 +1264,7 @@ PEPEBOT_<SECTION>_<KEY>=value
 **Examples:**
 ```bash
 # Agent configuration
-export PEPEBOT_AGENTS_DEFAULTS_MODEL="maia/gemini-3-pro-preview"
+export PEPEBOT_AGENTS_DEFAULTS_MODEL="maia/gemini-2.5-flash"
 export PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS=8192
 
 # Provider API keys
@@ -1297,14 +1297,14 @@ client = OpenAI(
 
 # Non-streaming
 response = client.chat.completions.create(
-    model="maia/gemini-3-pro-preview",
+    model="maia/gemini-2.5-flash",
     messages=[{"role": "user", "content": "What is 2+2?"}],
 )
 print(response.choices[0].message.content)
 
 # Streaming
 stream = client.chat.completions.create(
-    model="maia/gemini-3-pro-preview",
+    model="maia/gemini-2.5-flash",
     messages=[{"role": "user", "content": "Tell me a story"}],
     stream=True,
     extra_headers={"X-Agent": "default"},
@@ -1327,7 +1327,7 @@ async function chat(message) {
             'X-Agent': 'default',
         },
         body: JSON.stringify({
-            model: 'maia/gemini-3-pro-preview',
+            model: 'maia/gemini-2.5-flash',
             messages: [{ role: 'user', content: message }],
             stream: false,
         }),
@@ -1345,7 +1345,7 @@ async function chatStream(message, onChunk) {
             'X-Agent': 'default',
         },
         body: JSON.stringify({
-            model: 'maia/gemini-3-pro-preview',
+            model: 'maia/gemini-2.5-flash',
             messages: [{ role: 'user', content: message }],
             stream: true,
         }),
@@ -1382,7 +1382,7 @@ await chatStream('Tell me a story', (text) => process.stdout.write(text));
 ```bash
 curl -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":false}'
+  -d '{"model":"maia/gemini-2.5-flash","messages":[{"role":"user","content":"Hello!"}],"stream":false}'
 ```
 
 **Chat (streaming):**
@@ -1390,7 +1390,7 @@ curl -X POST http://localhost:18790/v1/chat/completions \
 curl -N -X POST http://localhost:18790/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "X-Agent: default" \
-  -d '{"model":"maia/gemini-3-pro-preview","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
+  -d '{"model":"maia/gemini-2.5-flash","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
 ```
 
 **List models:**
@@ -1439,7 +1439,7 @@ import (
 
 func main() {
     payload := map[string]interface{}{
-        "model":    "maia/gemini-3-pro-preview",
+        "model":    "maia/gemini-2.5-flash",
         "messages": []map[string]string{{"role": "user", "content": "Hello!"}},
         "stream":   true,
     }

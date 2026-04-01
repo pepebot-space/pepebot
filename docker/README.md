@@ -37,7 +37,7 @@ docker run -d \
   --name pepebot \
   -p 18790:18790 \
   -v $(pwd)/data/.pepebot:/root/.pepebot \
-  -e PEPEBOT_AGENTS_DEFAULTS_MODEL=maia/gemini-3-pro-preview \
+  -e PEPEBOT_AGENTS_DEFAULTS_MODEL=maia/gemini-2.5-flash \
   -e PEPEBOT_PROVIDERS_MAIAROUTER_API_KEY=your-api-key \
   ghcr.io/pepebot-space/pepebot:latest
 ```
