@@ -380,6 +380,7 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    environment: ANDROID
     env:
       ANDROID_REPO_TOKEN: ${{ secrets.ANDROID_REPO_TOKEN || vars.ANDROID_REPO_TOKEN }}
      
