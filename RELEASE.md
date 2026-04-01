@@ -1,57 +1,34 @@
-# 🐸 Pepebot v0.5.9 - Live API Video Toggle
+# 🐸 Pepebot v0.5.10 - Default Model Update & Android Release Fix
 
-**Release Date:** 2026-03-20
+**Release Date:** 2026-04-01
 
 ## 🎉 What's New
 
-### 🎥 Live API Video Toggle (`live.video`)
+### ⚡ MAIA Router Default Model Updated
 
-Live realtime sessions now support a simple config switch for video mode:
+Pepebot now uses a faster MAIA default model out of the box:
 
-```json
-{
-  "live": {
-    "video": true
-  }
-}
-```
+- From: `maia/gemini-3-pro-preview`
+- To: `maia/gemini-2.5-flash`
 
-You can also set it via environment variable:
+This update is applied in:
 
-```bash
-export PEPEBOT_LIVE_VIDEO=true
-```
+- Default agent configuration
+- Interactive onboarding defaults
+- `manage_agent` model example guidance
 
-### ✅ Provider Video Capability Check
+### 🤖 Android Release Trigger Reliability
 
-When connecting to `/v1/live`, the server now includes video capability metadata in the connected payload:
+Fixed GitHub Actions Android dispatch flow to avoid token resolution failures:
 
-- `video.requested`
-- `video.supported`
-- `video.enabled`
+- `trigger-android` now supports token lookup from both:
+  - `secrets.ANDROID_REPO_TOKEN`
+  - `vars.ANDROID_REPO_TOKEN`
+- Added explicit pre-check with clear error message if token is missing
 
-Explicit video support is currently available for:
+This prevents the previous opaque error:
 
-- `vertex`
-- `gemini`
-
-For those providers, `live.video=true` is used as a capability toggle for client camera streaming flow.
-
-### 🧪 New Video Examples (Copied and Extended)
-
-To keep existing demos stable, we added separate video variants instead of modifying old files:
-
-- `examples/live-api/index-video.html` (HTML5 mic + webcam)
-- `examples/live-api/client-video.py` (Python mic + optional webcam via OpenCV)
-
-### 🔊 OpenAI Realtime Examples
-
-Added dedicated OpenAI protocol examples (separate files, existing demos untouched):
-
-- `examples/live-api/index-openai.html`
-- `examples/live-api/client-openai.py`
-
-If `live.video=true` is used with a non-video provider, session still runs for audio/text and a warning is logged.
+`Parameter token or opts.auth is required`
 
 ---
 
@@ -79,9 +56,9 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 🚀 Quick Start
 
-1. Enable live mode and video toggle in config or env
-2. Start gateway: `pepebot gateway`
-3. Connect WebSocket client to `ws://localhost:18790/v1/live`
+1. Run setup wizard: `pepebot onboard`
+2. Start interactive agent: `pepebot agent`
+3. (Optional) Start API gateway: `pepebot gateway`
 
 ## 📚 Documentation
 

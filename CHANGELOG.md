@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.10] - 2026-04-01
+
+### Changed
+- **MAIA Router default model**: Updated the default model from `maia/gemini-3-pro-preview` to `maia/gemini-2.5-flash` in config defaults and onboarding flow.
+- **Agent tool model example**: Updated `manage_agent` model parameter example to `maia/gemini-2.5-flash`.
+
+### Fixed
+- **Android release trigger token resolution**: `trigger-android` now reads token from `secrets.ANDROID_REPO_TOKEN` or `vars.ANDROID_REPO_TOKEN`.
+- **Clear token validation error**: Added a fail-fast validation step so missing Android token reports an explicit error before dispatch call.
+
 ## [0.5.9] - 2026-03-20
 
 ### Added
