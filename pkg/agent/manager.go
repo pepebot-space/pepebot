@@ -12,6 +12,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/session"
+	"github.com/pepebot-space/pepebot/pkg/task"
 )
 
 // AgentManager manages multiple agent instances
@@ -177,6 +178,21 @@ func (am *AgentManager) ListAgents() map[string]*AgentDefinition {
 // ListEnabledAgents returns only enabled agents
 func (am *AgentManager) ListEnabledAgents() map[string]*AgentDefinition {
 	return am.registry.ListEnabled()
+}
+
+// ListEnabledAgentsForDispatch returns agent info suitable for task dispatch.
+// Implements task.AgentProvider interface.
+func (am *AgentManager) ListEnabledAgentsForDispatch() []task.AgentInfo {
+	enabled := am.registry.ListEnabled()
+	result := make([]task.AgentInfo, 0, len(enabled))
+	for name, def := range enabled {
+		result = append(result, task.AgentInfo{
+			Name:       name,
+			Enabled:    true,
+			TaskLabels: def.TaskLabels,
+		})
+	}
+	return result
 }
 
 // GetRegistry returns the agent registry

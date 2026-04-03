@@ -45,6 +45,32 @@ Complete guide to creating and using workflows for task automation:
 
 ---
 
+### [Task Orchestration & Kanban](./orchestration.md)
+**Task management with Kanban board and agent orchestration**
+
+Complete guide to the task orchestration system:
+- Kanban board with drag & drop in the dashboard
+- Dual storage backends (SQLite + JSON for MIPS)
+- Agent tool for task management (`manage_task`)
+- Task templates with variable interpolation
+- Auto-dispatch with agent label matching
+- Approval gates for human-in-the-loop governance
+- Workflow integration with `task` step type
+- WebSocket real-time events
+- Channel notifications (Telegram/Discord)
+
+**Topics covered:**
+- Configuration and feature flags
+- Task model, statuses, and transitions
+- REST API reference (15+ endpoints)
+- Agent tool actions and examples
+- Template system with sub-tasks
+- Auto-dispatch and TTL cleanup
+- Approval flow and notifications
+- Storage backend selection
+
+---
+
 ### [API Documentation](./api.md)
 **REST API and integration interfaces**
 
@@ -125,9 +151,10 @@ These important documents are located in the project root:
 
 ### Advanced Usage
 1. [Create Workflows](./workflows.md#workflow-structure)
-2. [Install Skills](../README.md#skills-management)
-3. [Setup Multi-Agent](../README.md#multi-agent-system)
-4. [Android Automation](./android.md)
+2. [Task Orchestration](./orchestration.md#quick-start)
+3. [Install Skills](../README.md#skills-management)
+4. [Setup Multi-Agent](../README.md#multi-agent-system)
+5. [Android Automation](./android.md)
 
 ### Development
 1. [Build from Source](./install.md#build-from-source)
