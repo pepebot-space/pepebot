@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Android release trigger token resolution**: `trigger-android` now reads token from `secrets.ANDROID_REPO_TOKEN` or `vars.ANDROID_REPO_TOKEN`.
 - **Clear token validation error**: Added a fail-fast validation step so missing Android token reports an explicit error before dispatch call.
+- **MIPS build compatibility**: Added a MIPS-specific SQLite task-store stub so `GOOS=linux GOARCH=mips` builds no longer fail when `modernc.org/sqlite` is unavailable; orchestration now falls back to JSON backend in `auto` mode.
 
 ## [0.5.9] - 2026-03-20
 

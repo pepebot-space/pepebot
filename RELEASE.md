@@ -30,6 +30,14 @@ This prevents the previous opaque error:
 
 `Parameter token or opts.auth is required`
 
+### 🧩 MIPS Build Compatibility Fix
+
+Cross-compiling for MIPS no longer breaks on SQLite task-store imports:
+
+- Added architecture-specific fallback for task orchestration on MIPS targets
+- When SQLite is unavailable, orchestration can now fall back to JSON backend (`backend: auto`)
+- Improves reliability for router-class and embedded Linux build targets
+
 ---
 
 ## 📦 Installation
