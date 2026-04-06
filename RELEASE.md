@@ -1,30 +1,48 @@
-# 🐸 Pepebot v0.5.11 - Workflow Goal Step Fix
+# 🐸 Pepebot v0.5.12 - Workflow Goals & Self-Updating Skills
 
 **Release Date:** 2026-04-06
 
 ## 🎉 What's New
 
-### 🔧 Workflow Goal Steps Now Work Correctly
+### 🔄 `pepebot update` Now Updates Builtin Skills
 
-Goal steps in workflows previously passed the raw goal text to the next step instead of the LLM-generated output. This caused workflows like:
+Previously `pepebot update` only replaced the binary. Now it also pulls the latest builtin skills from GitHub automatically.
 
+```bash
+pepebot update                # Update binary + builtin skills
+pepebot update --only-binary  # Binary only (old behavior)
+pepebot update --only-skills  # Skills only
+```
+
+### 🧠 Workflow Goal Steps Fixed
+
+Goal steps in workflows now properly send the goal to the LLM and store the result for subsequent steps. Previously the raw goal text was passed through instead of the AI-generated output.
+
+**Before (broken):**
+```
+discord message: "Buat pesan pengingat untuk tim ops..."  ← raw goal text
+```
+
+**After (fixed):**
+```
+discord message: "Halo Tim Operation! Jangan lupa cek #bugs-war ya. ..."  ← LLM output
+```
+
+Use `{{step_name_output}}` to reference goal results in later steps:
 ```json
 {
-  "name": "generate_message",
-  "goal": "Buat pesan pengingat dengan pantun..."
+  "name": "send_reminder",
+  "tool": "discord_send",
+  "args": {
+    "channel_id": "123",
+    "content": "{{generate_message_output}}"
+  }
 }
 ```
 
-...to output the literal goal text instead of the AI-generated message.
+### ✨ Cleaner Goal Output
 
-**Now fixed:**
-- Goal steps are processed by the LLM in both gateway and CLI modes
-- Use `{{step_name_output}}` to get the LLM result in subsequent steps
-- `{{step_name_goal}}` still available for the original goal text if needed
-
-### 📝 Documentation Corrected
-
-Updated workflow docs and skill prompts that previously recommended `{{step_name_goal}}` for getting goal results. The correct variable is `{{step_name_output}}`.
+Goal steps now produce clean output without LLM preamble like "Tentu, ini draf pesannya..." — the AI outputs the requested content directly.
 
 ---
 

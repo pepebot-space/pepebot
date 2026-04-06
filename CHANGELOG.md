@@ -5,13 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.11] - 2026-04-06
+## [0.5.12] - 2026-04-06
+
+### Added
+- **`pepebot update` now updates builtin skills**: Running `pepebot update` updates both the binary and builtin skills from `pepebot-space/skills-builtin`. New flags:
+  - `--only-binary` — update only the binary (previous default behavior)
+  - `--only-skills` — update only the builtin skills
+  - No flag — update both binary and skills
 
 ### Fixed
 - **Workflow goal step processing in agent loop**: Goal steps now use an LLM-backed `goalProcessor` in both `NewAgentLoop` and `NewAgentLoopWithDefinition`, so goal output is available as `{{step_name_output}}` for subsequent steps. Previously, goal steps in the agent loop returned raw goal text instead of LLM-processed output.
+- **Workflow goal step output quality**: Added a system prompt to the goal processor so the LLM outputs content directly without preamble like "Tentu, ini draf pesannya..." or "Sure, here is...".
 - **Workflow documentation variable naming**: Corrected docs, skill prompt, and examples that incorrectly advised using `{{step_name_goal}}` to retrieve goal step results. `{{step_name_goal}}` contains the raw goal text; `{{step_name_output}}` or `{{step_name}}` contains the LLM-processed output. Affected files: `docs/workflows.md`, `skills/workflow/SKILL.md`, `workspace/workflows/README.md`.
-
-### Added
 - **Workflow goal step unit tests**: Added `pkg/workflow/workflow_test.go` covering goal step processing with and without a `goalProcessor`, and variable naming (`_output`, `_goal`, base name).
 
 ## [0.5.10] - 2026-04-01

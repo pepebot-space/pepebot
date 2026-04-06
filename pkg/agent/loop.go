@@ -51,6 +51,7 @@ type agentGoalProcessor struct {
 
 func (p *agentGoalProcessor) ProcessGoal(ctx context.Context, goal string) (string, error) {
 	messages := []providers.Message{
+		{Role: "system", Content: "You are a workflow step executor. Output ONLY the requested content directly. Do not include preamble, commentary, or meta-text like 'Here is...' or 'Sure, here is...'. Just produce the content."},
 		{Role: "user", Content: goal},
 	}
 	resp, err := p.provider.Chat(ctx, messages, nil, p.model, nil)
