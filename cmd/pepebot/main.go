@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.11"
+const version = "0.5.12"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -2159,6 +2159,7 @@ type cliGoalProcessor struct {
 
 func (p *cliGoalProcessor) ProcessGoal(ctx context.Context, goal string) (string, error) {
 	messages := []providers.Message{
+		{Role: "system", Content: "You are a workflow step executor. Output ONLY the requested content directly. Do not include preamble, commentary, or meta-text like 'Here is...' or 'Sure, here is...'. Just produce the content."},
 		{Role: "user", Content: goal},
 	}
 	resp, err := p.provider.Chat(ctx, messages, nil, p.model, nil)
