@@ -97,8 +97,8 @@ Variables are replaced throughout the workflow:
 
 1. **Default Variables**: Defined in the `variables` section
 2. **Override Variables**: Passed during execution via `workflow_execute`
-3. **Step Outputs**: Automatically available as `{{step_name_output}}`
-4. **Goal Results**: Available as `{{step_name_goal}}`
+3. **Step Outputs**: Automatically available as `{{step_name_output}}` or `{{step_name}}` (works for both tool and goal steps)
+4. **Goal Raw Text**: `{{step_name_goal}}` contains the original goal text, NOT the LLM output — use `{{step_name_output}}` to get the LLM-processed result
 
 **Example:**
 ```json
