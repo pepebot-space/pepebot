@@ -1,34 +1,30 @@
-# 🐸 Pepebot v0.5.10 - Default Model Update & Android Release Fix
+# 🐸 Pepebot v0.5.11 - Workflow Goal Step Fix
 
-**Release Date:** 2026-04-01
+**Release Date:** 2026-04-06
 
 ## 🎉 What's New
 
-### ⚡ MAIA Router Default Model Updated
+### 🔧 Workflow Goal Steps Now Work Correctly
 
-Pepebot now uses a faster MAIA default model out of the box:
+Goal steps in workflows previously passed the raw goal text to the next step instead of the LLM-generated output. This caused workflows like:
 
-- From: `maia/gemini-3-pro-preview`
-- To: `maia/gemini-2.5-flash`
+```json
+{
+  "name": "generate_message",
+  "goal": "Buat pesan pengingat dengan pantun..."
+}
+```
 
-This update is applied in:
+...to output the literal goal text instead of the AI-generated message.
 
-- Default agent configuration
-- Interactive onboarding defaults
-- `manage_agent` model example guidance
+**Now fixed:**
+- Goal steps are processed by the LLM in both gateway and CLI modes
+- Use `{{step_name_output}}` to get the LLM result in subsequent steps
+- `{{step_name_goal}}` still available for the original goal text if needed
 
-### 🤖 Android Release Trigger Reliability
+### 📝 Documentation Corrected
 
-Fixed GitHub Actions Android dispatch flow to avoid token resolution failures:
-
-- `trigger-android` now supports token lookup from both:
-  - `secrets.ANDROID_REPO_TOKEN`
-  - `vars.ANDROID_REPO_TOKEN`
-- Added explicit pre-check with clear error message if token is missing
-
-This prevents the previous opaque error:
-
-`Parameter token or opts.auth is required`
+Updated workflow docs and skill prompts that previously recommended `{{step_name_goal}}` for getting goal results. The correct variable is `{{step_name_output}}`.
 
 ---
 
@@ -62,7 +58,7 @@ Download the appropriate binary for your platform from the [releases page](https
 
 ## 📚 Documentation
 
-- [Live API Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/live-api.md)
+- [Workflow Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/workflows.md)
 - [Installation Guide](https://github.com/pepebot-space/pepebot/blob/main/docs/install.md)
 - [Full Changelog](https://github.com/pepebot-space/pepebot/blob/main/CHANGELOG.md)
 

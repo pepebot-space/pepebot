@@ -244,8 +244,8 @@ ExecStart=/usr/local/bin/pepebot workflow run device_health --var device=emulato
 
 1. **Default variables**: Defined in `"variables"` field
 2. **Runtime overrides**: Passed via `workflow_execute` variables parameter or `--var` flag in CLI
-3. **Step outputs**: Auto-created as `{{step_name_output}}`
-4. **Goal results**: Auto-created as `{{step_name_goal}}`
+3. **Step outputs**: Auto-created as `{{step_name_output}}` or `{{step_name}}` (works for both tool and goal steps)
+4. **Goal raw text**: `{{step_name_goal}}` contains the original goal text, NOT the LLM output — use `{{step_name_output}}` to get the LLM-processed result
 
 ## Design Tips for Powerful Workflows
 

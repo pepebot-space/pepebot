@@ -60,8 +60,9 @@ Individual actions executed sequentially:
 
 ### 4. Step Outputs
 Results from each step automatically become available as variables:
-- Tool step output: `{{step_name_output}}`
-- Goal step result: `{{step_name_goal}}`
+- Tool step output: `{{step_name_output}}` or `{{step_name}}`
+- Goal step result: `{{step_name_output}}` or `{{step_name}}` (LLM-processed output)
+- Goal step raw text: `{{step_name_goal}}` (the original goal text, not the LLM output)
 
 ---
 
@@ -725,7 +726,7 @@ Agent: [Calls workflow_execute]
       "tool": "write_file",
       "args": {
         "path": "{{output_file}}",
-        "content": "Research Topic: {{search_topic}}\n\n{{analyze_results_goal}}\n\nCompleted at: {{timestamp}}"
+        "content": "Research Topic: {{search_topic}}\n\n{{analyze_results_output}}\n\nCompleted at: {{timestamp}}"
       }
     },
     {
@@ -865,7 +866,7 @@ pepebot workflow run broadcast_message \
       "tool": "write_file",
       "args": {
         "path": "{{report_file}}",
-        "content": "# Performance Report - {{device}}\n\n{{analyze_all_goal}}"
+        "content": "# Performance Report - {{device}}\n\n{{analyze_all_output}}"
       }
     }
   ]

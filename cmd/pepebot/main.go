@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.10"
+const version = "0.5.11"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -168,7 +168,7 @@ func main() {
 	case "workflow":
 		workflowCmd()
 	case "update":
-		updateCmd()
+		updateCmd(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Printf("%s pepebot v%s\n", logo, version)
 	default:
@@ -219,7 +219,9 @@ func printHelp() {
 	fmt.Println("                  --var key=value           Override a workflow variable (repeatable)")
 	fmt.Println("                delete <name>               Delete a workflow")
 	fmt.Println("                validate <name> [-f <path>] Validate workflow structure")
-	fmt.Println("  update      Update pepebot to the latest version")
+	fmt.Println("  update      Update pepebot binary and builtin skills")
+	fmt.Println("                --only-binary               Update only the binary")
+	fmt.Println("                --only-skills               Update only builtin skills")
 	fmt.Println("  version     Show version information")
 	fmt.Println("")
 }
@@ -2510,7 +2512,36 @@ func workflowValidateCmd(workspace string, cfg *config.Config) {
 // Update Command
 // =============================================================================
 
-func updateCmd() {
+func updateCmd(args []string) {
+	onlyBinary := false
+	onlySkills := false
+
+	for _, arg := range args {
+		switch arg {
+		case "--only-binary":
+			onlyBinary = true
+		case "--only-skills":
+			onlySkills = true
+		}
+	}
+
+	// Default: update both
+	updateBinary := !onlySkills
+	updateSkills := !onlyBinary
+
+	fmt.Printf("%s pepebot update\n\n", logo)
+	fmt.Printf("  Current version: v%s\n", version)
+
+	if updateBinary {
+		updateBinaryCmd()
+	}
+
+	if updateSkills {
+		updateBuiltinSkillsCmd()
+	}
+}
+
+func updateBinaryCmd() {
 	// Detect current binary path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -2536,8 +2567,6 @@ func updateCmd() {
 		binaryExt = ".exe"
 	}
 
-	fmt.Printf("%s pepebot update\n\n", logo)
-	fmt.Printf("  Current version: v%s\n", version)
 	fmt.Printf("  Binary:          %s\n", execPath)
 	fmt.Printf("  Platform:        %s/%s\n\n", osName, archName)
 
@@ -2552,7 +2581,7 @@ func updateCmd() {
 	// Normalize version (strip leading 'v')
 	latestClean := strings.TrimPrefix(latestVersion, "v")
 	if latestClean == version {
-		fmt.Printf("\n✓ Already up to date (v%s)\n", version)
+		fmt.Printf("\n✓ Binary already up to date (v%s)\n", version)
 		return
 	}
 
@@ -2620,7 +2649,30 @@ func updateCmd() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("\n✓ Updated pepebot: v%s → %s\n", version, latestVersion)
+	fmt.Printf("\n✓ Updated binary: v%s → %s\n", version, latestVersion)
+}
+
+func updateBuiltinSkillsCmd() {
+	fmt.Println("\nUpdating builtin skills...")
+
+	configPath := getConfigPath()
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		fmt.Printf("✗ Failed to load config: %v\n", err)
+		fmt.Println("  Run 'pepebot onboard' first to create a config file.")
+		os.Exit(1)
+	}
+
+	workspace := cfg.WorkspacePath()
+	installer := skills.NewSkillInstaller(workspace)
+
+	ctx := context.Background()
+	if err := installer.InstallBuiltinSkills(ctx); err != nil {
+		fmt.Printf("✗ Failed to update builtin skills: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("\n✓ Builtin skills updated successfully!")
 }
 
 // fetchLatestVersion queries the GitHub API for the latest release tag.

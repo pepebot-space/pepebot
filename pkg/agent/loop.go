@@ -43,6 +43,23 @@ type AgentLoop struct {
 	agentName      string
 }
 
+// agentGoalProcessor implements workflow.GoalProcessor using the agent's LLM provider.
+type agentGoalProcessor struct {
+	provider providers.LLMProvider
+	model    string
+}
+
+func (p *agentGoalProcessor) ProcessGoal(ctx context.Context, goal string) (string, error) {
+	messages := []providers.Message{
+		{Role: "user", Content: goal},
+	}
+	resp, err := p.provider.Chat(ctx, messages, nil, p.model, nil)
+	if err != nil {
+		return "", fmt.Errorf("LLM call failed: %w", err)
+	}
+	return resp.Content, nil
+}
+
 // WorkflowHelper returns the workflow helper for external wiring (e.g. agent processor injection)
 func (al *AgentLoop) WorkflowHelper() *workflow.WorkflowHelper {
 	return al.workflowHelper
@@ -71,6 +88,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 
 	// Register workflow tools (always available, no dependencies)
 	workflowHelper := workflow.NewWorkflowHelper(workspace, toolsRegistry)
+	workflowHelper.SetGoalProcessor(&agentGoalProcessor{provider: provider, model: cfg.Agents.Defaults.Model})
 	toolsRegistry.Register(tools.NewWorkflowExecuteTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowSaveTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowListTool(workflowHelper))
@@ -153,6 +171,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 
 	// Register workflow tools (always available, no dependencies)
 	workflowHelper := workflow.NewWorkflowHelper(workspace, toolsRegistry)
+	workflowHelper.SetGoalProcessor(&agentGoalProcessor{provider: provider, model: agentDef.Model})
 	toolsRegistry.Register(tools.NewWorkflowExecuteTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowSaveTool(workflowHelper))
 	toolsRegistry.Register(tools.NewWorkflowListTool(workflowHelper))
