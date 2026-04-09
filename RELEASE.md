@@ -44,6 +44,14 @@ Use `{{step_name_output}}` to reference goal results in later steps:
 
 Goal steps now produce clean output without LLM preamble like "Tentu, ini draf pesannya..." — the AI outputs the requested content directly.
 
+### 🧩 MIPS Build Compatibility Fix
+
+Cross-compiling for MIPS no longer breaks on SQLite task-store imports:
+
+- Added architecture-specific fallback for task orchestration on MIPS targets
+- When SQLite is unavailable, orchestration can now fall back to JSON backend (`backend: auto`)
+- Improves reliability for router-class and embedded Linux build targets
+
 ---
 
 ## 📦 Installation
