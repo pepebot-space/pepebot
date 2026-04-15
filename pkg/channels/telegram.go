@@ -285,7 +285,29 @@ func (c *TelegramChannel) handleMessage(update tgbotapi.Update) {
 	content := ""
 	mediaPaths := []string{}
 
+	// Extract reply context if this message is a reply
+	if message.ReplyToMessage != nil {
+		replyMsg := message.ReplyToMessage
+		replyAuthor := "unknown"
+		if replyMsg.From != nil {
+			replyAuthor = replyMsg.From.UserName
+			if replyAuthor == "" {
+				replyAuthor = replyMsg.From.FirstName
+			}
+		}
+		replyText := replyMsg.Text
+		if replyText == "" {
+			replyText = replyMsg.Caption
+		}
+		if replyText != "" {
+			content = fmt.Sprintf("[replying to %s: %s]", replyAuthor, replyText)
+		}
+	}
+
 	if message.Text != "" {
+		if content != "" {
+			content += "\n"
+		}
 		content += message.Text
 	}
 

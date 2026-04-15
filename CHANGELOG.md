@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.13] - 2026-04-15
+
+### Added
+- **WhatsApp typing indicator**: WhatsApp now shows a composing/typing indicator while the bot is processing a message, using `SendChatPresence(ChatPresenceComposing)`. The indicator refreshes every 5 seconds and is automatically cleared when the response is sent. Supports a 2-minute timeout to prevent stuck indicators.
+
+### Fixed
+- **Discord reply text not read**: When a user replies to a message in Discord, the text content of the referenced message is now extracted and prepended as `[replying to username: text]` context. Previously only attachments from referenced messages were forwarded; the reply text itself was silently dropped.
+- **Telegram reply text not read**: When a user replies to a message in Telegram, the text/caption of the replied-to message is now extracted and prepended as `[replying to username: text]` context. Previously `ReplyToMessage` was not checked at all.
+- **WhatsApp reply text not read**: When a user replies to a message in WhatsApp, the quoted message text is now extracted from `ContextInfo.GetQuotedMessage()` across all message types (text, image, video, audio, document) and prepended as `[replying to: text]` context.
+
 ## [0.5.12] - 2026-04-06
 
 ### Added

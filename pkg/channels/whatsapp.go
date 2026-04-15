@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
@@ -28,10 +29,12 @@ import (
 
 type WhatsAppChannel struct {
 	*BaseChannel
-	client    *whatsmeow.Client
-	config    config.WhatsAppConfig
-	container *sqlstore.Container
-	mu        sync.Mutex
+	client         *whatsmeow.Client
+	config         config.WhatsAppConfig
+	container      *sqlstore.Container
+	mu             sync.Mutex
+	typingChannels map[string]chan bool
+	typingMutex    sync.RWMutex
 }
 
 func NewWhatsAppChannel(cfg config.WhatsAppConfig, messageBus *bus.MessageBus) (*WhatsAppChannel, error) {
@@ -57,10 +60,11 @@ func NewWhatsAppChannel(cfg config.WhatsAppConfig, messageBus *bus.MessageBus) (
 	client := whatsmeow.NewClient(deviceStore, clientLog)
 
 	ch := &WhatsAppChannel{
-		BaseChannel: base,
-		client:      client,
-		config:      cfg,
-		container:   container,
+		BaseChannel:    base,
+		client:         client,
+		config:         cfg,
+		container:      container,
+		typingChannels: make(map[string]chan bool),
 	}
 
 	client.AddEventHandler(ch.handleEvent)
@@ -139,6 +143,12 @@ func (c *WhatsAppChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 	if err != nil {
 		return fmt.Errorf("failed to parse JID %q: %w", msg.ChatID, err)
 	}
+
+	// Stop typing indicator since we're about to send the response
+	c.stopTyping(msg.ChatID)
+
+	// Send paused presence to clear typing state
+	_ = c.client.SendChatPresence(ctx, jid, types.ChatPresencePaused, types.ChatPresenceMediaText)
 
 	// If there are media attachments, send with media
 	if len(msg.Media) > 0 {
@@ -304,6 +314,68 @@ func (c *WhatsAppChannel) sendWithMedia(ctx context.Context, jid types.JID, capt
 	return nil
 }
 
+// keepTyping continuously sends composing presence to WhatsApp chat
+// WhatsApp typing indicator is short-lived, so we refresh every 5 seconds
+func (c *WhatsAppChannel) keepTyping(chatJID types.JID, stop chan bool) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	ctx := context.Background()
+
+	// Send initial typing indicator
+	if err := c.client.SendChatPresence(ctx, chatJID, types.ChatPresenceComposing, types.ChatPresenceMediaText); err != nil {
+		logger.DebugCF("whatsapp", "Failed to send typing indicator", map[string]interface{}{
+			"error": err.Error(),
+			"chat":  chatJID.String(),
+		})
+		return
+	}
+
+	// Keep refreshing until stop signal or timeout (2 minutes max)
+	timeout := time.After(2 * time.Minute)
+
+	for {
+		select {
+		case <-stop:
+			return
+		case <-timeout:
+			logger.DebugCF("whatsapp", "Typing indicator timeout", map[string]interface{}{
+				"chat": chatJID.String(),
+			})
+			return
+		case <-ticker.C:
+			if err := c.client.SendChatPresence(ctx, chatJID, types.ChatPresenceComposing, types.ChatPresenceMediaText); err != nil {
+				logger.DebugCF("whatsapp", "Failed to refresh typing indicator", map[string]interface{}{
+					"error": err.Error(),
+					"chat":  chatJID.String(),
+				})
+				return
+			}
+		}
+	}
+}
+
+// storeTypingChannel stores the stop channel for a specific chat
+func (c *WhatsAppChannel) storeTypingChannel(chatID string, stop chan bool) {
+	c.typingMutex.Lock()
+	defer c.typingMutex.Unlock()
+	c.typingChannels[chatID] = stop
+}
+
+// stopTyping stops the typing indicator for a specific chat
+func (c *WhatsAppChannel) stopTyping(chatID string) {
+	c.typingMutex.Lock()
+	defer c.typingMutex.Unlock()
+
+	if stop, exists := c.typingChannels[chatID]; exists {
+		select {
+		case stop <- true:
+		default:
+		}
+		delete(c.typingChannels, chatID)
+	}
+}
+
 func (c *WhatsAppChannel) handleEvent(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
@@ -325,8 +397,21 @@ func (c *WhatsAppChannel) handleIncomingMessage(evt *events.Message) {
 	senderID := evt.Info.Sender.String()
 	chatID := evt.Info.Chat.String()
 
-	content := extractTextContent(evt.Message)
+	content := ""
 	mediaPaths := []string{}
+
+	// Extract reply context if this message quotes another message
+	if quotedText := extractQuotedText(evt.Message); quotedText != "" {
+		content = fmt.Sprintf("[replying to: %s]", quotedText)
+	}
+
+	// Extract the main message text
+	if text := extractTextContent(evt.Message); text != "" {
+		if content != "" {
+			content += "\n"
+		}
+		content += text
+	}
 
 	// Handle image messages
 	if imgMsg := evt.Message.GetImageMessage(); imgMsg != nil {
@@ -415,6 +500,11 @@ func (c *WhatsAppChannel) handleIncomingMessage(evt *events.Message) {
 		"has_media":   len(mediaPaths) > 0,
 		"media_count": len(mediaPaths),
 	})
+
+	// Start typing indicator
+	stopTyping := make(chan bool, 1)
+	go c.keepTyping(evt.Info.Chat, stopTyping)
+	c.storeTypingChannel(chatID, stopTyping)
 
 	c.HandleMessage(senderID, chatID, content, mediaPaths, metadata)
 }
@@ -516,6 +606,38 @@ func extractTextContent(msg *waE2E.Message) string {
 	}
 
 	return ""
+}
+
+// extractQuotedText extracts the quoted/replied-to message text from a WhatsApp message
+func extractQuotedText(msg *waE2E.Message) string {
+	if msg == nil {
+		return ""
+	}
+
+	var ctxInfo *waE2E.ContextInfo
+
+	if ext := msg.GetExtendedTextMessage(); ext != nil {
+		ctxInfo = ext.GetContextInfo()
+	} else if img := msg.GetImageMessage(); img != nil {
+		ctxInfo = img.GetContextInfo()
+	} else if vid := msg.GetVideoMessage(); vid != nil {
+		ctxInfo = vid.GetContextInfo()
+	} else if aud := msg.GetAudioMessage(); aud != nil {
+		ctxInfo = aud.GetContextInfo()
+	} else if doc := msg.GetDocumentMessage(); doc != nil {
+		ctxInfo = doc.GetContextInfo()
+	}
+
+	if ctxInfo == nil {
+		return ""
+	}
+
+	quotedMsg := ctxInfo.GetQuotedMessage()
+	if quotedMsg == nil {
+		return ""
+	}
+
+	return extractTextContent(quotedMsg)
 }
 
 func expandDBPath(path string) string {

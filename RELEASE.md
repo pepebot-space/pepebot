@@ -1,48 +1,24 @@
-# 🐸 Pepebot v0.5.12 - Workflow Goals & Self-Updating Skills
+# 🐸 Pepebot v0.5.13 - Reply Context & WhatsApp Typing
 
-**Release Date:** 2026-04-06
+**Release Date:** 2026-04-15
 
 ## 🎉 What's New
 
-### 🔄 `pepebot update` Now Updates Builtin Skills
+### 💬 Reply Context Now Visible to the Bot
 
-Previously `pepebot update` only replaced the binary. Now it also pulls the latest builtin skills from GitHub automatically.
+When you reply to a message in **Discord**, **Telegram**, or **WhatsApp**, the bot now sees the full text of the message you're replying to. This means you can say "translate this" while replying to a message and the bot will know exactly what to translate — no need to copy-paste.
 
-```bash
-pepebot update                # Update binary + builtin skills
-pepebot update --only-binary  # Binary only (old behavior)
-pepebot update --only-skills  # Skills only
+The quoted text is passed as context in the format:
+```
+[replying to username: original message text]
+your new message
 ```
 
-### 🧠 Workflow Goal Steps Fixed
+Previously, replies in Discord only forwarded media attachments (not text), and Telegram and WhatsApp ignored reply context entirely.
 
-Goal steps in workflows now properly send the goal to the LLM and store the result for subsequent steps. Previously the raw goal text was passed through instead of the AI-generated output.
+### ⌨️ WhatsApp Typing Indicator
 
-**Before (broken):**
-```
-discord message: "Buat pesan pengingat untuk tim ops..."  ← raw goal text
-```
-
-**After (fixed):**
-```
-discord message: "Halo Tim Operation! Jangan lupa cek #bugs-war ya. ..."  ← LLM output
-```
-
-Use `{{step_name_output}}` to reference goal results in later steps:
-```json
-{
-  "name": "send_reminder",
-  "tool": "discord_send",
-  "args": {
-    "channel_id": "123",
-    "content": "{{generate_message_output}}"
-  }
-}
-```
-
-### ✨ Cleaner Goal Output
-
-Goal steps now produce clean output without LLM preamble like "Tentu, ini draf pesannya..." — the AI outputs the requested content directly.
+The bot now shows a **typing/composing indicator** in WhatsApp while it's processing your message — just like it already did in Discord. The indicator appears immediately when your message is received and disappears when the response is sent.
 
 ---
 

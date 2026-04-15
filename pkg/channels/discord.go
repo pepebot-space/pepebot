@@ -213,8 +213,23 @@ func (c *DiscordChannel) handleMessage(s *discordgo.Session, m *discordgo.Messag
 		}
 	}
 
-	// Check for attachments in the referenced message (reply)
-	if m.ReferencedMessage != nil && len(m.ReferencedMessage.Attachments) > 0 {
+	// Check for referenced message content and attachments (reply)
+	if m.ReferencedMessage != nil {
+		// Extract text content from the referenced message
+		if m.ReferencedMessage.Content != "" {
+			replyAuthor := "unknown"
+			if m.ReferencedMessage.Author != nil {
+				replyAuthor = m.ReferencedMessage.Author.Username
+			}
+			replyText := fmt.Sprintf("[replying to %s: %s]", replyAuthor, m.ReferencedMessage.Content)
+			if content != "" {
+				content = replyText + "\n" + content
+			} else {
+				content = replyText
+			}
+		}
+
+		// Extract attachments from the referenced message
 		for _, attachment := range m.ReferencedMessage.Attachments {
 			mediaPaths = append(mediaPaths, attachment.URL)
 			if content != "" {
