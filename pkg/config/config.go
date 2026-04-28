@@ -15,8 +15,9 @@ type Config struct {
 	Providers ProvidersConfig `json:"providers"`
 	Gateway   GatewayConfig   `json:"gateway"`
 	Live      LiveConfig      `json:"live"`
-	Tools     ToolsConfig     `json:"tools"`
-	mu        sync.RWMutex
+	Tools         ToolsConfig         `json:"tools"`
+	Orchestration OrchestrationConfig `json:"orchestration"`
+	mu            sync.RWMutex
 }
 
 type AgentsConfig struct {
@@ -166,6 +167,19 @@ type ToolsConfig struct {
 	Web WebToolsConfig `json:"web"`
 }
 
+type OrchestrationConfig struct {
+	Enabled  bool          `json:"enabled" env:"PEPEBOT_ORCHESTRATION_ENABLED"`
+	Backend  string        `json:"backend" env:"PEPEBOT_ORCHESTRATION_BACKEND"`
+	DBPath   string        `json:"db_path" env:"PEPEBOT_ORCHESTRATION_DB_PATH"`
+	TasksDir string        `json:"tasks_dir" env:"PEPEBOT_ORCHESTRATION_TASKS_DIR"`
+	TTL      TaskTTLConfig `json:"ttl"`
+}
+
+type TaskTTLConfig struct {
+	DoneDays   int `json:"done_days" env:"PEPEBOT_ORCHESTRATION_TTL_DONE_DAYS"`
+	FailedDays int `json:"failed_days" env:"PEPEBOT_ORCHESTRATION_TTL_FAILED_DAYS"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Agents: AgentsConfig{
@@ -256,6 +270,16 @@ func DefaultConfig() *Config {
 					APIKey:     "",
 					MaxResults: 5,
 				},
+			},
+		},
+		Orchestration: OrchestrationConfig{
+			Enabled:  false,
+			Backend:  "auto",
+			DBPath:   "~/.pepebot/tasks.db",
+			TasksDir: "~/.pepebot/workspace/tasks",
+			TTL: TaskTTLConfig{
+				DoneDays:   30,
+				FailedDays: 7,
 			},
 		},
 	}

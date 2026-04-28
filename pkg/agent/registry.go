@@ -13,13 +13,14 @@ import (
 
 // AgentDefinition defines a registered agent configuration
 type AgentDefinition struct {
-	Enabled     bool    `json:"enabled"`
-	Model       string  `json:"model"`
-	Provider    string  `json:"provider"`
-	Description string  `json:"description"`
-	Temperature float64 `json:"temperature,omitempty"`
-	MaxTokens   int     `json:"max_tokens,omitempty"`
-	PromptFile  string  `json:"prompt_file,omitempty"`
+	Enabled     bool     `json:"enabled"`
+	Model       string   `json:"model"`
+	Provider    string   `json:"provider"`
+	Description string   `json:"description"`
+	Temperature float64  `json:"temperature,omitempty"`
+	MaxTokens   int      `json:"max_tokens,omitempty"`
+	PromptFile  string   `json:"prompt_file,omitempty"`
+	TaskLabels  []string `json:"task_labels,omitempty"` // restricts which task labels this agent can checkout
 }
 
 // AgentRegistry manages multiple agent configurations
