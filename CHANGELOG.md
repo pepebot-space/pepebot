@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.14] - 2026-04-29
+
+### Fixed
+- **Discord multi-part message header removed**: Long messages split into multiple parts in Discord no longer include a `[Part X/Y]` header on each chunk. The header was visually noisy and unnecessary for users.
+
 ## [0.5.13] - 2026-04-15
 
 ### Added

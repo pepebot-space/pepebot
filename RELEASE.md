@@ -1,24 +1,12 @@
-# 🐸 Pepebot v0.5.13 - Reply Context & WhatsApp Typing
+# 🐸 Pepebot v0.5.14 - Discord Message Cleanup
 
-**Release Date:** 2026-04-15
+**Release Date:** 2026-04-29
 
 ## 🎉 What's New
 
-### 💬 Reply Context Now Visible to the Bot
+### 💬 Cleaner Discord Messages
 
-When you reply to a message in **Discord**, **Telegram**, or **WhatsApp**, the bot now sees the full text of the message you're replying to. This means you can say "translate this" while replying to a message and the bot will know exactly what to translate — no need to copy-paste.
-
-The quoted text is passed as context in the format:
-```
-[replying to username: original message text]
-your new message
-```
-
-Previously, replies in Discord only forwarded media attachments (not text), and Telegram and WhatsApp ignored reply context entirely.
-
-### ⌨️ WhatsApp Typing Indicator
-
-The bot now shows a **typing/composing indicator** in WhatsApp while it's processing your message — just like it already did in Discord. The indicator appears immediately when your message is received and disappears when the response is sent.
+Long messages sent by the bot in Discord are split into multiple chunks to stay within Discord's character limit. Previously each chunk showed a `[Part 1/3]`, `[Part 2/3]` header — now those headers are gone, making the conversation feel more natural.
 
 ---
 

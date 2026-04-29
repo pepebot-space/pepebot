@@ -117,10 +117,10 @@ func (c *DiscordChannel) Send(ctx context.Context, msg bus.OutboundMessage) erro
 	// Send each part
 	for i, part := range parts {
 		// Add part indicator if multiple parts
-		if len(parts) > 1 {
-			partHeader := fmt.Sprintf("*[Part %d/%d]*\n", i+1, len(parts))
-			part = partHeader + part
-		}
+		// if len(parts) > 1 {
+		// 	partHeader := fmt.Sprintf("*[Part %d/%d]*\n", i+1, len(parts))
+		// 	part = partHeader + part
+		// }
 
 		if _, err := c.session.ChannelMessageSend(channelID, part); err != nil {
 			return fmt.Errorf("failed to send discord message part %d: %w", i+1, err)
