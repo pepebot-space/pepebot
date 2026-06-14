@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.16] - 2026-06-14
+
+### Added
+- **Live API system prompt (`systemInstruction`) support**: Live sessions can now be given a role/persona/task instruction that is injected into the upstream Vertex/Gemini `BidiGenerateContentSetup` as `systemInstruction.parts[0].text`. Resolution order (highest first):
+  1. **Per-session override** — `setup.system_prompt` (string) in the client setup message, so a client (e.g. a rover/voice app) can set task-specific instructions per session without redeploying.
+  2. **Config default** — `live.system_prompt`, or `live.system_prompt_file` (path, loaded when the inline prompt is empty; supports `~`). Env: `PEPEBOT_LIVE_SYSTEM_PROMPT` / `PEPEBOT_LIVE_SYSTEM_PROMPT_FILE`.
+  3. **Agent persona fallback (opt-in)** — when `live.use_agent_prompt: true` (env `PEPEBOT_LIVE_USE_AGENT_PROMPT`) and no explicit prompt is set, the selected agent's persona files (`AGENTS.md` → `SOUL.md` → `IDENTITY.md`, agent dir then workspace) are used, keeping persona consistent between text and Live.
+  - Implemented in `pkg/config/config.go` (new `LiveConfig` fields + file loading in `LoadConfig`), `pkg/live/vertex_live.go` & `pkg/live/gemini_live.go` (`SetupMessage` injects the config prompt), and `pkg/live/live.go` (`SetupConfig.SystemPrompt`, `injectGeminiSystemInstruction`, precedence resolution, and the optional `SystemPromptSource` interface implemented by `AgentManager.LiveSystemPrompt`).
+  - **No regression when unset**: if no prompt resolves from any source, the upstream setup is byte-identical to before (no `systemInstruction` added). Works for both `vertex` and `gemini` providers.
+
+## [0.5.15] - 2026-06-14
+
+### Changed
+- **Live API video latency tuning**: Reduced the delay between showing an image to the camera and the model actually "seeing"/responding to it on Vertex/Gemini Live sessions.
+  - **Faster turn commit**: Default `automaticActivityDetection.endOfSpeechSensitivity` changed from `END_SENSITIVITY_LOW` to `END_SENSITIVITY_HIGH`, and a `silenceDurationMs: 500` default was added. Because the model only processes the latest video frame when a turn commits (end-of-speech), a shorter silence window means it reacts to images noticeably sooner.
+  - **Lower media resolution by default**: New `live.media_resolution` config field (default `MEDIA_RESOLUTION_LOW`, ~280 tokens/frame) injected into `generationConfig.mediaResolution`, cutting per-frame token cost and inference latency. Configurable via `PEPEBOT_LIVE_MEDIA_RESOLUTION`; not overridden if `generation_config` already pins `mediaResolution`.
+
+### Added
+- **Snapshot in video example client**: `examples/live-api/index-video.html` gains a **Snapshot** button that sends the current camera frame as `clientContent` with `turnComplete: true`, forcing the model to look at the image and answer immediately instead of waiting for voice-activity end-of-turn detection.
+
+### Fixed
+- **Tool calls no longer stall Live audio/video**: `handleUpstreamToolCalls` now runs off the upstream→client proxy loop in a goroutine. Previously a slow tool call (timeout up to 90s) blocked forwarding of the model's audio responses and subsequent frames; tool responses remain serialized via the session's upstream mutex so concurrent writes stay safe.
+
 ## [0.5.14] - 2026-04-29
 
 ### Fixed

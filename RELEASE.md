@@ -1,12 +1,38 @@
-# 🐸 Pepebot v0.5.14 - Discord Message Cleanup
+# 🐸 Pepebot v0.5.16 - Give Your Live Session a Role
 
-**Release Date:** 2026-04-29
+**Release Date:** 2026-06-14
 
 ## 🎉 What's New
 
-### 💬 Cleaner Discord Messages
+### 🧠 System prompts for the Live API
 
-Long messages sent by the bot in Discord are split into multiple chunks to stay within Discord's character limit. Previously each chunk showed a `[Part 1/3]`, `[Part 2/3]` header — now those headers are gone, making the conversation feel more natural.
+Live voice/vision sessions can finally be told *how to behave*. Set a role, persona, or task and the Vertex/Gemini Live model follows it:
+
+- **Config default** — `live.system_prompt` (or `live.system_prompt_file`, env `PEPEBOT_LIVE_SYSTEM_PROMPT`).
+- **Per-session override** — a client can pass `system_prompt` in its `setup` message, perfect for task-specific clients (e.g. an autonomous rover that sets its mission per run).
+- **Reuse your agent's persona** — flip `live.use_agent_prompt: true` and the Live session inherits the selected agent's `AGENTS.md`/`SOUL.md`/`IDENTITY.md`, so it sounds the same in chat and in voice.
+
+If you set nothing, behavior is unchanged — no surprises.
+
+```json
+{ "live": { "system_prompt": "You are LEXA, an autonomous rover. Perceive → act → repeat, avoid obstacles, stop on command. Narrate briefly." } }
+```
+
+---
+
+## 🎉 Previous Highlights
+
+### 👁️ Live API sees your camera faster
+
+When you stream your camera to a Live session (Vertex/Gemini), the model now reacts to what it sees much sooner:
+
+- **Faster turn-taking** — the assistant decides you've stopped talking quicker (`END_SENSITIVITY_HIGH` + a shorter `silenceDurationMs: 500`), so it looks at the latest frame and replies with less lag.
+- **Lighter frames** — video frames default to `MEDIA_RESOLUTION_LOW` (~280 tokens each), cutting cost and inference latency. Tune it via `live.media_resolution` or `PEPEBOT_LIVE_MEDIA_RESOLUTION`.
+- **📸 Snapshot button** — the video example (`examples/live-api/index-video.html`) now has a **Snapshot** button that pushes the current frame as a committed turn, forcing an instant "look at this now" without waiting for you to finish speaking.
+
+### 🛠️ Tool calls no longer freeze the conversation
+
+A slow tool call during a Live session used to block the model's audio and incoming video frames. Tool calls now run off the proxy loop, so audio and video keep flowing smoothly while a tool runs.
 
 ---
 

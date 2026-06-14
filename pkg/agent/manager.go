@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -229,6 +231,39 @@ func (am *AgentManager) GetToolDefinitions(agentName string) ([]map[string]inter
 	}
 
 	return agentLoop.ToolDefinitions(), nil
+}
+
+// LiveSystemPrompt returns the selected agent's persona text for use as a Live
+// systemInstruction. It reads AGENTS.md/SOUL.md/IDENTITY.md from the agent's
+// prompt dir, falling back to the workspace root per file. Returns "" when none
+// exist. Used only when live.use_agent_prompt is enabled and no explicit prompt
+// is set.
+func (am *AgentManager) LiveSystemPrompt(agentName string) string {
+	if agentName == "" {
+		agentName = am.defaultAgent
+	}
+
+	agentDir := am.registry.AgentPromptDir(agentName)
+	workspace := am.config.WorkspacePath()
+
+	var b strings.Builder
+	for _, name := range []string{"AGENTS.md", "SOUL.md", "IDENTITY.md"} {
+		var data []byte
+		if agentDir != "" {
+			data, _ = os.ReadFile(filepath.Join(agentDir, name))
+		}
+		if len(data) == 0 {
+			data, _ = os.ReadFile(filepath.Join(workspace, name))
+		}
+		if len(data) > 0 {
+			if b.Len() > 0 {
+				b.WriteString("\n\n")
+			}
+			b.Write(data)
+		}
+	}
+
+	return strings.TrimSpace(b.String())
 }
 
 // ExecuteTool executes a tool using the selected agent's tool registry.

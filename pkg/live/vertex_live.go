@@ -94,9 +94,13 @@ func (p *VertexLiveProvider) SetupMessage(model string) []byte {
 		"model": modelResource,
 	}
 
-	// Use config-provided generationConfig, or defaults
+	// Use config-provided generationConfig, or defaults. Build into a fresh map
+	// so injecting mediaResolution never mutates the shared config across sessions.
+	genCfg := map[string]interface{}{}
 	if p.liveConfig.GenerationConfig != nil {
-		setupInner["generationConfig"] = p.liveConfig.GenerationConfig
+		for k, v := range p.liveConfig.GenerationConfig {
+			genCfg[k] = v
+		}
 	} else {
 		speechConfig := map[string]interface{}{
 			"voiceConfig": map[string]interface{}{
@@ -108,12 +112,17 @@ func (p *VertexLiveProvider) SetupMessage(model string) []byte {
 		if p.liveConfig.Language != "" {
 			speechConfig["languageCode"] = p.liveConfig.Language
 		}
-
-		setupInner["generationConfig"] = map[string]interface{}{
-			"responseModalities": []string{"AUDIO"},
-			"speechConfig":       speechConfig,
+		genCfg["responseModalities"] = []string{"AUDIO"}
+		genCfg["speechConfig"] = speechConfig
+	}
+	// Inject media resolution (lower = fewer tokens/frame, lower latency) unless
+	// the config already pins it explicitly.
+	if mr := p.liveConfig.MediaResolution; mr != "" {
+		if _, ok := genCfg["mediaResolution"]; !ok {
+			genCfg["mediaResolution"] = mr
 		}
 	}
+	setupInner["generationConfig"] = genCfg
 
 	// Use config-provided realtimeInputConfig, or defaults
 	if p.liveConfig.RealtimeInputConfig != nil {
@@ -123,8 +132,16 @@ func (p *VertexLiveProvider) SetupMessage(model string) []byte {
 			"automaticActivityDetection": map[string]interface{}{
 				"disabled":                 false,
 				"startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
-				"endOfSpeechSensitivity":   "END_SENSITIVITY_LOW",
+				"endOfSpeechSensitivity":   "END_SENSITIVITY_HIGH",
+				"silenceDurationMs":        500,
 			},
+		}
+	}
+
+	// Set the system instruction (role/persona/task) when configured.
+	if prompt := p.liveConfig.SystemPrompt; prompt != "" {
+		setupInner["systemInstruction"] = map[string]interface{}{
+			"parts": []map[string]interface{}{{"text": prompt}},
 		}
 	}
 

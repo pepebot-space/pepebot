@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/caarlos0/env/v11"
@@ -144,11 +145,19 @@ type GatewayConfig struct {
 }
 
 type LiveConfig struct {
-	Enabled             bool                   `json:"enabled" env:"PEPEBOT_LIVE_ENABLED"`
-	Provider            string                 `json:"provider" env:"PEPEBOT_LIVE_PROVIDER"`
-	Model               string                 `json:"model" env:"PEPEBOT_LIVE_MODEL"`
-	Video               bool                   `json:"video,omitempty" env:"PEPEBOT_LIVE_VIDEO"`
-	Language            string                 `json:"language,omitempty" env:"PEPEBOT_LIVE_LANGUAGE"`
+	Enabled         bool   `json:"enabled" env:"PEPEBOT_LIVE_ENABLED"`
+	Provider        string `json:"provider" env:"PEPEBOT_LIVE_PROVIDER"`
+	Model           string `json:"model" env:"PEPEBOT_LIVE_MODEL"`
+	Video           bool   `json:"video,omitempty" env:"PEPEBOT_LIVE_VIDEO"`
+	Language        string `json:"language,omitempty" env:"PEPEBOT_LIVE_LANGUAGE"`
+	MediaResolution string `json:"media_resolution,omitempty" env:"PEPEBOT_LIVE_MEDIA_RESOLUTION"`
+	// SystemPrompt sets the upstream systemInstruction for Live sessions (role/persona/task).
+	SystemPrompt string `json:"system_prompt,omitempty" env:"PEPEBOT_LIVE_SYSTEM_PROMPT"`
+	// SystemPromptFile loads the system prompt from a file when SystemPrompt is empty.
+	SystemPromptFile string `json:"system_prompt_file,omitempty" env:"PEPEBOT_LIVE_SYSTEM_PROMPT_FILE"`
+	// UseAgentPrompt, when true, falls back to the selected agent's persona files
+	// (AGENTS.md/SOUL.md/IDENTITY.md) as the Live systemInstruction if none is set.
+	UseAgentPrompt      bool                   `json:"use_agent_prompt,omitempty" env:"PEPEBOT_LIVE_USE_AGENT_PROMPT"`
 	GenerationConfig    map[string]interface{} `json:"generation_config,omitempty"`
 	RealtimeInputConfig map[string]interface{} `json:"realtime_input_config,omitempty"`
 }
@@ -232,6 +241,9 @@ func DefaultConfig() *Config {
 			Model:    "gemini-live-2.5-flash-native-audio",
 			Video:    false,
 			Language: "",
+			// Low media resolution = ~280 tokens/frame, lower latency for the
+			// model to "see" each video frame (vs medium/high).
+			MediaResolution: "MEDIA_RESOLUTION_LOW",
 			GenerationConfig: map[string]interface{}{
 				"responseModalities": []interface{}{"AUDIO"},
 				"speechConfig": map[string]interface{}{
@@ -246,7 +258,10 @@ func DefaultConfig() *Config {
 				"automaticActivityDetection": map[string]interface{}{
 					"disabled":                 false,
 					"startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
-					"endOfSpeechSensitivity":   "END_SENSITIVITY_LOW",
+					// HIGH + shorter silence window = turn commits sooner, so the
+					// model processes the latest frame and responds with less delay.
+					"endOfSpeechSensitivity": "END_SENSITIVITY_HIGH",
+					"silenceDurationMs":      500,
 				},
 			},
 		},
@@ -283,6 +298,13 @@ func LoadConfig(path string) (*Config, error) {
 
 	// Overlay native provider environment variables (higher priority)
 	overlayNativeEnvVars(cfg)
+
+	// Load the Live system prompt from file when set and no inline prompt given.
+	if cfg.Live.SystemPrompt == "" && cfg.Live.SystemPromptFile != "" {
+		if promptData, ferr := os.ReadFile(expandHome(cfg.Live.SystemPromptFile)); ferr == nil {
+			cfg.Live.SystemPrompt = strings.TrimSpace(string(promptData))
+		}
+	}
 
 	return cfg, nil
 }

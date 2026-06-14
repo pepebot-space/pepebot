@@ -39,6 +39,13 @@ type ToolExecutor interface {
 	ExecuteTool(ctx context.Context, agentName, toolName string, args map[string]interface{}) (string, error)
 }
 
+// SystemPromptSource optionally supplies an agent's persona prompt for use as the
+// Live systemInstruction. A ToolExecutor may implement it; resolution is opt-in
+// via live.use_agent_prompt and only used when no explicit prompt is set.
+type SystemPromptSource interface {
+	LiveSystemPrompt(agentName string) string
+}
+
 // SetupMessage is the first message sent by the client to configure the session
 type SetupMessage struct {
 	Setup *SetupConfig `json:"setup,omitempty"`
@@ -54,6 +61,8 @@ type SetupConfig struct {
 	// EnableTools controls whether gateway-side tool execution is enabled for the session.
 	// Defaults to true when omitted.
 	EnableTools *bool `json:"enable_tools,omitempty"`
+	// SystemPrompt sets the session systemInstruction (highest precedence override).
+	SystemPrompt string `json:"system_prompt,omitempty"`
 }
 
 // LiveServer manages WebSocket live sessions
@@ -281,6 +290,31 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		}
 	}
 
+	// Resolve the session systemInstruction with precedence:
+	//   client setup.system_prompt > live.system_prompt(/_file) > agent persona.
+	// SetupMessage already injects the config prompt; re-injecting is idempotent.
+	// When nothing resolves, setupData is left untouched (byte-identical to before).
+	sysPrompt := strings.TrimSpace(setupMsg.Setup.SystemPrompt)
+	promptSource := "client"
+	if sysPrompt == "" {
+		sysPrompt = strings.TrimSpace(ls.config.Live.SystemPrompt)
+		promptSource = "config"
+	}
+	if sysPrompt == "" && ls.config.Live.UseAgentPrompt && ls.tools != nil {
+		if src, ok := ls.tools.(SystemPromptSource); ok {
+			sysPrompt = strings.TrimSpace(src.LiveSystemPrompt(agentName))
+			promptSource = "agent"
+		}
+	}
+	if sysPrompt != "" && setupData != nil {
+		setupData = injectGeminiSystemInstruction(setupData, sysPrompt)
+		logger.InfoCF("live", "Applied system instruction", map[string]interface{}{
+			"agent":  agentName,
+			"source": promptSource,
+			"chars":  len(sysPrompt),
+		})
+	}
+
 	if setupData != nil {
 		if err := upstreamConn.WriteMessage(websocket.TextMessage, setupData); err != nil {
 			logger.ErrorCF("live", "Failed to send upstream setup message", map[string]interface{}{
@@ -380,7 +414,10 @@ func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, s
 		}
 
 		if direction == "upstream→client" {
-			ls.handleUpstreamToolCalls(ctx, session, msgType, data)
+			// Run tool calls off the proxy loop so a slow tool (up to 90s) never
+			// stalls forwarding of audio/video frames. The toolResponse write is
+			// serialized via session.upstreamMu, so concurrent writes stay safe.
+			go ls.handleUpstreamToolCalls(ctx, session, msgType, data)
 		}
 
 		var writeErr error
@@ -542,6 +579,34 @@ func injectGeminiToolsIntoSetup(setupData []byte, toolDefs []map[string]interfac
 
 	setupInner["tools"] = []map[string]interface{}{
 		{"functionDeclarations": functionDecls},
+	}
+
+	b, err := json.Marshal(setup)
+	if err != nil {
+		return setupData
+	}
+	return b
+}
+
+// injectGeminiSystemInstruction sets setup.systemInstruction.parts[0].text on a
+// Gemini/Vertex BidiGenerateContentSetup payload, replacing any existing value.
+func injectGeminiSystemInstruction(setupData []byte, prompt string) []byte {
+	if len(setupData) == 0 || prompt == "" {
+		return setupData
+	}
+
+	var setup map[string]interface{}
+	if err := json.Unmarshal(setupData, &setup); err != nil {
+		return setupData
+	}
+
+	setupInner, ok := setup["setup"].(map[string]interface{})
+	if !ok {
+		return setupData
+	}
+
+	setupInner["systemInstruction"] = map[string]interface{}{
+		"parts": []map[string]interface{}{{"text": prompt}},
 	}
 
 	b, err := json.Marshal(setup)
