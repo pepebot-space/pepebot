@@ -112,6 +112,93 @@ Jika koneksi dan inisialisasi berhasil, Pepebot Server akan membalas dengan stat
 - Untuk Vertex/Gemini: `{"setupComplete": true}` atau respon ekuivalen yang menandakan Live session siap.
 - Untuk OpenAI / MAIA Router: `{"status": "connected", "provider": "openai", "model": "gpt-4o-realtime-preview", "session": "..."}`. Setelah menerima respons ini, klien dapat mulai mengirimkan *frame* mengikuti skema spesifik dari provider tersebut.
 
+### Tuning Latency Video (kapan model "melihat" gambar)
+
+Pada Vertex/Gemini, frame kamera dikirim sebagai `realtimeInput` (streaming kontinu). Model **tidak** memproses tiap frame seketika — ia hanya "melihat" frame terbaru saat *turn* di-commit, yaitu ketika *Voice Activity Detection* (VAD) mendeteksi Anda berhenti bicara. Jadi delay yang terasa sebagian besar berasal dari konfigurasi turn-taking, bukan dari proxy Pepebot (yang transparan).
+
+Tiga knob yang memengaruhi delay (semua opsional, punya default yang baik):
+
+```json
+{
+  "live": {
+    "media_resolution": "MEDIA_RESOLUTION_LOW",
+    "generation_config": {},
+    "realtime_input_config": {
+      "automaticActivityDetection": {
+        "disabled": false,
+        "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+        "endOfSpeechSensitivity": "END_SENSITIVITY_HIGH",
+        "prefixPaddingMs": 80,
+        "silenceDurationMs": 500
+      }
+    }
+  }
+}
+```
+
+| Field | Efek | Default Pepebot |
+|-------|------|-----------------|
+| `media_resolution` | `MEDIA_RESOLUTION_LOW` ≈ 280 token/gambar → inferensi lebih cepat & murah; `MEDIUM/HIGH` lebih detail tapi lebih lambat. Disuntikkan otomatis ke `generationConfig.mediaResolution` bila belum di-set. | `MEDIA_RESOLUTION_LOW` |
+| `endOfSpeechSensitivity` | `END_SENSITIVITY_HIGH` = lebih cepat memutuskan ucapan selesai → turn cepat commit → gambar cepat diproses. `LOW` menunggu lebih lama. | `END_SENSITIVITY_HIGH` |
+| `silenceDurationMs` | Lama hening sebelum turn dianggap selesai. Makin kecil makin responsif, tapi terlalu kecil bisa memotong ucapan. | `500` |
+
+> ⚠️ Jika `realtime_input_config` Anda set eksplisit di `config.json`, isinya **menggantikan** default (bukan merge). Pastikan menyertakan `endOfSpeechSensitivity`/`silenceDurationMs` yang diinginkan.
+
+**Snapshot (lihat sekarang juga):** untuk memaksa model melihat satu frame seketika tanpa menunggu VAD, kirim frame sebagai `clientContent` dengan `turnComplete: true` (bukan `realtimeInput`). Contoh di `examples/live-api/index-video.html` punya tombol **Snapshot**:
+
+```json
+{
+  "clientContent": {
+    "turns": [{ "role": "user", "parts": [
+      { "inlineData": { "mimeType": "image/jpeg", "data": "<base64 jpeg>" } },
+      { "text": "apa yang saya pegang?" }
+    ]}],
+    "turnComplete": true
+  }
+}
+```
+
+### System Prompt (`systemInstruction`)
+
+Anda bisa memberi peran/persona/instruksi tugas ke model Live (Vertex/Gemini) lewat `systemInstruction`. Pepebot menyusunnya dengan urutan presedensi:
+
+1. **Per-sesi (paling tinggi)** — field `system_prompt` di pesan `setup` dari klien.
+2. **Config default** — `live.system_prompt` (atau `live.system_prompt_file`; env `PEPEBOT_LIVE_SYSTEM_PROMPT`).
+3. **Persona agent (opsional)** — bila `live.use_agent_prompt: true`, fallback ke file persona agent terpilih (`AGENTS.md` → `SOUL.md` → `IDENTITY.md`, cek di direktori agent lalu workspace).
+
+Jika tidak ada satu pun yang di-set, perilaku **identik** seperti sebelumnya (upstream setup tanpa `systemInstruction`, tanpa regresi).
+
+**Config default:**
+
+```json
+{
+  "live": {
+    "enabled": true,
+    "provider": "vertex",
+    "model": "gemini-live-2.5-flash-native-audio",
+    "video": true,
+    "system_prompt": "You are LEXA, an autonomous rover. You can see the camera and call rover tools. Given a goal, work toward it in a perceive→act→perceive loop with small bounded steps; avoid obstacles (back off + turn on blocked); stop immediately when asked. Narrate briefly."
+  }
+}
+```
+
+- Alternatif dari file: `"system_prompt_file": "~/.pepebot/lexa.md"` (dipakai hanya bila `system_prompt` kosong; mendukung `~`).
+- Pakai persona agent: `"use_agent_prompt": true` (hanya berlaku jika `system_prompt`/`system_prompt_file` kosong).
+
+**Override per-sesi (dari klien):**
+
+```json
+{ "setup": { "provider": "vertex", "model": "gemini-live-2.5-flash-native-audio",
+             "agent": "default", "enable_tools": true,
+             "system_prompt": "You are LEXA, an autonomous rover ..." } }
+```
+
+Hasilnya, `BidiGenerateContentSetup` upstream akan menyertakan:
+
+```json
+{ "setup": { "systemInstruction": { "parts": [ { "text": "<PROMPT>" } ] }, "model": "...", "generationConfig": {} } }
+```
+
 ---
 
 ## 4. Pengiriman Audio dan Teks

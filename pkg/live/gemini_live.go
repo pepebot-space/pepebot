@@ -60,8 +60,13 @@ func (p *GeminiLiveProvider) SetupMessage(model string) []byte {
 		"model": "models/" + model,
 	}
 
+	// Build generationConfig into a fresh map so injecting mediaResolution never
+	// mutates the shared config across sessions.
+	genCfg := map[string]interface{}{}
 	if p.liveConfig.GenerationConfig != nil {
-		setupInner["generationConfig"] = p.liveConfig.GenerationConfig
+		for k, v := range p.liveConfig.GenerationConfig {
+			genCfg[k] = v
+		}
 	} else {
 		speechConfig := map[string]interface{}{
 			"voiceConfig": map[string]interface{}{
@@ -73,15 +78,36 @@ func (p *GeminiLiveProvider) SetupMessage(model string) []byte {
 		if p.liveConfig.Language != "" {
 			speechConfig["languageCode"] = p.liveConfig.Language
 		}
-
-		setupInner["generationConfig"] = map[string]interface{}{
-			"responseModalities": []string{"AUDIO"},
-			"speechConfig":       speechConfig,
+		genCfg["responseModalities"] = []string{"AUDIO"}
+		genCfg["speechConfig"] = speechConfig
+	}
+	// Inject media resolution (lower = fewer tokens/frame, lower latency) unless
+	// the config already pins it explicitly.
+	if mr := p.liveConfig.MediaResolution; mr != "" {
+		if _, ok := genCfg["mediaResolution"]; !ok {
+			genCfg["mediaResolution"] = mr
 		}
 	}
+	setupInner["generationConfig"] = genCfg
 
 	if p.liveConfig.RealtimeInputConfig != nil {
 		setupInner["realtimeInputConfig"] = p.liveConfig.RealtimeInputConfig
+	} else {
+		setupInner["realtimeInputConfig"] = map[string]interface{}{
+			"automaticActivityDetection": map[string]interface{}{
+				"disabled":                 false,
+				"startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+				"endOfSpeechSensitivity":   "END_SENSITIVITY_HIGH",
+				"silenceDurationMs":        500,
+			},
+		}
+	}
+
+	// Set the system instruction (role/persona/task) when configured.
+	if prompt := p.liveConfig.SystemPrompt; prompt != "" {
+		setupInner["systemInstruction"] = map[string]interface{}{
+			"parts": []map[string]interface{}{{"text": prompt}},
+		}
 	}
 
 	setup := map[string]interface{}{

@@ -55,6 +55,7 @@
 
         <div class="flex gap-2">
           <input id="textInput" class="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm" placeholder="Type message..." />
+          <button id="snapshotBtn" class="rounded-lg px-4 bg-amber-600 hover:bg-amber-500" title="Send current frame now and force the model to look (clientContent + turnComplete)">Snapshot</button>
           <button id="sendBtn" class="rounded-lg px-4 bg-indigo-700 hover:bg-indigo-600">Send</button>
         </div>
 
@@ -71,6 +72,7 @@
     const startCamBtn = document.getElementById('startCamBtn');
     const stopCamBtn = document.getElementById('stopCamBtn');
     const sendBtn = document.getElementById('sendBtn');
+    const snapshotBtn = document.getElementById('snapshotBtn');
     const textInput = document.getElementById('textInput');
     const logs = document.getElementById('logs');
     const statusEl = document.getElementById('status');
@@ -436,6 +438,37 @@
       }));
     }
 
+    // Snapshot: send the current frame as a committed turn (clientContent +
+    // turnComplete) so the model looks at the image and answers immediately,
+    // instead of waiting for end-of-speech detection on the realtimeInput stream.
+    function sendSnapshot() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('Connect first', 'error');
+        return;
+      }
+      if (!camCanvas || !camCtx || !camPreview.videoWidth || !camPreview.videoHeight) {
+        log('Start the camera first', 'error');
+        return;
+      }
+
+      camCtx.drawImage(camPreview, 0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
+      const b64 = base64FromJpegDataUrl(camCanvas.toDataURL('image/jpeg', JPEG_QUALITY));
+      if (!b64) return;
+
+      const text = textInput.value.trim();
+      const parts = [{ inlineData: { mimeType: VIDEO_MIME, data: b64 } }];
+      if (text) parts.push({ text });
+
+      ws.send(JSON.stringify({
+        clientContent: {
+          turns: [{ role: 'user', parts }],
+          turnComplete: true,
+        },
+      }));
+      log(text ? `Snapshot + "${text}" sent` : 'Snapshot sent', 'ok');
+      if (text) textInput.value = '';
+    }
+
     async function startCamera() {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         log('Connect first', 'error');
@@ -496,6 +529,7 @@
     disconnectBtn.addEventListener('click', disconnect);
     startMicBtn.addEventListener('click', startMic);
     stopMicBtn.addEventListener('click', stopMic);
+    snapshotBtn.addEventListener('click', sendSnapshot);
     startCamBtn.addEventListener('click', startCamera);
     stopCamBtn.addEventListener('click', stopCamera);
     sendBtn.addEventListener('click', sendText);
