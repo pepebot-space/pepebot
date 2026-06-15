@@ -21,6 +21,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/mcp"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/session"
+	"github.com/pepebot-space/pepebot/pkg/task"
 	"github.com/pepebot-space/pepebot/pkg/tools"
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
@@ -116,6 +117,17 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 	toolsRegistry.Register(tools.NewManageMCPTool(workspace))
 
+	// Register task orchestration tool (conditional on config)
+	if cfg.Orchestration.Enabled {
+		if taskStore, err := task.NewTaskStore(&cfg.Orchestration); err == nil {
+			toolsRegistry.Register(tools.NewManageTaskTool(taskStore, workspace))
+			workflowHelper.SetTaskExecutor(task.NewWorkflowBridge(taskStore))
+			logger.InfoC("agent", "Task orchestration tool registered")
+		} else {
+			logger.WarnCF("agent", "Failed to init task store for tool", map[string]interface{}{"error": err.Error()})
+		}
+	}
+
 	var mcpRuntime *mcp.Runtime
 	if rt, count, err := tools.RegisterMCPTools(workspace, toolsRegistry); err != nil {
 		logger.WarnCF("mcp", "Failed to register MCP tools", map[string]interface{}{"error": err.Error()})
@@ -198,6 +210,17 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 	toolsRegistry.Register(tools.NewSendFileTool(bus, workspace))
 	toolsRegistry.Register(tools.NewManageAgentTool(workspace))
 	toolsRegistry.Register(tools.NewManageMCPTool(workspace))
+
+	// Register task orchestration tool (conditional on config)
+	if cfg.Orchestration.Enabled {
+		if taskStore, err := task.NewTaskStore(&cfg.Orchestration); err == nil {
+			toolsRegistry.Register(tools.NewManageTaskTool(taskStore, workspace))
+			workflowHelper.SetTaskExecutor(task.NewWorkflowBridge(taskStore))
+			logger.InfoC("agent", "Task orchestration tool registered")
+		} else {
+			logger.WarnCF("agent", "Failed to init task store for tool", map[string]interface{}{"error": err.Error()})
+		}
+	}
 
 	var mcpRuntime *mcp.Runtime
 	if rt, count, err := tools.RegisterMCPTools(workspace, toolsRegistry); err != nil {

@@ -11,16 +11,21 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/live"
 	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/task"
 )
 
 // GatewayServer is the HTTP API server for OpenAI-compatible endpoints
 type GatewayServer struct {
-	config       *config.Config
-	agentManager *agent.AgentManager
-	bus          *bus.MessageBus
-	httpServer   *http.Server
-	liveServer   *live.LiveServer
-	restartFunc  func() // called to trigger graceful restart
+	config         *config.Config
+	agentManager   *agent.AgentManager
+	bus            *bus.MessageBus
+	httpServer     *http.Server
+	liveServer     *live.LiveServer
+	taskStore      task.TaskStore
+	taskDispatcher *task.Dispatcher
+	taskStreamHub  *TaskStreamHub
+	taskStopChan   chan struct{}
+	restartFunc    func() // called to trigger graceful restart
 }
 
 // SetRestartFunc sets the function called when a restart is requested via API or chat command
@@ -34,6 +39,49 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 		config:       cfg,
 		agentManager: agentManager,
 		bus:          msgBus,
+	}
+
+	// Initialize task store if orchestration is enabled
+	if cfg.Orchestration.Enabled {
+		store, err := task.NewTaskStore(&cfg.Orchestration)
+		if err != nil {
+			logger.WarnCF("gateway", "Failed to initialize task store", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			gs.taskStore = store
+			gs.taskDispatcher = task.NewDispatcher(store, agentManager, agentManager)
+			gs.taskStreamHub = NewTaskStreamHub()
+			gs.taskStopChan = make(chan struct{})
+
+			// Wire notifications via message bus
+			var notifyChannels []task.NotifyChannel
+			if cfg.Channels.Telegram.Enabled && cfg.Channels.Telegram.Token != "" {
+				for _, chatID := range cfg.Channels.Telegram.AllowFrom {
+					notifyChannels = append(notifyChannels, task.NotifyChannel{Channel: "telegram", ChatID: chatID})
+				}
+			}
+			if cfg.Channels.Discord.Enabled && cfg.Channels.Discord.Token != "" {
+				for _, chatID := range cfg.Channels.Discord.AllowFrom {
+					notifyChannels = append(notifyChannels, task.NotifyChannel{Channel: "discord", ChatID: chatID})
+				}
+			}
+			if len(notifyChannels) > 0 {
+				notifier := task.NewNotifier(func(channel, chatID, message string) {
+					msgBus.PublishOutbound(bus.OutboundMessage{
+						Channel: channel,
+						ChatID:  chatID,
+						Content: message,
+					})
+				}, notifyChannels)
+				gs.taskDispatcher.SetNotifier(notifier)
+				logger.InfoCF("gateway", "Task notifications enabled", map[string]interface{}{
+					"channels": len(notifyChannels),
+				})
+			}
+
+			logger.InfoC("gateway", "Task orchestration enabled")
+		}
 	}
 
 	// Initialize Live API server if enabled
@@ -108,6 +156,14 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/config", gs.corsMiddleware(gs.handleConfig))
 	mux.HandleFunc("/v1/restart", gs.corsMiddleware(gs.handleRestart))
 	mux.HandleFunc("/v1/send", gs.corsMiddleware(gs.handleSend))
+	mux.HandleFunc("/v1/features", gs.corsMiddleware(gs.handleFeatures))
+	mux.HandleFunc("/v1/tasks", gs.corsMiddleware(gs.handleTaskRoutes))
+	mux.HandleFunc("/v1/tasks/", gs.corsMiddleware(gs.handleTaskRoutes))
+	mux.HandleFunc("/v1/task-templates", gs.corsMiddleware(gs.handleTemplateRoutes))
+	mux.HandleFunc("/v1/task-templates/", gs.corsMiddleware(gs.handleTemplateRoutes))
+	if gs.taskStreamHub != nil {
+		mux.HandleFunc("/v1/tasks/stream", gs.taskStreamHub.HandleWebSocket)
+	}
 
 	// Live API WebSocket endpoint
 	if gs.liveServer != nil {
@@ -132,11 +188,49 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start task dispatch + cleanup ticker (every 30 seconds)
+	if gs.taskDispatcher != nil {
+		go gs.runTaskTicker(ctx)
+	}
+
 	return nil
+}
+
+// emitTaskEvent broadcasts a task event to WebSocket clients.
+func (gs *GatewayServer) emitTaskEvent(eventType string, t *task.Task) {
+	if gs.taskStreamHub == nil || t == nil {
+		return
+	}
+	gs.taskStreamHub.Broadcast(TaskEvent{Type: eventType, Task: t})
+}
+
+// runTaskTicker periodically dispatches tasks and runs cleanup.
+func (gs *GatewayServer) runTaskTicker(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-gs.taskStopChan:
+			return
+		case <-ticker.C:
+			gs.taskDispatcher.Dispatch(ctx)
+			task.RunCleanup(gs.taskStore, gs.config.Orchestration.TTL.DoneDays, gs.config.Orchestration.TTL.FailedDays)
+		}
+	}
 }
 
 // Stop gracefully shuts down the HTTP server
 func (gs *GatewayServer) Stop(ctx context.Context) error {
+	if gs.taskStopChan != nil {
+		close(gs.taskStopChan)
+	}
+	if gs.taskStore != nil {
+		gs.taskStore.Close()
+	}
+
 	if gs.httpServer == nil {
 		return nil
 	}

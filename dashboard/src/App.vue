@@ -1,7 +1,7 @@
 <script setup>
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { computed, ref } from 'vue'
-import { Home, MessageSquare, Cpu, Zap, GitBranch, Settings, LogOut, RefreshCw } from 'lucide-vue-next'
+import { computed, ref, onMounted } from 'vue'
+import { Home, MessageSquare, Cpu, Zap, GitBranch, KanbanSquare, Settings, LogOut, RefreshCw } from 'lucide-vue-next'
 import { setActiveGateway, getActiveGateway, getGatewayApiUrl } from './lib/gateway.js'
 import axios from 'axios'
 
@@ -16,6 +16,17 @@ function logout() {
   setActiveGateway(null)
   router.push('/setup')
 }
+
+const features = ref({})
+
+onMounted(async () => {
+  try {
+    const res = await axios.get(`${GATEWAY_API}/v1/features`)
+    features.value = res.data
+  } catch {
+    features.value = {}
+  }
+})
 
 const isRestarting = ref(false)
 async function restartGateway() {
@@ -64,6 +75,9 @@ async function restartGateway() {
         </RouterLink>
         <RouterLink to="/workflows" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
            <GitBranch :size="22" />
+        </RouterLink>
+        <RouterLink v-if="features.orchestration?.enabled" to="/tasks" class="p-3 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all" active-class="bg-white/10 text-white">
+           <KanbanSquare :size="22" />
         </RouterLink>
       </nav>
 

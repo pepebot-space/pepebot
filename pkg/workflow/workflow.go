@@ -53,6 +53,27 @@ type WorkflowStep struct {
 	Goal  string                 `json:"goal,omitempty"`  // Natural language goal for LLM
 	Skill string                 `json:"skill,omitempty"` // Skill name to load and combine with goal
 	Agent string                 `json:"agent,omitempty"` // Agent name to delegate goal to
+	Task  *TaskStepConfig        `json:"task,omitempty"`  // Create or wait for a task
+}
+
+// TaskStepConfig defines a task step in a workflow.
+type TaskStepConfig struct {
+	Action      string            `json:"action"`                // "create" or "wait"
+	Title       string            `json:"title,omitempty"`       // for create
+	Description string            `json:"description,omitempty"` // for create
+	Agent       string            `json:"agent,omitempty"`       // for create
+	Priority    string            `json:"priority,omitempty"`    // for create
+	Labels      []string          `json:"labels,omitempty"`      // for create
+	Approval    bool              `json:"approval,omitempty"`    // for create
+	ID          string            `json:"id,omitempty"`          // for wait (task ID, supports {{variable}})
+	Timeout     int               `json:"timeout,omitempty"`     // for wait (seconds, default 300)
+}
+
+// WorkflowTaskExecutor allows workflows to create and wait for tasks.
+// Implemented by a bridge in the agent package to avoid circular imports.
+type WorkflowTaskExecutor interface {
+	CreateTask(title, description, agent, priority string, labels []string, approval bool) (string, error)
+	WaitForTask(id string, timeoutSeconds int) (string, string, error) // returns (status, result, error)
 }
 
 // WorkflowHelper manages workflow execution and storage.
@@ -62,6 +83,7 @@ type WorkflowHelper struct {
 	skillProvider  WorkflowSkillProvider
 	agentProcessor WorkflowAgentProcessor
 	goalProcessor  GoalProcessor
+	taskExecutor   WorkflowTaskExecutor
 }
 
 // NewWorkflowHelper creates a new WorkflowHelper.
@@ -88,6 +110,11 @@ func (h *WorkflowHelper) SetAgentProcessor(processor WorkflowAgentProcessor) {
 // SetGoalProcessor sets the goal processor for goal-based steps.
 func (h *WorkflowHelper) SetGoalProcessor(processor GoalProcessor) {
 	h.goalProcessor = processor
+}
+
+// SetTaskExecutor sets the task executor for task-based workflow steps.
+func (h *WorkflowHelper) SetTaskExecutor(executor WorkflowTaskExecutor) {
+	h.taskExecutor = executor
 }
 
 // WorkflowsDir returns the path to the workflows directory.
@@ -263,6 +290,53 @@ func (h *WorkflowHelper) ExecuteWorkflow(ctx context.Context, wf *WorkflowDefini
 			results = append(results, fmt.Sprintf("  Agent: %s", step.Agent))
 			results = append(results, fmt.Sprintf("  Goal: %s", interpolatedGoal))
 			results = append(results, fmt.Sprintf("  Response: %s", displayOutput))
+		}
+
+		// Task step (create or wait for a task)
+		if step.Task != nil {
+			if h.taskExecutor == nil {
+				results = append(results, "  ERROR: task executor not available")
+				return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: task executor not available", i+1, step.Name)
+			}
+
+			switch step.Task.Action {
+			case "create":
+				title := interpolateVariables(step.Task.Title, variables)
+				desc := interpolateVariables(step.Task.Description, variables)
+				taskID, err := h.taskExecutor.CreateTask(title, desc, step.Task.Agent, step.Task.Priority, step.Task.Labels, step.Task.Approval)
+				if err != nil {
+					results = append(results, fmt.Sprintf("  ERROR: task create failed: %v", err))
+					return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: %w", i+1, step.Name, err)
+				}
+				variables[step.Name+"_output"] = taskID
+				variables[step.Name] = taskID
+				results = append(results, fmt.Sprintf("  Task created: %s (title: %s)", taskID, title))
+
+			case "wait":
+				taskID := interpolateVariables(step.Task.ID, variables)
+				timeout := step.Task.Timeout
+				if timeout <= 0 {
+					timeout = 300
+				}
+				status, result, err := h.taskExecutor.WaitForTask(taskID, timeout)
+				if err != nil {
+					results = append(results, fmt.Sprintf("  ERROR: task wait failed: %v", err))
+					return strings.Join(results, "\n"), fmt.Errorf("step %d (%s) failed: %w", i+1, step.Name, err)
+				}
+				variables[step.Name+"_output"] = result
+				variables[step.Name] = result
+				variables[step.Name+"_status"] = status
+				displayResult := result
+				if len(displayResult) > 500 {
+					displayResult = displayResult[:500] + "... (truncated)"
+				}
+				results = append(results, fmt.Sprintf("  Task %s: %s", taskID, status))
+				results = append(results, fmt.Sprintf("  Result: %s", displayResult))
+
+			default:
+				results = append(results, fmt.Sprintf("  ERROR: unknown task action: %s", step.Task.Action))
+				return strings.Join(results, "\n"), fmt.Errorf("step %d (%s): unknown task action '%s'", i+1, step.Name, step.Task.Action)
+			}
 		}
 
 		// Goal step (pure LLM, no skill/agent)

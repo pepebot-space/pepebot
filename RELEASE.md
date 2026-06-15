@@ -34,6 +34,14 @@ When you stream your camera to a Live session (Vertex/Gemini), the model now rea
 
 A slow tool call during a Live session used to block the model's audio and incoming video frames. Tool calls now run off the proxy loop, so audio and video keep flowing smoothly while a tool runs.
 
+### 🧩 MIPS Build Compatibility Fix
+
+Cross-compiling for MIPS no longer breaks on SQLite task-store imports:
+
+- Added architecture-specific fallback for task orchestration on MIPS targets
+- When SQLite is unavailable, orchestration can now fall back to JSON backend (`backend: auto`)
+- Improves reliability for router-class and embedded Linux build targets
+
 ---
 
 ## 📦 Installation
