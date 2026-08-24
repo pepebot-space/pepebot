@@ -537,6 +537,9 @@ func (p *VertexProvider) parseResponse(body []byte) (*LLMResponse, error) {
 
 // getMessageContentString extracts string content from a Message.Content field
 func getMessageContentString(content interface{}) string {
+	if content == nil {
+		return ""
+	}
 	switch c := content.(type) {
 	case string:
 		return c

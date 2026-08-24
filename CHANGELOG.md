@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.17] - 2026-08-24
 
+### Fixed
+- **OpenCode Go tool calling was completely broken** (HTTP 400 on every tool-using turn): the agent loop stores tool calls in OpenAI shape (`Function.Arguments` as a JSON string, `ToolCall.Arguments` left nil), but `buildAnthropicRequest` replayed the nil map straight into the Anthropic `tool_use.input` field, so the API got `input: null` and rejected the request with `messages.N.content.0.tool_use.input: Input should be a valid dictionary`. `input` is now decoded from `Function.Arguments` when the map is nil and always falls back to `{}`. Verified end-to-end (single- and multi-tool turns) on `minimax-m3`, `kimi-k3`, `glm-5.3`, `deepseek-v4-pro`, `qwen3.8-max`. Regression test: `TestOpenCodeProvider_ToolUseInputIsAlwaysObject`.
+- **Nil message content no longer leaks the string `<nil>` into prompts**: `getMessageContentString` (shared with the Vertex provider) and `OpenCodeProvider.buildContent` now treat nil content as empty instead of formatting it with `%v`.
+
 ### Changed
 - **OpenCode Go model catalog refreshed**: the provider's default model is now `minimax-m3` (was `minimax-m2.5`), and the onboarding menu / docs list the models currently served by `https://opencode.ai/zen/go/v1/models` instead of the original three.
   - Now available: `minimax-m3`, `minimax-m2.7`, `minimax-m2.5`, `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`, `glm-5.3`, `glm-5.2`, `glm-5.1`, `glm-5`, `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp`, `qwen3.8-max`, `qwen3.7-max`, `qwen3.7-plus`, `qwen3.6-plus`, `qwen3.5-plus`, `mimo-v2.5-pro`, `mimo-v2.5`, `mimo-v2-pro`, `mimo-v2-omni`, `hy3`, `hy3-preview`, `grok-4.5`, `gpt-5.6-luna`, `ox-alpha-free`, `muse-spark-1.2-contributor`.

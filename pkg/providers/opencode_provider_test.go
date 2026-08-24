@@ -108,3 +108,54 @@ func TestOpenCodeProvider_BuildAnthropicRequestWithTools(t *testing.T) {
 		t.Errorf("Expected tool name 'get_weather', got %v", toolsArray[0]["name"])
 	}
 }
+
+// Regression: the agent loop stores tool calls OpenAI-style (Function.Arguments
+// as a JSON string, Arguments nil). Sending that through as `input` yields null
+// and the API rejects the whole request with a 400.
+func TestOpenCodeProvider_ToolUseInputIsAlwaysObject(t *testing.T) {
+	provider := NewOpenCodeProvider("test-key", "")
+
+	cases := map[string]ToolCall{
+		"openai shape": {ID: "t1", Type: "function", Function: &FunctionCall{Name: "exec", Arguments: `{"command":"echo hi"}`}},
+		"no arguments": {ID: "t2", Name: "list_dir"},
+		"bad json":     {ID: "t3", Name: "exec", Function: &FunctionCall{Name: "exec", Arguments: "not json"}},
+	}
+
+	for name, tc := range cases {
+		request := provider.buildAnthropicRequest([]Message{
+			{Role: "user", Content: "go"},
+			{Role: "assistant", Content: "", ToolCalls: []ToolCall{tc}},
+		}, nil, "minimax-m3", nil)
+
+		block := toolUseBlock(t, request)
+
+		if block["name"] == "" {
+			t.Errorf("%s: tool_use name is empty", name)
+		}
+		if _, ok := block["input"].(map[string]interface{}); !ok {
+			t.Errorf("%s: input must be an object, got %#v", name, block["input"])
+		}
+	}
+
+	// The decoded arguments must survive the round trip.
+	request := provider.buildAnthropicRequest([]Message{
+		{Role: "user", Content: "go"},
+		{Role: "assistant", ToolCalls: []ToolCall{cases["openai shape"]}},
+	}, nil, "minimax-m3", nil)
+	input := toolUseBlock(t, request)["input"].(map[string]interface{})
+	if input["command"] != "echo hi" {
+		t.Errorf("expected command 'echo hi', got %v", input["command"])
+	}
+}
+
+func toolUseBlock(t *testing.T, request map[string]interface{}) map[string]interface{} {
+	t.Helper()
+	msgs := request["messages"].([]map[string]interface{})
+	for _, block := range msgs[1]["content"].([]map[string]interface{}) {
+		if block["type"] == "tool_use" {
+			return block
+		}
+	}
+	t.Fatal("no tool_use block in assistant message")
+	return nil
+}

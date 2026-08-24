@@ -1,4 +1,4 @@
-# 🐸 Pepebot v0.5.17 - OpenCode Go, Now With The Whole Menu
+# 🐸 Pepebot v0.5.17 - OpenCode Go: Full Menu, Working Tools
 
 **Release Date:** 2026-08-24
 
@@ -13,6 +13,10 @@ OpenCode Go quietly grew from 3 models to ~30. Pepebot now knows about them.
 - **Onboarding and docs updated**, so `pepebot onboard` no longer offers you a menu from last season.
 
 Already running an OpenCode Go model? Nothing breaks — your configured `model` keeps working. Only the default for fresh setups changed.
+
+### 🐛 Tool calling on OpenCode Go actually works now
+
+Any OpenCode Go turn that used a tool died with an HTTP 400. Pepebot was replaying tool calls with a `null` argument object, which the API refuses. Fixed and verified end-to-end on `minimax-m3`, `kimi-k3`, `glm-5.3`, `deepseek-v4-pro` and `qwen3.8-max` — single tool, multiple tools, multi-turn.
 
 ## 📦 Installation
 

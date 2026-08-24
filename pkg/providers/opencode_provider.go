@@ -252,11 +252,23 @@ func (p *OpenCodeProvider) buildAnthropicRequest(messages []Message, tools []Too
 				if name == "" && tc.Function != nil {
 					name = tc.Function.Name
 				}
+				// History stores tool calls in OpenAI shape (Function.Arguments as a
+				// JSON string) with Arguments nil; Anthropic requires input to be an
+				// object, so decode it back and never send null.
+				input := tc.Arguments
+				if input == nil && tc.Function != nil && tc.Function.Arguments != "" {
+					if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
+						input = nil
+					}
+				}
+				if input == nil {
+					input = map[string]interface{}{}
+				}
 				contentArray = append(contentArray, map[string]interface{}{
 					"type":  "tool_use",
 					"id":    tc.ID,
 					"name":  name,
-					"input": tc.Arguments,
+					"input": input,
 				})
 			}
 			anthropicMsg["content"] = contentArray
@@ -338,7 +350,7 @@ func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
 		}
 		return result
 	default:
-		if msg.ToolCallID != "" {
+		if content == nil || msg.ToolCallID != "" {
 			return []map[string]interface{}{}
 		}
 		return []map[string]interface{}{
