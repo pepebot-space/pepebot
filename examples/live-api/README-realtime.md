@@ -48,21 +48,19 @@ port than the gateway.
 
 Audio is pcm16 mono at 24kHz in both directions.
 
-## Frame size matters
+## Frame size
 
-Send audio in **small frames — 20ms (480 samples, 960 bytes) is the safe default**.
-A server-side VAD that works on fixed frames silently stalls on larger chunks: you
-get `input_audio_buffer.speech_started` and then nothing — no `speech_stopped`, no
-transcription, no response, and no error either.
+Small frames are still the better default — **20ms (480 samples, 960 bytes)** keeps
+latency low and barge-in responsive — but they are no longer a hard requirement of
+the Paniki Realtime server: appends of 100ms and 170ms now complete a turn, because
+the server repacketizes internally.
 
-Measured against the Paniki Realtime server at 24kHz: appends up to 1056 samples
-(44ms) complete a turn; 1200 samples (50ms) and above stop dead after
-`speech_started`. 20ms leaves plenty of headroom.
+Some other Realtime servers run a frame-based VAD that only accepts small frames and
+stall silently on anything larger — no `speech_stopped`, no transcription, no error.
+`index-openai.html` therefore repacketizes every audio path — mic and synthetic —
+into 20ms frames via `sendAudioSamples`, which also solves the browser's
+`ScriptProcessorNode` handing out 4096-sample (~170ms) buffers. Reuse that approach
+in your own client rather than forwarding raw capture buffers.
 
-The browser's `ScriptProcessorNode` hands out 4096-sample buffers (~170ms), well
-over that limit, so `index-openai.html` repacketizes every audio path — mic and
-synthetic — into 20ms frames before sending (`sendAudioSamples`). Reuse that
-approach in your own client rather than forwarding raw capture buffers.
-
-Pacing matters too: stream frames in real time. Dumping a whole utterance at once
-never triggers the VAD.
+Pacing matters more than size: stream frames in real time. Dumping a whole utterance
+at once does not trigger the VAD.
