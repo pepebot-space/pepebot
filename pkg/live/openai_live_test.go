@@ -147,3 +147,23 @@ func TestBuildRealtimeSessionUpdate_Passthrough(t *testing.T) {
 		t.Error("expected an update for passthrough-only config")
 	}
 }
+
+// The Realtime protocol has no language field, so the reply language has to ride in
+// the instructions — appended to the persona, never replacing it.
+func TestWithReplyLanguage(t *testing.T) {
+	cases := []struct{ prompt, code, want string }{
+		{"", "", ""},
+		{"You are a butler.", "", "You are a butler."},
+		{"", "id-ID", "Always reply in Indonesian."},
+		{"", "id", "Always reply in Indonesian."},
+		{"You are a butler.", "id-ID", "You are a butler.\n\nAlways reply in Indonesian."},
+		{"  You are a butler.  ", "en-US", "You are a butler.\n\nAlways reply in English."},
+		{"", "jv-ID", "Always reply in Javanese."},
+		{"", "xx-YY", "Always reply in xx-YY."}, // unknown code passes through
+	}
+	for _, c := range cases {
+		if got := withReplyLanguage(c.prompt, c.code); got != c.want {
+			t.Errorf("withReplyLanguage(%q, %q) = %q, want %q", c.prompt, c.code, got, c.want)
+		}
+	}
+}

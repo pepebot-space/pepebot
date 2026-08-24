@@ -75,6 +75,17 @@
           <select id="model"></select>
         </div>
         <div>
+          <label for="lang">Reply language</label>
+          <select id="lang">
+            <option value="id-ID" selected>Indonesia</option>
+            <option value="en-US">English</option>
+            <option value="jv-ID">Jawa</option>
+            <option value="su-ID">Sunda</option>
+            <option value="ms-MY">Melayu</option>
+            <option value="">(ikuti live.language)</option>
+          </select>
+        </div>
+        <div>
           <label for="voice">Voice <span class="t-dim">(blank = whatever live.realtime_session sets)</span></label>
           <select id="voice">
             <option value="">(server default)</option>
@@ -297,12 +308,15 @@
 
     ws.onopen = () => {
       log('Socket open, sending setup', 'ok');
+      // Language rides in the setup: the Realtime protocol has no language field, so
+      // Pepebot folds it into the session instructions upstream.
       send({ setup: {
         provider: 'realtime',
         model,
         agent: 'default',
         session_key: sessionKey(),
         enable_tools: true,
+        language: $('lang').value,
       }});
     };
 

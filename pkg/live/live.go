@@ -63,6 +63,10 @@ type SetupConfig struct {
 	EnableTools *bool `json:"enable_tools,omitempty"`
 	// SystemPrompt sets the session systemInstruction (highest precedence override).
 	SystemPrompt string `json:"system_prompt,omitempty"`
+	// Language is a BCP-47 code (e.g. "id-ID") the model should reply in. Overrides
+	// live.language for this session. Applied on the OpenAI Realtime protocol, where
+	// the only lever is the instructions text.
+	Language string `json:"language,omitempty"`
 }
 
 // LiveServer manages WebSocket live sessions
@@ -331,7 +335,12 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 				toolDefs = defs
 			}
 		}
-		if update := buildRealtimeSessionUpdate(sysPrompt, toolDefs, ls.config.Live.RealtimeSession); update != nil {
+		lang := strings.TrimSpace(setupMsg.Setup.Language)
+		if lang == "" {
+			lang = strings.TrimSpace(ls.config.Live.Language)
+		}
+		prompt := withReplyLanguage(sysPrompt, lang)
+		if update := buildRealtimeSessionUpdate(prompt, toolDefs, ls.config.Live.RealtimeSession); update != nil {
 			if err := upstreamConn.WriteMessage(websocket.TextMessage, update); err != nil {
 				logger.ErrorCF("live", "Failed to send upstream session.update", map[string]interface{}{
 					"error": err.Error(),
@@ -342,8 +351,9 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 			logger.InfoCF("live", "Sent upstream session.update", map[string]interface{}{
 				"provider":      providerName,
 				"tools":         len(toolDefs),
-				"prompt_chars":  len(sysPrompt),
+				"prompt_chars":  len(prompt),
 				"prompt_source": promptSource,
+				"language":      lang,
 			})
 		}
 	}
@@ -644,6 +654,35 @@ func (ls *LiveServer) handleRealtimeToolCall(ctx context.Context, session *LiveS
 			return
 		}
 	}
+}
+
+// replyLanguages maps the BCP-47 codes worth naming explicitly to a language name a
+// model reliably understands. Anything else falls through as the code itself.
+var replyLanguages = map[string]string{
+	"id": "Indonesian", "en": "English", "jv": "Javanese", "su": "Sundanese",
+	"ms": "Malay", "ja": "Japanese", "ko": "Korean", "zh": "Chinese",
+	"ar": "Arabic", "es": "Spanish", "fr": "French", "de": "German",
+}
+
+// withReplyLanguage appends a reply-language directive to the session instructions.
+// The Realtime protocol has no language field — transcription and output language are
+// whatever the server was built with — so instructions are the only lever.
+func withReplyLanguage(prompt, code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return prompt
+	}
+
+	name, ok := replyLanguages[strings.ToLower(strings.SplitN(code, "-", 2)[0])]
+	if !ok {
+		name = code
+	}
+
+	directive := fmt.Sprintf("Always reply in %s.", name)
+	if strings.TrimSpace(prompt) == "" {
+		return directive
+	}
+	return strings.TrimSpace(prompt) + "\n\n" + directive
 }
 
 // buildRealtimeSessionUpdate renders the persona, tool definitions and any
