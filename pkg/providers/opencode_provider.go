@@ -194,7 +194,7 @@ func (p *OpenCodeProvider) ChatStream(ctx context.Context, messages []Message, m
 }
 
 func (p *OpenCodeProvider) GetDefaultModel() string {
-	return "minimax-m2.5"
+	return "minimax-m3"
 }
 
 func (p *OpenCodeProvider) buildAnthropicRequest(messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) map[string]interface{} {
@@ -252,11 +252,23 @@ func (p *OpenCodeProvider) buildAnthropicRequest(messages []Message, tools []Too
 				if name == "" && tc.Function != nil {
 					name = tc.Function.Name
 				}
+				// History stores tool calls in OpenAI shape (Function.Arguments as a
+				// JSON string) with Arguments nil; Anthropic requires input to be an
+				// object, so decode it back and never send null.
+				input := tc.Arguments
+				if input == nil && tc.Function != nil && tc.Function.Arguments != "" {
+					if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
+						input = nil
+					}
+				}
+				if input == nil {
+					input = map[string]interface{}{}
+				}
 				contentArray = append(contentArray, map[string]interface{}{
 					"type":  "tool_use",
 					"id":    tc.ID,
 					"name":  name,
-					"input": tc.Arguments,
+					"input": input,
 				})
 			}
 			anthropicMsg["content"] = contentArray
@@ -305,9 +317,13 @@ func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
 		return []map[string]interface{}{
 			{"type": "text", "text": content},
 		}
-	case []interface{}:
+	default:
+		blocks := contentBlocks(msg.Content)
+		if blocks == nil {
+			break
+		}
 		var result []map[string]interface{}
-		for _, block := range content {
+		for _, block := range blocks {
 			if blockMap, ok := block.(map[string]interface{}); ok {
 				switch blockMap["type"] {
 				case "text":
@@ -336,14 +352,17 @@ func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
 				}
 			}
 		}
+		if result == nil {
+			result = []map[string]interface{}{}
+		}
 		return result
-	default:
-		if msg.ToolCallID != "" {
-			return []map[string]interface{}{}
-		}
-		return []map[string]interface{}{
-			{"type": "text", "text": fmt.Sprintf("%v", content)},
-		}
+	}
+
+	if msg.Content == nil || msg.ToolCallID != "" {
+		return []map[string]interface{}{}
+	}
+	return []map[string]interface{}{
+		{"type": "text", "text": fmt.Sprintf("%v", msg.Content)},
 	}
 }
 

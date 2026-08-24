@@ -82,3 +82,37 @@ type ToolFunctionDefinition struct {
 	Description string                 `json:"description"`
 	Parameters  map[string]interface{} `json:"parameters"`
 }
+
+// contentBlocks normalizes Message.Content into generic blocks that providers can
+// walk uniformly. Content is typed ([]ContentBlock) when the agent builds it
+// in-process, and generic ([]interface{}) once it has been through JSON (session
+// history on disk, gateway requests). Returns nil when content holds no blocks.
+func contentBlocks(content interface{}) []interface{} {
+	switch c := content.(type) {
+	case []interface{}:
+		return c
+	case []ContentBlock:
+		blocks := make([]interface{}, 0, len(c))
+		for _, b := range c {
+			block := map[string]interface{}{"type": b.Type}
+			if b.Text != "" {
+				block["text"] = b.Text
+			}
+			if b.ImageURL != nil {
+				block["image_url"] = map[string]interface{}{
+					"url":    b.ImageURL.URL,
+					"detail": b.ImageURL.Detail,
+				}
+			}
+			if b.File != nil {
+				block["file"] = map[string]interface{}{
+					"file_data": b.File.FileData,
+					"file_id":   b.File.FileID,
+				}
+			}
+			blocks = append(blocks, block)
+		}
+		return blocks
+	}
+	return nil
+}

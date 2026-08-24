@@ -390,7 +390,7 @@ To set up Vertex AI:
 {
   "agents": {
     "defaults": {
-      "model": "minimax-m2.5",
+      "model": "minimax-m3",
       "provider": "opencodego"
     }
   },
@@ -407,15 +407,18 @@ To get your API key:
 2. Subscribe to OpenCode Go ($5 first month, then $10/month)
 3. Copy your API key
 
-Available models:
-- `minimax-m2.5` (Recommended, high volume limit)
-- `kimi-k2.5`
-- `glm-5`
+Available models (full list: `GET https://opencode.ai/zen/go/v1/models`):
+- `minimax-m3` (Recommended, high volume limit), `minimax-m2.7`, `minimax-m2.5`
+- `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`
+- `glm-5.3`, `glm-5.2`, `glm-5.1`, `glm-5`
+- `deepseek-v4-pro`, `deepseek-v4-flash`
+- `qwen3.8-max`, `qwen3.7-max`, `qwen3.7-plus`
+- `mimo-v2.5-pro`, `hy3`, `grok-4.5`, `gpt-5.6-luna`
 
 Environment variables:
 ```bash
 export OPENCODEGO_API_KEY="your-api-key"
-export PEPEBOT_AGENTS_DEFAULTS_MODEL="minimax-m2.5"
+export PEPEBOT_AGENTS_DEFAULTS_MODEL="minimax-m3"
 export PEPEBOT_AGENTS_DEFAULTS_PROVIDER="opencodego"
 ```
 

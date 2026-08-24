@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.16"
+const version = "0.5.17"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -267,7 +267,7 @@ func onboard() {
 	fmt.Println("6. Groq")
 	fmt.Println("7. Zhipu (GLM)")
 	fmt.Println("8. Google Vertex AI (Service Account)")
-	fmt.Println("9. OpenCode Go - minimax-m2.5, kimi-k2.5, glm-5")
+	fmt.Println("9. OpenCode Go - minimax-m3, kimi-k3, glm-5.3, deepseek-v4-pro")
 	fmt.Println("10. Skip (configure later)")
 	fmt.Print("\nSelect provider [1-10] (default: 1): ")
 
@@ -331,10 +331,10 @@ func onboard() {
 		fmt.Println("  Setup via Google Cloud Console: https://console.cloud.google.com")
 	case "9":
 		selectedProvider = "opencodego"
-		defaultModel = "minimax-m2.5"
+		defaultModel = "minimax-m3"
 		providerURL = "https://opencode.ai/auth"
 		fmt.Println("\n✓ OpenCode Go selected")
-		fmt.Println("  Default model: minimax-m2.5")
+		fmt.Println("  Default model: minimax-m3")
 		fmt.Printf("  Get your API key at: %s\n", providerURL)
 	case "10":
 		fmt.Println("\n⊙ Skipped provider configuration")
