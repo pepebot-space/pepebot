@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pepebot × Paniki Realtime</title>
+  <style>
+    :root {
+      --bg: #0b1020; --card: #141a2e; --line: #26304d;
+      --fg: #e6e9f2; --muted: #8b94ad; --ok: #34d399; --err: #f87171;
+      --warn: #fbbf24; --accent: #6366f1; --tool: #22d3ee;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg);
+           font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .wrap { max-width: 780px; margin: 0 auto; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .head { display: flex; justify-content: space-between; align-items: center;
+            gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .head h1 { margin: 0; font-size: 17px; }
+    .head p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+    .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+            background: #1f2740; color: var(--muted); white-space: nowrap; }
+    .pill.on { background: rgba(52,211,153,.15); color: var(--ok); }
+    .pill.wait { background: rgba(251,191,36,.15); color: var(--warn); }
+    .body { padding: 18px; display: grid; gap: 12px; }
+    .grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+    @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+    label { font-size: 12px; color: var(--muted); display: block; }
+    input, select, button { font: inherit; }
+    input, select { width: 100%; margin-top: 4px; padding: 8px 10px; color: var(--fg);
+                    background: #1b2238; border: 1px solid var(--line); border-radius: 8px; }
+    button { padding: 10px 14px; border: 0; border-radius: 9px; color: #fff;
+             background: #2c3557; cursor: pointer; }
+    button:hover:not(:disabled) { filter: brightness(1.18); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .go { background: #059669; } .stop { background: #b91c1c; }
+    .mic { background: #1d4ed8; } .test { background: #6d28d9; }
+    .row { display: flex; gap: 10px; }
+    .row > input { flex: 1; }
+    #log { height: 300px; overflow-y: auto; padding: 12px; border-radius: 10px;
+           background: #070b16; border: 1px solid var(--line);
+           font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #log div { white-space: pre-wrap; word-break: break-word; }
+    .t-ok { color: var(--ok); } .t-err { color: var(--err); }
+    .t-warn { color: var(--warn); } .t-tool { color: var(--tool); }
+    .t-dim { color: var(--muted); }
+    .note { font-size: 12px; color: var(--muted); }
+    .note code { color: #c7d2fe; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="head">
+      <div>
+        <h1>Pepebot × Paniki Realtime</h1>
+        <p>Voice + agent tools over Pepebot's <code>/v1/live</code> proxy</p>
+      </div>
+      <div id="status" class="pill">Disconnected</div>
+    </div>
+
+    <div class="body">
+      <div class="grid">
+        <div>
+          <label for="gateway">Pepebot gateway</label>
+          <input id="gateway" />
+        </div>
+        <div>
+          <label for="paniki">Paniki base URL <span class="t-dim">(for model discovery)</span></label>
+          <input id="paniki" value="http://100.104.36.93:8000" />
+        </div>
+        <div>
+          <label for="model">Model <span class="t-dim">(loaded from /v1/models)</span></label>
+          <select id="model"></select>
+        </div>
+        <div>
+          <label for="voice">Voice</label>
+          <select id="voice"><option value="">(server default)</option></select>
+        </div>
+      </div>
+
+      <div class="grid">
+        <button id="refresh">Reload models</button>
+        <button id="voices">Discover voices</button>
+      </div>
+
+      <div class="grid">
+        <button id="connect" class="go">Connect</button>
+        <button id="disconnect" class="stop">Disconnect</button>
+      </div>
+
+      <div class="grid">
+        <button id="micOn" class="mic">Start mic</button>
+        <button id="micOff">Stop mic</button>
+      </div>
+
+      <button id="test" class="test">Send 2s test audio (no mic needed)</button>
+
+      <div class="row">
+        <input id="text" placeholder="Type a message, or ask it to use a tool…" />
+        <button id="send">Send</button>
+      </div>
+
+      <div id="log"></div>
+
+      <p class="note">
+        Paniki fixes <code>modalities</code>, <code>input_audio_format</code>,
+        <code>output_audio_format</code> and <code>input_audio_transcription</code>
+        server-side, so this page never sends them. It also leaves
+        <code>instructions</code> alone — Pepebot already injected the agent persona and
+        its tools, and a client <code>session.update</code> would overwrite them.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const gatewayEl = $('gateway'), panikiEl = $('paniki'), modelEl = $('model'),
+        voiceEl = $('voice'), logEl = $('log'), statusEl = $('status'),
+        testBtn = $('test');
+
+  const RATE = 24000;               // Paniki speaks pcm16 mono at this rate
+  const FRAME = RATE / 50;          // 20ms frames: low latency, snappy barge-in
+  const SESSION_KEY = 'pepebot_paniki_session';
+
+  let ws = null, playCtx = null, micCtx = null, micStream = null,
+      micSource = null, micProc = null, nextPlayAt = 0, ready = false,
+      tail = new Float32Array(0);
+
+  function log(msg, kind = '') {
+    const row = document.createElement('div');
+    row.className = kind ? 't-' + kind : '';
+    row.textContent = `[${new Date().toLocaleTimeString([], { hour12: false })}] ${msg}`;
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setStatus(text, cls = '') {
+    statusEl.textContent = text;
+    statusEl.className = 'pill' + (cls ? ' ' + cls : '');
+  }
+
+  function sessionKey() {
+    let k = localStorage.getItem(SESSION_KEY);
+    if (!k) { k = `paniki-web:${Date.now()}`; localStorage.setItem(SESSION_KEY, k); }
+    return k;
+  }
+
+  gatewayEl.value = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname || '127.0.0.1'}:18790/v1/live`;
+
+  // ---------- model discovery ----------
+  // The model changes whenever the server is redeployed, so never hardcode it:
+  // a stale id connects fine and then answers as a different model than the UI claims.
+  async function loadModels() {
+    const base = panikiEl.value.trim().replace(/\/+$/, '');
+    modelEl.innerHTML = '';
+    try {
+      const res = await fetch(`${base}/v1/models`);
+      const body = await res.json();
+      const ids = (body.data || []).map((m) => m.id);
+      if (!ids.length) throw new Error('no models listed');
+      for (const id of ids) {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = id;
+        modelEl.appendChild(opt);
+      }
+      log(`Models: ${ids.join(', ')}`, 'ok');
+    } catch (err) {
+      // Keep the field usable — the gateway may reach Paniki even when the browser can't.
+      modelEl.innerHTML = '<option value="">(type a model id)</option>';
+      const manual = document.createElement('option');
+      manual.value = manual.textContent = 'qwen/qwen3.8-27b';
+      modelEl.appendChild(manual);
+      log(`Could not read ${base}/v1/models (${err.message}). Pick or edit manually.`, 'err');
+    }
+  }
+
+  // Paniki has no voices endpoint, but it names every available voice in the
+  // unknown_voice error — so ask for one that cannot exist and read the answer.
+  function discoverVoices() {
+    if (!ready) { log('Connect first', 'err'); return; }
+    log('Asking the server which voices it has…', 'dim');
+    send({ type: 'session.update', session: { voice: '__list_voices__' } });
+  }
+
+  function fillVoices(message) {
+    const listed = message.split('Available:')[1];
+    if (!listed) return;
+    const names = listed.replace(/\.\.\.\s*$/, '').split(',')
+      .map((v) => v.trim()).filter(Boolean);
+    if (!names.length) return;
+    const current = voiceEl.value;
+    voiceEl.innerHTML = '<option value="">(server default)</option>';
+    for (const name of names) {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = name;
+      voiceEl.appendChild(opt);
+    }
+    voiceEl.value = current;
+    log(`Voices: ${names.join(', ')}`, 'ok');
+  }
+
+  // ---------- audio ----------
+  async function playback() {
+    if (!playCtx) {
+      playCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: RATE });
+      log(`Playback @ ${playCtx.sampleRate}Hz`, 'dim');
+    }
+    if (playCtx.state === 'suspended') await playCtx.resume();
+    return playCtx;
+  }
+
+  async function play(pcm) {
+    const ctx = await playback();
+    const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2);
+    const buf = ctx.createBuffer(1, samples.length, RATE);
+    const channel = buf.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) channel[i] = samples[i] / 32768;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    nextPlayAt = Math.max(nextPlayAt, ctx.currentTime + 0.04);
+    src.start(nextPlayAt);
+    nextPlayAt += buf.duration;
+  }
+
+  function stopPlayback() {
+    // Barge-in: drop anything not spoken yet by re-anchoring the schedule.
+    nextPlayAt = playCtx ? playCtx.currentTime : 0;
+  }
+
+  function b64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function toB64Pcm16(samples) {
+    const pcm = new Int16Array(samples.length);
+    for (let i = 0; i < samples.length; i++) {
+      const v = Math.max(-1, Math.min(1, samples[i]));
+      pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+    }
+    const bytes = new Uint8Array(pcm.buffer);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  // ScriptProcessorNode hands out 4096-sample buffers (~170ms). Repacketize to 20ms
+  // frames and carry the remainder, so latency stays low and any frame-based VAD
+  // upstream sees what it expects.
+  function sendSamples(samples) {
+    let buf = samples;
+    if (tail.length) {
+      buf = new Float32Array(tail.length + samples.length);
+      buf.set(tail);
+      buf.set(samples, tail.length);
+    }
+    let at = 0;
+    for (; at + FRAME <= buf.length; at += FRAME) {
+      send({ type: 'input_audio_buffer.append', audio: toB64Pcm16(buf.subarray(at, at + FRAME)) });
+    }
+    tail = buf.slice(at);
+  }
+
+  // ---------- connection ----------
+  function send(event) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
+  }
+
+  function connect() {
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+    const url = gatewayEl.value.trim();
+    const model = modelEl.value.trim();
+    if (!model) { log('Pick a model first', 'err'); return; }
+
+    setStatus('Connecting', 'wait');
+    playback().catch((e) => log(`Playback setup: ${e}`, 'err'));
+
+    log(`Connecting to ${url}`);
+    ws = new WebSocket(url);
+    ready = false;
+
+    ws.onopen = () => {
+      log('Socket open, sending setup', 'ok');
+      send({ setup: {
+        provider: 'realtime',
+        model,
+        agent: 'default',
+        session_key: sessionKey(),
+        enable_tools: true,
+      }});
+    };
+
+    ws.onmessage = async (ev) => {
+      const text = typeof ev.data === 'string' ? ev.data : await ev.data.text();
+      let evt;
+      try { evt = JSON.parse(text); } catch { return; }
+      handle(evt);
+    };
+
+    ws.onerror = () => { setStatus('Disconnected'); log('Socket error', 'err'); };
+    ws.onclose = () => { setStatus('Disconnected'); ready = false; log('Socket closed'); };
+  }
+
+  function handle(evt) {
+    if (evt.status === 'connected') {
+      log(`Proxy: ${evt.provider} -> ${evt.model}`, 'ok');
+      return;
+    }
+
+    switch (evt.type) {
+      case 'session.created':
+        ready = true;
+        setStatus('Connected', 'on');
+        log('Session created — Pepebot already sent the persona and tools', 'ok');
+        // Only the fields Paniki actually accepts, and only when asked for.
+        if (voiceEl.value) send({ type: 'session.update', session: { voice: voiceEl.value } });
+        return;
+
+      case 'session.updated':
+        log(`Session: voice=${evt.session.voice} temp=${evt.session.temperature} tools=${(evt.session.tools || []).length}`, 'dim');
+        return;
+
+      case 'input_audio_buffer.speech_started':
+        stopPlayback();
+        log('… listening (barge-in: dropped queued audio)', 'dim');
+        return;
+
+      case 'conversation.item.input_audio_transcription.completed':
+        log(`You: ${(evt.transcript || '').trim()}`);
+        return;
+
+      case 'response.audio.delta':
+        if (evt.delta) play(b64ToBytes(evt.delta));
+        return;
+
+      case 'response.audio_transcript.done':
+        log(`Bot: ${(evt.transcript || '').trim()}`, 'ok');
+        return;
+
+      case 'response.output_item.added':
+        if (evt.item && evt.item.type === 'function_call') log(`Tool call: ${evt.item.name}`, 'tool');
+        return;
+
+      case 'response.output_item.done':
+        // Pepebot runs the tool and returns the result; this is just the trace.
+        if (evt.item && evt.item.type === 'function_call') {
+          log(`Tool call: ${evt.item.name}(${evt.item.arguments || ''}) — Pepebot is executing it`, 'tool');
+        }
+        return;
+
+      case 'response.done':
+        log('Turn complete', 'dim');
+        return;
+
+      case 'error': {
+        const err = evt.error || {};
+        log(`Server error [${err.code || '?'}]: ${err.message || ''}`, 'err');
+        if (err.code === 'unknown_voice') fillVoices(err.message || '');
+        return;
+      }
+    }
+  }
+
+  function disconnect() {
+    stopMic();
+    if (ws) { ws.close(); ws = null; }
+    setStatus('Disconnected');
+  }
+
+  // ---------- mic ----------
+  async function startMic() {
+    if (!ready) { log('Connect first', 'err'); return; }
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, sampleRate: RATE, echoCancellation: true,
+               noiseSuppression: true, autoGainControl: true },
+    });
+    micCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: RATE });
+    if (micCtx.state === 'suspended') await micCtx.resume();
+
+    tail = new Float32Array(0);
+    micSource = micCtx.createMediaStreamSource(micStream);
+    micProc = micCtx.createScriptProcessor(4096, 1, 1);
+    micProc.onaudioprocess = (e) => { if (ready) sendSamples(e.inputBuffer.getChannelData(0)); };
+    micSource.connect(micProc);
+    micProc.connect(micCtx.destination);
+    log('Mic on — speak, server VAD closes the turn', 'ok');
+  }
+
+  function stopMic() {
+    if (micProc) { micProc.onaudioprocess = null; micProc.disconnect(); micProc = null; }
+    if (micSource) { micSource.disconnect(); micSource = null; }
+    if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    if (micCtx && micCtx.state !== 'closed') micCtx.close();
+    micCtx = null;
+    if (ready) log('Mic off');
+  }
+
+  // ---------- synthetic audio, so the pipe can be tested without a mic ----------
+  async function sendTestAudio() {
+    if (!ready) { log('Connect first', 'err'); return; }
+    testBtn.disabled = true;
+    let phase = 0;
+    const frames = [];
+    const perSec = RATE / FRAME;
+    for (let f = 0; f < perSec * 4; f++) {          // 2s tone, then 2s silence
+      const samples = new Float32Array(FRAME);
+      if (f < perSec * 2) {
+        for (let i = 0; i < FRAME; i++) {
+          samples[i] = Math.sin(phase) * 0.3;
+          phase += (2 * Math.PI * 440) / RATE;
+        }
+      }
+      frames.push(toB64Pcm16(samples));
+    }
+    log(`Streaming ${frames.length} frames of 20ms (2s tone + 2s silence)…`);
+    for (const audio of frames) {
+      send({ type: 'input_audio_buffer.append', audio });
+      await new Promise((r) => setTimeout(r, 20));   // keep this tab in the foreground
+    }
+    send({ type: 'input_audio_buffer.commit' });
+    send({ type: 'response.create' });
+    log('Test audio committed', 'ok');
+    testBtn.disabled = false;
+  }
+
+  function sendText() {
+    const value = $('text').value.trim();
+    if (!value) return;
+    if (!ready) { log('Connect first', 'err'); return; }
+    send({ type: 'conversation.item.create', item: {
+      type: 'message', role: 'user', content: [{ type: 'input_text', text: value }],
+    }});
+    send({ type: 'response.create' });
+    log(`You: ${value}`);
+    $('text').value = '';
+  }
+
+  $('connect').addEventListener('click', connect);
+  $('disconnect').addEventListener('click', disconnect);
+  $('micOn').addEventListener('click', () => startMic().catch((e) => log(`Mic: ${e.message}`, 'err')));
+  $('micOff').addEventListener('click', stopMic);
+  testBtn.addEventListener('click', sendTestAudio);
+  $('send').addEventListener('click', sendText);
+  $('text').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText(); });
+  $('refresh').addEventListener('click', loadModels);
+  $('voices').addEventListener('click', discoverVoices);
+  panikiEl.addEventListener('change', loadModels);
+
+  log('Ready. Reading the model list from Paniki…', 'dim');
+  loadModels();
+</script>
+</body>
+</html>

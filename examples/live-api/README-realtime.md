@@ -31,7 +31,15 @@ pepebot gateway                                   # listens on 127.0.0.1:18790
 python3 -m http.server 8899 --bind 127.0.0.1      # from examples/live-api/
 ```
 
-Open <http://127.0.0.1:8899/index-openai.html>.
+Open **<http://127.0.0.1:8899/paniki.html>** — the page written for this server.
+(`index-openai.html` is the generic OpenAI-Realtime demo; it sends fields Paniki
+fixes server-side and will log errors for them.)
+
+`paniki.html` reads the model list from `/v1/models` on load, so it never goes stale
+when the server is redeployed with a different model. It sends only fields Paniki
+accepts, leaves `instructions` alone so Pepebot's agent persona and tools survive, and
+logs tool calls as they happen. "Discover voices" harvests the available voice ids from
+the server's own `unknown_voice` error, since there is no voices endpoint.
 
 The page asks for the gateway URL separately (default
 `ws://127.0.0.1:18790/v1/live`) because it is usually served from a different
