@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **The OpenAI Realtime demo could not connect when served from another port**: it derived the WebSocket port from `location.port`, so serving the page on e.g. `:8899` made it dial `ws://host:8899/v1/live` instead of the gateway. The gateway URL is now an explicit field defaulting to `ws://<host>:18790/v1/live`.
+- **The OpenAI Realtime demo sent audio frames too large for frame-based VADs**: both the microphone path (`ScriptProcessorNode`, 4096-sample buffers ≈ 170ms) and the synthetic sender (100ms) exceeded what a fixed-frame server-side VAD accepts, so turns stalled after `input_audio_buffer.speech_started` with no transcription, no response and no error. All audio now goes through a `sendAudioSamples` repacketizer that emits exact 20ms frames (480 samples at 24kHz), carrying the remainder across callbacks.
 - **The same demo hung before opening the WebSocket**: `connect()` awaited `AudioContext.resume()`, which never resolves until the browser sees a user gesture. Audio setup no longer blocks the connection; it initialises on the first audio chunk instead.
 
 ## [0.5.17] - 2026-08-24

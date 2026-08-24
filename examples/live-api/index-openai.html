@@ -318,6 +318,7 @@
       captureCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: INPUT_SAMPLE_RATE });
       if (captureCtx.state === 'suspended') await captureCtx.resume();
 
+      audioTail = new Float32Array(0);
       micSource = captureCtx.createMediaStreamSource(micStream);
       micProcessor = captureCtx.createScriptProcessor(4096, 1, 1);
 
@@ -325,21 +326,7 @@
         if (!sessionReady) return;
 
         const input = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
-
-        const bytes = new Uint8Array(pcm16.buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        const b64 = btoa(binary);
-
-        sendEvent({
-          type: 'input_audio_buffer.append',
-          audio: b64,
-        });
+        sendAudioSamples(input);
       };
 
       micSource.connect(micProcessor);
@@ -359,18 +346,42 @@
       return btoa(binary);
     }
 
-    // Builds 100ms base64 pcm16 chunks: `toneSec` of a 440Hz tone, then `silenceSec`
+    // Realtime servers with a frame-based VAD (webrtcvad, Silero) only accept exact
+    // 20ms frames and silently stall the turn on anything else — no speech_stopped,
+    // no transcription, no response. The mic hands us 4096-sample buffers, so every
+    // audio path repacketizes to BLOCK_SAMPLES before sending.
+    const BLOCK_SAMPLES = INPUT_SAMPLE_RATE / 50; // 20ms
+    let audioTail = new Float32Array(0);
+
+    function sendAudioSamples(samples) {
+      let buf = samples;
+      if (audioTail.length) {
+        buf = new Float32Array(audioTail.length + samples.length);
+        buf.set(audioTail);
+        buf.set(samples, audioTail.length);
+      }
+      let offset = 0;
+      for (; offset + BLOCK_SAMPLES <= buf.length; offset += BLOCK_SAMPLES) {
+        sendEvent({
+          type: 'input_audio_buffer.append',
+          audio: pcm16Base64(buf.subarray(offset, offset + BLOCK_SAMPLES)),
+        });
+      }
+      audioTail = buf.slice(offset);
+    }
+
+    // Builds 20ms base64 pcm16 frames: `toneSec` of a 440Hz tone, then `silenceSec`
     // of silence so a server-side VAD has a clear end-of-speech to trigger on.
     function buildTestAudioChunks(toneSec = 2, silenceSec = 2, freq = 440) {
-      const chunkSamples = INPUT_SAMPLE_RATE / 10;
       const chunks = [];
       let phase = 0;
-      const toneChunks = Math.round(toneSec * 10);
-      const totalChunks = toneChunks + Math.round(silenceSec * 10);
-      for (let c = 0; c < totalChunks; c++) {
-        const samples = new Float32Array(chunkSamples);
-        if (c < toneChunks) {
-          for (let i = 0; i < chunkSamples; i++) {
+      const framesPerSec = INPUT_SAMPLE_RATE / BLOCK_SAMPLES;
+      const toneFrames = Math.round(toneSec * framesPerSec);
+      const totalFrames = toneFrames + Math.round(silenceSec * framesPerSec);
+      for (let c = 0; c < totalFrames; c++) {
+        const samples = new Float32Array(BLOCK_SAMPLES);
+        if (c < toneFrames) {
+          for (let i = 0; i < BLOCK_SAMPLES; i++) {
             samples[i] = Math.sin(phase) * 0.3;
             phase += (2 * Math.PI * freq) / INPUT_SAMPLE_RATE;
           }
@@ -390,16 +401,16 @@
       }
       testAudioBtn.disabled = true;
       const chunks = buildTestAudioChunks();
-      log(`Test audio: streaming ${chunks.length} chunks (2s tone + 2s silence)...`);
+      log(`Test audio: streaming ${chunks.length} frames of 20ms (2s tone + 2s silence)...`);
 
       for (const audio of chunks) {
         sendEvent({ type: 'input_audio_buffer.append', audio });
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 20));
       }
 
       sendEvent({ type: 'input_audio_buffer.commit' });
       sendEvent({ type: 'response.create' });
-      log(`Test audio sent (${chunks.length} chunks), committed`, 'ok');
+      log(`Test audio sent (${chunks.length} frames), committed`, 'ok');
       testAudioBtn.disabled = false;
     }
 
