@@ -553,6 +553,19 @@ For voice sessions, `realtime_input_config.automaticActivityDetection` helps red
 Pepebot includes a WebSocket proxy for real-time multimodal streaming (audio, video, text) using the Gemini Live API or OpenAI Realtime API. 
 The WebSocket endpoint is available at `ws://localhost:18790/v1/live`.
 
+**Self-hosted OpenAI Realtime servers**: any server that speaks the OpenAI Realtime event protocol on `<api_base>/realtime` works as the `vllm` live provider. Point `providers.vllm.api_base` at it — `api_key` may be left empty, and no `Authorization` header is sent when it is:
+
+```json
+{
+  "providers": {
+    "vllm": { "api_base": "http://127.0.0.1:8000/v1", "api_key": "" }
+  },
+  "live": { "enabled": true, "provider": "vllm", "model": "google/gemma-4-31B-it" }
+}
+```
+
+An `http://` base becomes `ws://` and `https://` becomes `wss://` automatically. Clients can also select it per session with `{"setup": {"provider": "vllm"}}` without changing `live.provider`.
+
 For Vertex/Gemini Live sessions, Pepebot can now expose and execute local agent tools automatically (same tool registry used by normal agent mode). You can select the target agent directly in the setup message:
 
 ```json

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Self-hosted OpenAI Realtime endpoints as a Live provider**: `providers.vllm.api_base` is now registered as the `vllm` live provider, reusing the existing `OpenAILiveProvider` (it already derives `ws(s)://<api_base>/realtime?model=...`). Selectable as `live.provider: "vllm"` or per session with `{"setup":{"provider":"vllm"}}`, so an existing `live.provider` (e.g. `vertex`) keeps working untouched.
+
+### Changed
+- **`api_key` is now optional for OpenAI-compatible Live endpoints**: self-hosted realtime servers commonly run without auth. `NewOpenAILiveProvider` only requires a key for `api.openai.com`, `AuthHeaders` omits the `Authorization` header when the key is empty, and the gateway registers the `openai` live provider when either `api_key` or `api_base` is set. Failures to initialise it are now logged instead of silently swallowed.
+  - Verified against a self-hosted "Paniki Realtime API" (`ws://100.104.36.93:8000/v1/realtime`, model `google/gemma-4-31B-it`): the proxy connects with no key and relays `session.created`, `session.updated` and `input_audio_buffer.speech_started` between client and upstream, for both `live.provider` defaults and per-session overrides.
+  - Tests: `TestOpenAILiveProvider_KeylessSelfHosted`, `TestOpenAILiveProvider_URLScheme`.
+
 ## [0.5.17] - 2026-08-24
 
 ### Fixed

@@ -60,10 +60,15 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 			}
 		}
 
-		// Register OpenAI Live provider if configured
-		if cfg.Providers.OpenAI.APIKey != "" {
+		// Register OpenAI Live provider if configured. A bare api_base is enough:
+		// self-hosted OpenAI-compatible realtime servers often need no api_key.
+		if cfg.Providers.OpenAI.APIKey != "" || cfg.Providers.OpenAI.APIBase != "" {
 			openaiLive, err := live.NewOpenAILiveProvider("openai", cfg.Providers.OpenAI.APIBase, cfg.Providers.OpenAI.APIKey)
-			if err == nil {
+			if err != nil {
+				logger.WarnCF("gateway", "Failed to init OpenAI Live provider", map[string]interface{}{
+					"error": err.Error(),
+				})
+			} else {
 				gs.liveServer.RegisterProvider("openai", openaiLive)
 			}
 		}
@@ -73,6 +78,19 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 			maiaLive, err := live.NewOpenAILiveProvider("maiarouter", cfg.Providers.MAIARouter.APIBase, cfg.Providers.MAIARouter.APIKey)
 			if err == nil {
 				gs.liveServer.RegisterProvider("maiarouter", maiaLive)
+			}
+		}
+
+		// Register vLLM / self-hosted OpenAI-compatible Live provider. These speak the
+		// OpenAI Realtime event protocol on <api_base>/realtime and usually need no key.
+		if cfg.Providers.VLLM.APIBase != "" {
+			vllmLive, err := live.NewOpenAILiveProvider("vllm", cfg.Providers.VLLM.APIBase, cfg.Providers.VLLM.APIKey)
+			if err != nil {
+				logger.WarnCF("gateway", "Failed to init vLLM Live provider", map[string]interface{}{
+					"error": err.Error(),
+				})
+			} else {
+				gs.liveServer.RegisterProvider("vllm", vllmLive)
 			}
 		}
 
