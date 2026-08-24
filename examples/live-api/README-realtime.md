@@ -48,6 +48,25 @@ port than the gateway.
 
 Audio is pcm16 mono at 24kHz in both directions.
 
+## Agent tools
+
+Tools are on by default (`setup.enable_tools`, defaults to true). Pepebot sends the
+agent's tool definitions to the upstream server in a `session.update`, then executes
+any `function_call` it gets back and returns a `function_call_output`, exactly as it
+does for Vertex/Gemini live sessions.
+
+The upstream server has to allow it. The Paniki Realtime server currently does not —
+`session.update` with tools is answered with:
+
+```
+{"type":"error","error":{"type":"invalid_request_error","code":"unsupported_field",
+ "message":"session.tools is fixed by the server."}}
+```
+
+The rest of the same `session.update` still applies (the persona in `instructions`
+does land), and those two error frames are relayed to your client. Once the server
+accepts `session.tools`, tool calling works with no client change.
+
 ## Frame size
 
 Small frames are still the better default — **20ms (480 samples, 960 bytes)** keeps

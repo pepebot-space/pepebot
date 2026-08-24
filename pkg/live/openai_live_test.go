@@ -5,7 +5,11 @@
 
 package live
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 // Self-hosted OpenAI-compatible realtime servers usually run without auth, so an
 // empty api_key must only be rejected for api.openai.com itself.
@@ -47,5 +51,62 @@ func TestOpenAILiveProvider_URLScheme(t *testing.T) {
 		if got := p.BuildUpstreamURL("m"); got != want {
 			t.Errorf("%s -> %q, want %q", base, got, want)
 		}
+	}
+}
+
+// Pepebot stores tool schemas in the chat-completions shape ({type, function:{...}}),
+// but the Realtime protocol wants them flat, with the name at the top level.
+func TestBuildRealtimeSessionUpdate(t *testing.T) {
+	defs := []map[string]interface{}{
+		{"type": "function", "function": map[string]interface{}{
+			"name":        "exec",
+			"description": "Execute a shell command",
+			"parameters":  map[string]interface{}{"type": "object"},
+		}},
+		{"type": "function", "name": "already_flat"},               // passed through
+		{"type": "function", "function": map[string]interface{}{}}, // no name: dropped
+	}
+
+	var update map[string]interface{}
+	if err := json.Unmarshal(buildRealtimeSessionUpdate("be brief", defs), &update); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if update["type"] != "session.update" {
+		t.Errorf("type = %v, want session.update", update["type"])
+	}
+
+	session := update["session"].(map[string]interface{})
+	if session["instructions"] != "be brief" {
+		t.Errorf("instructions = %v", session["instructions"])
+	}
+	if session["tool_choice"] != "auto" {
+		t.Errorf("tool_choice = %v, want auto", session["tool_choice"])
+	}
+
+	toolList := session["tools"].([]interface{})
+	if len(toolList) != 2 {
+		t.Fatalf("expected 2 tools (the nameless one dropped), got %d", len(toolList))
+	}
+	first := toolList[0].(map[string]interface{})
+	if _, wrapped := first["function"]; wrapped {
+		t.Error("tool still wrapped in a chat-completions \"function\" object")
+	}
+	if first["name"] != "exec" || first["description"] != "Execute a shell command" {
+		t.Errorf("flattened tool = %#v", first)
+	}
+	if first["parameters"] == nil {
+		t.Error("parameters dropped")
+	}
+}
+
+func TestBuildRealtimeSessionUpdate_Empty(t *testing.T) {
+	if got := buildRealtimeSessionUpdate("", nil); got != nil {
+		t.Errorf("expected nil when there is nothing to send, got %s", got)
+	}
+	// Tools alone, or a prompt alone, are both worth sending.
+	if got := buildRealtimeSessionUpdate("  persona  ", nil); got == nil {
+		t.Error("expected an update for a prompt with no tools")
+	} else if !strings.Contains(string(got), `"instructions":"persona"`) {
+		t.Errorf("prompt not trimmed/included: %s", got)
 	}
 }

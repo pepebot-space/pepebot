@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Custom OpenAI Realtime endpoints as a Live provider**: new `providers.realtime` config block (`api_base`, `api_key`; env `REALTIME_API_BASE` / `REALTIME_API_KEY`) registered as the `realtime` live provider. It reuses the existing `OpenAILiveProvider`, which already derives `ws(s)://<api_base>/realtime?model=...` from the base URL. Live-API-only — it never touches chat completions, so an OpenAI key configured for chat is unaffected. Selectable via `live.provider: "realtime"` or per session with `{"setup":{"provider":"realtime"}}`.
+- **Agent tools and persona now work on the OpenAI Realtime Live protocol**, not just Vertex/Gemini. Previously both were silently dropped for those providers: tool definitions and the system instruction were only injected into a provider setup frame, and `OpenAILiveProvider.SetupMessage()` returns nil by design (the Realtime API selects the model via the URL). Now, for providers on that protocol, Pepebot sends a `session.update` carrying `instructions` (same precedence as before: client `setup.system_prompt` > `live.system_prompt(_file)` > agent persona) plus the agent's tool definitions with `tool_choice: "auto"`.
+  - Tool schemas are converted from the chat-completions shape Pepebot stores internally (`{type, function:{name,description,parameters}}`) to the flat Realtime shape (`{type, name, description, parameters}`).
+  - Function calls are executed and fed back: `response.output_item.done` with `item.type == "function_call"` → local tool execution (90s timeout, session key preserved) → `conversation.item.create` with a `function_call_output` item → `response.create` for the follow-up turn. Errors come back as `Error: <message>` output rather than dropping the call.
+  - Verified end-to-end against a mock Realtime server: 24 tool definitions injected in the flat shape, `list_dir` executed locally, real output returned with the matching `call_id`, and the follow-up response relayed to the client.
+  - Tests: `TestBuildRealtimeSessionUpdate`, `TestBuildRealtimeSessionUpdate_Empty`.
 - **`examples/live-api/README-realtime.md`**: how to point the demo at a custom Realtime endpoint and run it (gateway + static server).
 
 ### Changed

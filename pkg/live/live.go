@@ -315,6 +315,39 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		})
 	}
 
+	// Providers on the OpenAI Realtime protocol have no setup frame — model selection
+	// rides in the URL — so the persona and tools go up as a session.update instead.
+	// Without this, both are silently dropped for those providers.
+	if _, isOpenAI := provider.(*OpenAILiveProvider); isOpenAI {
+		var toolDefs []map[string]interface{}
+		if enableTools && ls.tools != nil {
+			defs, err := ls.tools.GetToolDefinitions(agentName)
+			if err != nil {
+				logger.WarnCF("live", "Failed to load tool definitions for live session", map[string]interface{}{
+					"agent": agentName,
+					"error": err.Error(),
+				})
+			} else {
+				toolDefs = defs
+			}
+		}
+		if update := buildRealtimeSessionUpdate(sysPrompt, toolDefs); update != nil {
+			if err := upstreamConn.WriteMessage(websocket.TextMessage, update); err != nil {
+				logger.ErrorCF("live", "Failed to send upstream session.update", map[string]interface{}{
+					"error": err.Error(),
+				})
+				ls.sendError(clientConn, "Upstream setup failed: "+err.Error())
+				return
+			}
+			logger.InfoCF("live", "Sent upstream session.update", map[string]interface{}{
+				"provider":      providerName,
+				"tools":         len(toolDefs),
+				"prompt_chars":  len(sysPrompt),
+				"prompt_source": promptSource,
+			})
+		}
+	}
+
 	if setupData != nil {
 		if err := upstreamConn.WriteMessage(websocket.TextMessage, setupData); err != nil {
 			logger.ErrorCF("live", "Failed to send upstream setup message", map[string]interface{}{
@@ -452,6 +485,13 @@ func (ls *LiveServer) handleUpstreamToolCalls(ctx context.Context, session *Live
 		return
 	}
 
+	// OpenAI Realtime reports a call as one response.output_item.done carrying the
+	// name, call_id and complete arguments; Gemini uses a toolCall envelope.
+	if payload["type"] == "response.output_item.done" {
+		ls.handleRealtimeToolCall(ctx, session, payload)
+		return
+	}
+
 	toolCallRaw, ok := payload["toolCall"]
 	if !ok {
 		return
@@ -532,6 +572,131 @@ func (ls *LiveServer) handleUpstreamToolCalls(ctx context.Context, session *Live
 			"error": err.Error(),
 		})
 	}
+}
+
+// handleRealtimeToolCall executes one OpenAI Realtime function call and feeds the
+// result back as a function_call_output item, then asks for the follow-up response.
+func (ls *LiveServer) handleRealtimeToolCall(ctx context.Context, session *LiveSession, payload map[string]interface{}) {
+	item, ok := payload["item"].(map[string]interface{})
+	if !ok || item["type"] != "function_call" {
+		return
+	}
+
+	name, _ := item["name"].(string)
+	callID, _ := item["call_id"].(string)
+	if name == "" || callID == "" {
+		return
+	}
+
+	// arguments arrive as a JSON string, and an argument-less call may send "" or {}.
+	args := map[string]interface{}{}
+	if raw, _ := item["arguments"].(string); strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), &args); err != nil {
+			logger.WarnCF("live", "Bad tool call arguments", map[string]interface{}{
+				"tool":  name,
+				"error": err.Error(),
+			})
+			args = map[string]interface{}{}
+		}
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	toolCtx = tools.WithSessionKey(toolCtx, session.sessionKey)
+	result, err := ls.tools.ExecuteTool(toolCtx, session.agent, name, args)
+	cancel()
+
+	output := result
+	if err != nil {
+		output = "Error: " + err.Error()
+	}
+
+	logger.InfoCF("live", "Executed live tool call", map[string]interface{}{
+		"agent":   session.agent,
+		"tool":    name,
+		"call_id": callID,
+		"failed":  err != nil,
+		"chars":   len(output),
+	})
+
+	frames := make([][]byte, 0, 2)
+	resultFrame, marshalErr := json.Marshal(map[string]interface{}{
+		"type": "conversation.item.create",
+		"item": map[string]interface{}{
+			"type":    "function_call_output",
+			"call_id": callID,
+			"output":  output,
+		},
+	})
+	if marshalErr != nil {
+		return
+	}
+	frames = append(frames, resultFrame, []byte(`{"type":"response.create"}`))
+
+	session.upstreamMu.Lock()
+	defer session.upstreamMu.Unlock()
+	for _, frame := range frames {
+		if err := session.upstreamConn.WriteMessage(websocket.TextMessage, frame); err != nil {
+			logger.WarnCF("live", "Failed to write tool result upstream", map[string]interface{}{
+				"agent": session.agent,
+				"tool":  name,
+				"error": err.Error(),
+			})
+			return
+		}
+	}
+}
+
+// buildRealtimeSessionUpdate renders the persona and tool definitions as an OpenAI
+// Realtime session.update. Tool schemas are converted from the chat-completions
+// shape Pepebot uses internally ({type, function:{...}}) to the flat Realtime shape.
+// Returns nil when there is nothing to send.
+func buildRealtimeSessionUpdate(systemPrompt string, toolDefs []map[string]interface{}) []byte {
+	session := map[string]interface{}{}
+
+	if prompt := strings.TrimSpace(systemPrompt); prompt != "" {
+		session["instructions"] = prompt
+	}
+
+	realtimeTools := make([]map[string]interface{}, 0, len(toolDefs))
+	for _, def := range toolDefs {
+		fn, ok := def["function"].(map[string]interface{})
+		if !ok {
+			// Already flat (name at the top level) — pass it through.
+			if _, hasName := def["name"]; hasName {
+				realtimeTools = append(realtimeTools, def)
+			}
+			continue
+		}
+		name, _ := fn["name"].(string)
+		if name == "" {
+			continue
+		}
+		tool := map[string]interface{}{"type": "function", "name": name}
+		if desc, ok := fn["description"].(string); ok && desc != "" {
+			tool["description"] = desc
+		}
+		if params, ok := fn["parameters"]; ok && params != nil {
+			tool["parameters"] = params
+		}
+		realtimeTools = append(realtimeTools, tool)
+	}
+	if len(realtimeTools) > 0 {
+		session["tools"] = realtimeTools
+		session["tool_choice"] = "auto"
+	}
+
+	if len(session) == 0 {
+		return nil
+	}
+
+	update, err := json.Marshal(map[string]interface{}{
+		"type":    "session.update",
+		"session": session,
+	})
+	if err != nil {
+		return nil
+	}
+	return update
 }
 
 func injectGeminiToolsIntoSetup(setupData []byte, toolDefs []map[string]interface{}) []byte {
