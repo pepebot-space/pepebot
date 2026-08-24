@@ -12,12 +12,24 @@
       <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
         <div>
           <h1 class="text-xl font-semibold">Pepebot OpenAI Realtime Demo</h1>
-          <p class="text-xs text-slate-400">Copied from voice demo, adapted for OpenAI event protocol</p>
+          <p class="text-xs text-slate-400">Works with any OpenAI-Realtime-compatible endpoint proxied by Pepebot</p>
         </div>
         <div id="status" class="text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300">Disconnected</div>
       </div>
 
       <div class="p-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="text-xs text-slate-400 md:col-span-2">Pepebot gateway
+            <input id="gatewayInput" class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100" />
+          </label>
+          <label class="text-xs text-slate-400">Provider
+            <input id="providerInput" value="realtime" class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100" />
+          </label>
+          <label class="text-xs text-slate-400">Model
+            <input id="modelInput" value="google/gemma-4-31B-it" class="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100" />
+          </label>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <button id="connectBtn" class="py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition">Connect</button>
           <button id="disconnectBtn" class="py-2.5 rounded-lg bg-rose-700 hover:bg-rose-600 transition">Disconnect</button>
@@ -27,6 +39,8 @@
           <button id="startMicBtn" class="py-2.5 rounded-lg bg-blue-700 hover:bg-blue-600 transition">Start Mic</button>
           <button id="stopMicBtn" class="py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition">Stop Mic</button>
         </div>
+
+        <button id="testAudioBtn" class="w-full py-2.5 rounded-lg bg-violet-700 hover:bg-violet-600 transition">Send 2s test audio (no mic needed)</button>
 
         <div class="flex gap-2">
           <input id="textInput" class="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm" placeholder="Type message..." />
@@ -44,6 +58,10 @@
     const startMicBtn = document.getElementById('startMicBtn');
     const stopMicBtn = document.getElementById('stopMicBtn');
     const sendBtn = document.getElementById('sendBtn');
+    const testAudioBtn = document.getElementById('testAudioBtn');
+    const gatewayInput = document.getElementById('gatewayInput');
+    const providerInput = document.getElementById('providerInput');
+    const modelInput = document.getElementById('modelInput');
     const textInput = document.getElementById('textInput');
     const logs = document.getElementById('logs');
     const statusEl = document.getElementById('status');
@@ -68,6 +86,14 @@
         localStorage.setItem(SESSION_STORAGE_KEY, key);
       }
       return key;
+    }
+
+    // This page is often served from a different port than the gateway (or from
+    // file://), so the gateway URL is explicit rather than derived from location.
+    function defaultGatewayURL() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = location.hostname || '127.0.0.1';
+      return `${proto}//${host}:18790/v1/live`;
     }
 
     function log(msg, type = 'info') {
@@ -227,12 +253,14 @@
       if (ws && ws.readyState === WebSocket.OPEN) return;
 
       setStatus('Connecting');
-      await ensurePlaybackContext();
+      // Don't await audio setup here: AudioContext.resume() never resolves until the
+      // browser sees a user gesture, which would block the WebSocket from ever opening.
+      // Line 303 sets it up on the first audio chunk instead.
+      ensurePlaybackContext().catch((err) => log(`Playback setup: ${err}`, 'error'));
 
-      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsHost = location.hostname || 'localhost';
-      const wsPort = location.port || '18790';
-      ws = new WebSocket(`${wsProto}//${wsHost}:${wsPort}/v1/live`);
+      const url = gatewayInput.value.trim() || defaultGatewayURL();
+      log(`Connecting to ${url}`);
+      ws = new WebSocket(url);
       ws.binaryType = 'arraybuffer';
       sessionReady = false;
 
@@ -240,8 +268,8 @@
         log('WebSocket open, sending setup', 'ok');
         sendEvent({
           setup: {
-            provider: 'openai',
-            model: 'gpt-4o-realtime-preview',
+            provider: providerInput.value.trim() || 'realtime',
+            model: modelInput.value.trim() || 'google/gemma-4-31B-it',
             agent: 'default',
             session_key: getOrCreateClientSessionKey(),
             enable_tools: true,
@@ -319,6 +347,62 @@
       log('Mic started', 'ok');
     }
 
+    function pcm16Base64(samples) {
+      const pcm16 = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++) {
+        const v = Math.max(-1, Math.min(1, samples[i]));
+        pcm16[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+      }
+      const bytes = new Uint8Array(pcm16.buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+
+    // Builds 100ms base64 pcm16 chunks: `toneSec` of a 440Hz tone, then `silenceSec`
+    // of silence so a server-side VAD has a clear end-of-speech to trigger on.
+    function buildTestAudioChunks(toneSec = 2, silenceSec = 2, freq = 440) {
+      const chunkSamples = INPUT_SAMPLE_RATE / 10;
+      const chunks = [];
+      let phase = 0;
+      const toneChunks = Math.round(toneSec * 10);
+      const totalChunks = toneChunks + Math.round(silenceSec * 10);
+      for (let c = 0; c < totalChunks; c++) {
+        const samples = new Float32Array(chunkSamples);
+        if (c < toneChunks) {
+          for (let i = 0; i < chunkSamples; i++) {
+            samples[i] = Math.sin(phase) * 0.3;
+            phase += (2 * Math.PI * freq) / INPUT_SAMPLE_RATE;
+          }
+        }
+        chunks.push(pcm16Base64(samples));
+      }
+      return chunks;
+    }
+
+    // Streams the synthetic chunks in real time, exactly like the mic path, so you can
+    // exercise browser -> Pepebot -> upstream without granting microphone access.
+    // Keep this tab in the foreground: browsers throttle timers in background tabs.
+    async function sendTestAudio() {
+      if (!sessionReady) {
+        log('Connect first (wait session.created)', 'error');
+        return;
+      }
+      testAudioBtn.disabled = true;
+      const chunks = buildTestAudioChunks();
+      log(`Test audio: streaming ${chunks.length} chunks (2s tone + 2s silence)...`);
+
+      for (const audio of chunks) {
+        sendEvent({ type: 'input_audio_buffer.append', audio });
+        await new Promise((r) => setTimeout(r, 100));
+      }
+
+      sendEvent({ type: 'input_audio_buffer.commit' });
+      sendEvent({ type: 'response.create' });
+      log(`Test audio sent (${chunks.length} chunks), committed`, 'ok');
+      testAudioBtn.disabled = false;
+    }
+
     function stopMic() {
       if (micProcessor) {
         micProcessor.disconnect();
@@ -358,12 +442,14 @@
     disconnectBtn.addEventListener('click', disconnect);
     startMicBtn.addEventListener('click', startMic);
     stopMicBtn.addEventListener('click', stopMic);
+    testAudioBtn.addEventListener('click', sendTestAudio);
     sendBtn.addEventListener('click', sendText);
     textInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') sendText();
     });
 
-    log('Ready. This demo is for provider=openai with OpenAI Realtime event format.');
+    gatewayInput.value = defaultGatewayURL();
+    log('Ready. Set gateway/provider/model above, then Connect.');
   </script>
 </body>
 </html>

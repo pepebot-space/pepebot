@@ -81,16 +81,16 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 			}
 		}
 
-		// Register vLLM / self-hosted OpenAI-compatible Live provider. These speak the
-		// OpenAI Realtime event protocol on <api_base>/realtime and usually need no key.
-		if cfg.Providers.VLLM.APIBase != "" {
-			vllmLive, err := live.NewOpenAILiveProvider("vllm", cfg.Providers.VLLM.APIBase, cfg.Providers.VLLM.APIKey)
+		// Register a custom OpenAI-Realtime-compatible Live endpoint. These speak the
+		// OpenAI Realtime event protocol on <api_base>/realtime and often need no key.
+		if cfg.Providers.Realtime.APIBase != "" {
+			realtimeLive, err := live.NewOpenAILiveProvider("realtime", cfg.Providers.Realtime.APIBase, cfg.Providers.Realtime.APIKey)
 			if err != nil {
-				logger.WarnCF("gateway", "Failed to init vLLM Live provider", map[string]interface{}{
+				logger.WarnCF("gateway", "Failed to init Realtime Live provider", map[string]interface{}{
 					"error": err.Error(),
 				})
 			} else {
-				gs.liveServer.RegisterProvider("vllm", vllmLive)
+				gs.liveServer.RegisterProvider("realtime", realtimeLive)
 			}
 		}
 

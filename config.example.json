@@ -83,6 +83,10 @@
     "opencodego": {
       "api_key": "YOUR_OPENCODE_API_KEY",
       "api_base": ""
+    },
+    "realtime": {
+      "api_base": "",
+      "api_key": ""
     }
   },
   "tools": {

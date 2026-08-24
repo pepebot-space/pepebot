@@ -86,6 +86,14 @@ type ProvidersConfig struct {
 	Gemini     GeminiConfig     `json:"gemini"`
 	Vertex     VertexConfig     `json:"vertex"`
 	OpenCodeGo OpenCodeGoConfig `json:"opencodego"`
+	Realtime   RealtimeConfig   `json:"realtime"`
+}
+
+// RealtimeConfig points at a custom OpenAI-Realtime-compatible live endpoint.
+// Only the Live API uses it; api_key may be empty for servers without auth.
+type RealtimeConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_REALTIME_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_REALTIME_API_BASE"`
 }
 
 type MAIARouterConfig struct {
@@ -394,6 +402,13 @@ func overlayNativeEnvVars(cfg *Config) {
 	}
 
 	// OpenCode Go
+	if val := os.Getenv("REALTIME_API_KEY"); val != "" {
+		cfg.Providers.Realtime.APIKey = val
+	}
+	if val := os.Getenv("REALTIME_API_BASE"); val != "" {
+		cfg.Providers.Realtime.APIBase = val
+	}
+
 	if val := os.Getenv("OPENCODEGO_API_KEY"); val != "" {
 		cfg.Providers.OpenCodeGo.APIKey = val
 	}

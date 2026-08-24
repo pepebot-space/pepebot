@@ -259,5 +259,6 @@ Untuk provider OpenAI (serta proxy MAIA Router yang kompatibel dengan protokol O
 > 💡 **Tip Implementasi Klien:** Anda dapat melihat kode lengkap (*source code*) integrasi Web HTML, Python, dan ekosistem terkait Live API ini di bagian direktori [examples/live-api/](../examples/live-api/) termasuk contoh video `index-video.html` dan `client-video.py`.
 
 Untuk varian OpenAI Realtime event protocol, gunakan contoh:
-- `examples/live-api/index-openai.html`
+- `examples/live-api/index-openai.html` (provider/model/gateway are editable in the UI)
+- `examples/live-api/README-realtime.md` (how to point it at a custom Realtime endpoint)
 - `examples/live-api/client-openai.py`

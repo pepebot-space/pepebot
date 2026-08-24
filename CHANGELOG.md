@@ -8,12 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Self-hosted OpenAI Realtime endpoints as a Live provider**: `providers.vllm.api_base` is now registered as the `vllm` live provider, reusing the existing `OpenAILiveProvider` (it already derives `ws(s)://<api_base>/realtime?model=...`). Selectable as `live.provider: "vllm"` or per session with `{"setup":{"provider":"vllm"}}`, so an existing `live.provider` (e.g. `vertex`) keeps working untouched.
+- **Custom OpenAI Realtime endpoints as a Live provider**: new `providers.realtime` config block (`api_base`, `api_key`; env `REALTIME_API_BASE` / `REALTIME_API_KEY`) registered as the `realtime` live provider. It reuses the existing `OpenAILiveProvider`, which already derives `ws(s)://<api_base>/realtime?model=...` from the base URL. Live-API-only — it never touches chat completions, so an OpenAI key configured for chat is unaffected. Selectable via `live.provider: "realtime"` or per session with `{"setup":{"provider":"realtime"}}`.
+- **`examples/live-api/README-realtime.md`**: how to point the demo at a custom Realtime endpoint and run it (gateway + static server).
 
 ### Changed
-- **`api_key` is now optional for OpenAI-compatible Live endpoints**: self-hosted realtime servers commonly run without auth. `NewOpenAILiveProvider` only requires a key for `api.openai.com`, `AuthHeaders` omits the `Authorization` header when the key is empty, and the gateway registers the `openai` live provider when either `api_key` or `api_base` is set. Failures to initialise it are now logged instead of silently swallowed.
-  - Verified against a self-hosted "Paniki Realtime API" (`ws://100.104.36.93:8000/v1/realtime`, model `google/gemma-4-31B-it`): the proxy connects with no key and relays `session.created`, `session.updated` and `input_audio_buffer.speech_started` between client and upstream, for both `live.provider` defaults and per-session overrides.
-  - Tests: `TestOpenAILiveProvider_KeylessSelfHosted`, `TestOpenAILiveProvider_URLScheme`.
+- **`api_key` is now optional for OpenAI-compatible Live endpoints**: self-hosted realtime servers commonly run without auth. `NewOpenAILiveProvider` only requires a key for `api.openai.com`, `AuthHeaders` omits the `Authorization` header when the key is empty, and the gateway registers the `openai` live provider when either `api_key` or `api_base` is set. Live provider init failures are now logged instead of silently swallowed.
+- **`examples/live-api/index-openai.html`** is no longer hardcoded to OpenAI: gateway URL, provider and model are editable fields, and a "Send 2s test audio" button streams a synthetic pcm16 tone so the pipe can be exercised without microphone permission.
+
+### Fixed
+- **The OpenAI Realtime demo could not connect when served from another port**: it derived the WebSocket port from `location.port`, so serving the page on e.g. `:8899` made it dial `ws://host:8899/v1/live` instead of the gateway. The gateway URL is now an explicit field defaulting to `ws://<host>:18790/v1/live`.
+- **The same demo hung before opening the WebSocket**: `connect()` awaited `AudioContext.resume()`, which never resolves until the browser sees a user gesture. Audio setup no longer blocks the connection; it initialises on the first audio chunk instead.
 
 ## [0.5.17] - 2026-08-24
 
