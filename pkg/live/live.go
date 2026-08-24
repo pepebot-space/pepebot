@@ -331,7 +331,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 				toolDefs = defs
 			}
 		}
-		if update := buildRealtimeSessionUpdate(sysPrompt, toolDefs); update != nil {
+		if update := buildRealtimeSessionUpdate(sysPrompt, toolDefs, ls.config.Live.RealtimeSession); update != nil {
 			if err := upstreamConn.WriteMessage(websocket.TextMessage, update); err != nil {
 				logger.ErrorCF("live", "Failed to send upstream session.update", map[string]interface{}{
 					"error": err.Error(),
@@ -646,12 +646,18 @@ func (ls *LiveServer) handleRealtimeToolCall(ctx context.Context, session *LiveS
 	}
 }
 
-// buildRealtimeSessionUpdate renders the persona and tool definitions as an OpenAI
-// Realtime session.update. Tool schemas are converted from the chat-completions
+// buildRealtimeSessionUpdate renders the persona, tool definitions and any
+// live.realtime_session passthrough as an OpenAI Realtime session.update. Tool schemas are converted from the chat-completions
 // shape Pepebot uses internally ({type, function:{...}}) to the flat Realtime shape.
 // Returns nil when there is nothing to send.
-func buildRealtimeSessionUpdate(systemPrompt string, toolDefs []map[string]interface{}) []byte {
+func buildRealtimeSessionUpdate(systemPrompt string, toolDefs []map[string]interface{}, extra map[string]interface{}) []byte {
 	session := map[string]interface{}{}
+
+	// Config passthrough first, so agent-owned instructions and tools below win on
+	// a key collision.
+	for k, v := range extra {
+		session[k] = v
+	}
 
 	if prompt := strings.TrimSpace(systemPrompt); prompt != "" {
 		session["instructions"] = prompt

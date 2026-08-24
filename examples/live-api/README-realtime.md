@@ -51,21 +51,36 @@ Audio is pcm16 mono at 24kHz in both directions.
 ## Agent tools
 
 Tools are on by default (`setup.enable_tools`, defaults to true). Pepebot sends the
-agent's tool definitions to the upstream server in a `session.update`, then executes
-any `function_call` it gets back and returns a `function_call_output`, exactly as it
-does for Vertex/Gemini live sessions.
+agent's tool definitions and persona to the upstream server in a `session.update`,
+executes any `function_call` the model makes, and returns a `function_call_output` —
+the same behaviour as Vertex/Gemini live sessions.
 
-The upstream server has to allow it. The Paniki Realtime server currently does not —
-`session.update` with tools is answered with:
+Verified against the Paniki Realtime server, asking it to list a directory:
 
 ```
-{"type":"error","error":{"type":"invalid_request_error","code":"unsupported_field",
- "message":"session.tools is fixed by the server."}}
+live: Sent upstream session.update {provider=realtime, tools=24, prompt_chars=162, prompt_source=config}
+<< response.output_item.done -> function_call list_dir {"path":"."}
+live: Executed live tool call {tool=list_dir, failed=false, chars=42}
+<< response.audio_transcript.done -> "Here's the current directory: agents, ok.txt, workflows"
 ```
 
-The rest of the same `session.update` still applies (the persona in `instructions`
-does land), and those two error frames are relayed to your client. Once the server
-accepts `session.tools`, tool calling works with no client change.
+The second turn is spoken as well — 130 audio deltas on the follow-up.
+
+### Tuning the upstream session
+
+Anything else the upstream server allows goes in `live.realtime_session` and is merged
+into the same `session.update`:
+
+```json
+"live": {
+  "provider": "realtime",
+  "realtime_session": { "voice": "JV-00027", "temperature": 0.2, "max_response_output_tokens": 200 }
+}
+```
+
+Ask for a voice the server does not have and it says so:
+`unknown_voice — No voice 'echo'. Available: JV-00027, JV-00264, JV-00658, ...`.
+Pepebot's own `instructions` and `tools` take precedence over the same keys.
 
 ## Frame size
 

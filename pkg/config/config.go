@@ -168,6 +168,11 @@ type LiveConfig struct {
 	UseAgentPrompt      bool                   `json:"use_agent_prompt,omitempty" env:"PEPEBOT_LIVE_USE_AGENT_PROMPT"`
 	GenerationConfig    map[string]interface{} `json:"generation_config,omitempty"`
 	RealtimeInputConfig map[string]interface{} `json:"realtime_input_config,omitempty"`
+	// RealtimeSession is merged into the session.update sent to OpenAI-Realtime
+	// providers, for whatever fields that server lets a client set (voice,
+	// temperature, max_response_output_tokens, turn_detection, ...). Pepebot's own
+	// instructions and tools take precedence over the same keys here.
+	RealtimeSession map[string]interface{} `json:"realtime_session,omitempty"`
 }
 
 type WebSearchConfig struct {

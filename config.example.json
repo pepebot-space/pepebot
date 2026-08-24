@@ -127,6 +127,11 @@
         "prefixPaddingMs": 80,
         "silenceDurationMs": 1400
       }
+    },
+    "realtime_session": {
+      "voice": "",
+      "temperature": 0.8,
+      "max_response_output_tokens": "inf"
     }
   }
 }

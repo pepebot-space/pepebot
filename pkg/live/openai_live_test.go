@@ -68,7 +68,7 @@ func TestBuildRealtimeSessionUpdate(t *testing.T) {
 	}
 
 	var update map[string]interface{}
-	if err := json.Unmarshal(buildRealtimeSessionUpdate("be brief", defs), &update); err != nil {
+	if err := json.Unmarshal(buildRealtimeSessionUpdate("be brief", defs, nil), &update); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if update["type"] != "session.update" {
@@ -100,13 +100,50 @@ func TestBuildRealtimeSessionUpdate(t *testing.T) {
 }
 
 func TestBuildRealtimeSessionUpdate_Empty(t *testing.T) {
-	if got := buildRealtimeSessionUpdate("", nil); got != nil {
+	if got := buildRealtimeSessionUpdate("", nil, nil); got != nil {
 		t.Errorf("expected nil when there is nothing to send, got %s", got)
 	}
 	// Tools alone, or a prompt alone, are both worth sending.
-	if got := buildRealtimeSessionUpdate("  persona  ", nil); got == nil {
+	if got := buildRealtimeSessionUpdate("  persona  ", nil, nil); got == nil {
 		t.Error("expected an update for a prompt with no tools")
 	} else if !strings.Contains(string(got), `"instructions":"persona"`) {
 		t.Errorf("prompt not trimmed/included: %s", got)
+	}
+}
+
+// live.realtime_session carries whatever the upstream server allows a client to set,
+// but must not be able to override the agent's own instructions or tools.
+func TestBuildRealtimeSessionUpdate_Passthrough(t *testing.T) {
+	extra := map[string]interface{}{
+		"voice":                      "JV-00027",
+		"max_response_output_tokens": 256,
+		"instructions":               "should lose to the agent persona",
+	}
+	defs := []map[string]interface{}{
+		{"type": "function", "function": map[string]interface{}{"name": "exec"}},
+	}
+
+	var update map[string]interface{}
+	if err := json.Unmarshal(buildRealtimeSessionUpdate("agent persona", defs, extra), &update); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	session := update["session"].(map[string]interface{})
+
+	if session["voice"] != "JV-00027" {
+		t.Errorf("voice = %v, want JV-00027", session["voice"])
+	}
+	if session["max_response_output_tokens"] != float64(256) {
+		t.Errorf("max_response_output_tokens = %v", session["max_response_output_tokens"])
+	}
+	if session["instructions"] != "agent persona" {
+		t.Errorf("passthrough overrode the agent persona: %v", session["instructions"])
+	}
+	if len(session["tools"].([]interface{})) != 1 {
+		t.Errorf("tools = %v", session["tools"])
+	}
+
+	// Passthrough alone is worth sending even with no persona and no tools.
+	if got := buildRealtimeSessionUpdate("", nil, map[string]interface{}{"voice": "JV-00027"}); got == nil {
+		t.Error("expected an update for passthrough-only config")
 	}
 }

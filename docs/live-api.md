@@ -84,6 +84,19 @@ Fitur unggulan di Live API adalah **Integrasi Agent**, di mana alur *real-time v
 - **`session_key`** *(string)*: Kunci unik untuk *state* sesi. Digunakan Pepebot unuk memanjangkan obrolan *(Chat History)* pada sesi yang berlanjut.
 - **`enable_tools`** *(boolean)*: Set ke `true` jika Anda menghendaki agen di dalam percakapan suara ini diizinkan untuk memanggil ekstensi tools (misalnya web search, scraping, dll).
 
+> Tools bekerja untuk provider Vertex/Gemini maupun provider dengan protokol OpenAI Realtime (`openai`, `maiarouter`, `realtime`). Untuk protokol Realtime, definisi tool dikirim lewat `session.update`, dan panggilan tool dibaca dari `response.output_item.done` (`item.type == "function_call"`) lalu hasilnya dibalas sebagai item `function_call_output` diikuti `response.create`.
+
+### Konfigurasi `live.realtime_session`
+
+Field apa pun yang diizinkan server Realtime upstream (misalnya `voice`, `temperature`, `max_response_output_tokens`, `turn_detection`) bisa diisi di sini dan akan digabungkan ke `session.update`. `instructions` dan `tools` milik Pepebot selalu menang jika ada key yang sama.
+
+```json
+"live": {
+  "provider": "realtime",
+  "realtime_session": { "voice": "JV-00027", "temperature": 0.2, "max_response_output_tokens": 200 }
+}
+```
+
 ### Konfigurasi `live.video`
 
 Anda bisa mengaktifkan hint mode video langsung dari config:
