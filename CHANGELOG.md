@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.17] - 2026-08-24
+
+### Changed
+- **OpenCode Go model catalog refreshed**: the provider's default model is now `minimax-m3` (was `minimax-m2.5`), and the onboarding menu / docs list the models currently served by `https://opencode.ai/zen/go/v1/models` instead of the original three.
+  - Now available: `minimax-m3`, `minimax-m2.7`, `minimax-m2.5`, `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`, `glm-5.3`, `glm-5.2`, `glm-5.1`, `glm-5`, `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp`, `qwen3.8-max`, `qwen3.7-max`, `qwen3.7-plus`, `qwen3.6-plus`, `qwen3.5-plus`, `mimo-v2.5-pro`, `mimo-v2.5`, `mimo-v2-pro`, `mimo-v2-omni`, `hy3`, `hy3-preview`, `grok-4.5`, `gpt-5.6-luna`, `ox-alpha-free`, `muse-spark-1.2-contributor`.
+  - Verified live against the API: `minimax-m3` and `kimi-k3` respond over the Anthropic Messages endpoint; `glm-5.3` was returning HTTP 500 upstream at the time of testing.
+  - Touched: `pkg/providers/opencode_provider.go` (`GetDefaultModel`), `cmd/pepebot/main.go` (onboard step 1), `README.md`, `docs/api.md`.
+  - No config migration needed — existing `model` values keep working; only the default for new setups changed.
+
 ## [0.5.16] - 2026-06-14
 
 ### Added

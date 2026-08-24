@@ -194,7 +194,7 @@ func (p *OpenCodeProvider) ChatStream(ctx context.Context, messages []Message, m
 }
 
 func (p *OpenCodeProvider) GetDefaultModel() string {
-	return "minimax-m2.5"
+	return "minimax-m3"
 }
 
 func (p *OpenCodeProvider) buildAnthropicRequest(messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) map[string]interface{} {

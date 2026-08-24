@@ -1052,7 +1052,7 @@ func (p *CustomProvider) GenerateResponse(
 | **Gemini** | Gemini 2.0, 1.5 | Vision, tools, long context |
 | **Zhipu** | GLM-4 | Chinese language optimized |
 | **Vertex AI** | Gemini, Gemma | Google Cloud, service account auth |
-| **OpenCode Go** | minimax-m2.5, kimi-k2.5, glm-5 | Low-cost, global hosting |
+| **OpenCode Go** | minimax-m3, kimi-k3, glm-5.3, deepseek-v4, qwen3.8-max | Low-cost, global hosting |
 | **vLLM** | Local models | Self-hosted, any model |
 
 ---

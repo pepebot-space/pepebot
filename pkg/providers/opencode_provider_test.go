@@ -12,7 +12,7 @@ import (
 
 func TestOpenCodeProvider_GetDefaultModel(t *testing.T) {
 	provider := NewOpenCodeProvider("test-key", "")
-	expected := "minimax-m2.5"
+	expected := "minimax-m3"
 	if provider.GetDefaultModel() != expected {
 		t.Errorf("Expected default model %s, got %s", expected, provider.GetDefaultModel())
 	}
@@ -41,11 +41,11 @@ func TestOpenCodeProvider_BuildAnthropicRequest(t *testing.T) {
 		{Role: "user", Content: "Hello"},
 	}
 
-	request := provider.buildAnthropicRequest(messages, nil, "minimax-m2.5", nil)
+	request := provider.buildAnthropicRequest(messages, nil, "minimax-m3", nil)
 
 	model, ok := request["model"].(string)
-	if !ok || model != "minimax-m2.5" {
-		t.Errorf("Expected model 'minimax-m2.5', got %v", request["model"])
+	if !ok || model != "minimax-m3" {
+		t.Errorf("Expected model 'minimax-m3', got %v", request["model"])
 	}
 
 	maxTokens, ok := request["max_tokens"].(int)
@@ -62,7 +62,7 @@ func TestOpenCodeProvider_BuildAnthropicRequestWithSystem(t *testing.T) {
 		{Role: "user", Content: "Hello"},
 	}
 
-	request := provider.buildAnthropicRequest(messages, nil, "minimax-m2.5", nil)
+	request := provider.buildAnthropicRequest(messages, nil, "minimax-m3", nil)
 
 	system, ok := request["system"].(string)
 	if !ok || system != "You are a helpful assistant." {
@@ -97,7 +97,7 @@ func TestOpenCodeProvider_BuildAnthropicRequestWithTools(t *testing.T) {
 		},
 	}
 
-	request := provider.buildAnthropicRequest(messages, tools, "minimax-m2.5", nil)
+	request := provider.buildAnthropicRequest(messages, tools, "minimax-m3", nil)
 
 	toolsArray, ok := request["tools"].([]map[string]interface{})
 	if !ok || len(toolsArray) != 1 {
