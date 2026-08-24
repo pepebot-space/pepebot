@@ -155,14 +155,8 @@ func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary str
 		systemPrompt += "\n\n" + bootstrapContent
 	}
 
-	skillsSummary := cb.skillsLoader.BuildSkillsSummary()
-	if skillsSummary != "" {
-		systemPrompt += "\n\n## Available Skills\n\n" + skillsSummary
-	}
-
-	skillsContent := cb.loadSkills()
-	if skillsContent != "" {
-		systemPrompt += "\n\n" + skillsContent
+	if skillsPrompt := cb.SkillsPrompt(); skillsPrompt != "" {
+		systemPrompt += "\n\n" + skillsPrompt
 	}
 
 	if summary != "" {
@@ -217,6 +211,20 @@ func (cb *ContextBuilder) AddAssistantMessage(messages []providers.Message, cont
 		messages = append(messages, msg)
 	}
 	return messages
+}
+
+// SkillsPrompt renders the skills block that goes into a system prompt: the summary
+// of every skill plus the full definitions. Shared with Live sessions so a voice
+// conversation knows about the same skills a text one does.
+func (cb *ContextBuilder) SkillsPrompt() string {
+	var parts []string
+	if summary := cb.skillsLoader.BuildSkillsSummary(); summary != "" {
+		parts = append(parts, "## Available Skills\n\n"+summary)
+	}
+	if content := cb.loadSkills(); content != "" {
+		parts = append(parts, content)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func (cb *ContextBuilder) loadSkills() string {

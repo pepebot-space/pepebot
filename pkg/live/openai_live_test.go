@@ -148,22 +148,50 @@ func TestBuildRealtimeSessionUpdate_Passthrough(t *testing.T) {
 	}
 }
 
-// The Realtime protocol has no language field, so the reply language has to ride in
-// the instructions — appended to the persona, never replacing it.
-func TestWithReplyLanguage(t *testing.T) {
-	cases := []struct{ prompt, code, want string }{
-		{"", "", ""},
-		{"You are a butler.", "", "You are a butler."},
-		{"", "id-ID", "Always reply in Indonesian."},
-		{"", "id", "Always reply in Indonesian."},
-		{"You are a butler.", "id-ID", "You are a butler.\n\nAlways reply in Indonesian."},
-		{"  You are a butler.  ", "en-US", "You are a butler.\n\nAlways reply in English."},
-		{"", "jv-ID", "Always reply in Javanese."},
-		{"", "xx-YY", "Always reply in xx-YY."}, // unknown code passes through
+// Live output is spoken, so the instructions must always carry the speech rules, and
+// the language rule must be additive to the persona rather than replacing it.
+func TestLiveInstructions(t *testing.T) {
+	// The speech directive is unconditional — a bare session still gets it.
+	bare := liveInstructions("", "", "")
+	if !strings.Contains(bare, "converted to speech") {
+		t.Errorf("speech directive missing from a bare session: %q", bare)
 	}
-	for _, c := range cases {
-		if got := withReplyLanguage(c.prompt, c.code); got != c.want {
-			t.Errorf("withReplyLanguage(%q, %q) = %q, want %q", c.prompt, c.code, got, c.want)
+	for _, banned := range []string{"markdown", "tables", "emoji"} {
+		if !strings.Contains(bare, banned) {
+			t.Errorf("speech directive does not mention %q", banned)
+		}
+	}
+
+	full := liveInstructions("  You are a butler.  ", "## Available Skills\n\n<skills/>", "id-ID")
+	if !strings.HasPrefix(full, "You are a butler.") {
+		t.Errorf("persona should come first and be trimmed: %q", full)
+	}
+	if !strings.HasSuffix(full, "Always reply in Indonesian.") {
+		t.Errorf("language directive should come last: %q", full)
+	}
+	if !strings.Contains(full, "converted to speech") {
+		t.Error("speech directive dropped when a persona is set")
+	}
+	if !strings.Contains(full, "Available Skills") {
+		t.Error("skills dropped from the instructions")
+	}
+	if strings.Index(full, "Available Skills") < strings.Index(full, "You are a butler.") {
+		t.Error("skills should follow the persona, not precede it")
+	}
+}
+
+func TestReplyLanguageDirective(t *testing.T) {
+	cases := map[string]string{
+		"":      "",
+		"id-ID": "Always reply in Indonesian.",
+		"id":    "Always reply in Indonesian.",
+		"en-US": "Always reply in English.",
+		"jv-ID": "Always reply in Javanese.",
+		"xx-YY": "Always reply in xx-YY.", // unknown code passes through
+	}
+	for code, want := range cases {
+		if got := replyLanguageDirective(code); got != want {
+			t.Errorf("replyLanguageDirective(%q) = %q, want %q", code, got, want)
 		}
 	}
 }

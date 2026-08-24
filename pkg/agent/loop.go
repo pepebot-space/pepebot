@@ -61,6 +61,14 @@ func (p *agentGoalProcessor) ProcessGoal(ctx context.Context, goal string) (stri
 	return resp.Content, nil
 }
 
+// SkillsPrompt returns the agent's skills block for injection into a Live session.
+func (al *AgentLoop) SkillsPrompt() string {
+	if al.contextBuilder == nil {
+		return ""
+	}
+	return al.contextBuilder.SkillsPrompt()
+}
+
 // WorkflowHelper returns the workflow helper for external wiring (e.g. agent processor injection)
 func (al *AgentLoop) WorkflowHelper() *workflow.WorkflowHelper {
 	return al.workflowHelper

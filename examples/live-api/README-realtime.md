@@ -90,6 +90,23 @@ Ask for a voice the server does not have and it says so:
 `unknown_voice — No voice 'echo'. Available: JV-00027, JV-00264, JV-00658, ...`.
 Pepebot's own `instructions` and `tools` take precedence over the same keys.
 
+## What the session carries
+
+Every Realtime session's `instructions` are assembled by Pepebot in this order:
+
+1. the persona — `setup.system_prompt`, else `live.system_prompt(_file)`, else the agent's `AGENTS.md`/`SOUL.md`/`IDENTITY.md`
+2. the agent's skills (summary plus definitions) — attached independently, so setting a
+   system prompt does not drop them
+3. a speech directive: the reply is spoken, so no markdown, lists, tables or emoji
+4. the reply language from `setup.language` or `live.language` (e.g. `id-ID`)
+
+Conversation turns are appended to the agent's session history under `setup.session_key`,
+so a voice session and a text session on the same key share one memory.
+
+If the upstream connection drops, Pepebot rebuilds it (3 attempts, 1s/2s/4s backoff) and
+replays all of the above, then sends the client `{"status":"reconnected"}`. Upstream
+conversation state does not survive that — only the session configuration does.
+
 ## Frame size
 
 Small frames are still the better default — **20ms (480 samples, 960 bytes)** keeps
