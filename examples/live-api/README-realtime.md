@@ -55,8 +55,9 @@ A server-side VAD that works on fixed frames silently stalls on larger chunks: y
 get `input_audio_buffer.speech_started` and then nothing — no `speech_stopped`, no
 transcription, no response, and no error either.
 
-Measured against the Paniki Realtime server at 24kHz: 10, 20, 30 and 40ms frames
-all complete a turn; 50ms and above stop dead after `speech_started`.
+Measured against the Paniki Realtime server at 24kHz: appends up to 1056 samples
+(44ms) complete a turn; 1200 samples (50ms) and above stop dead after
+`speech_started`. 20ms leaves plenty of headroom.
 
 The browser's `ScriptProcessorNode` hands out 4096-sample buffers (~170ms), well
 over that limit, so `index-openai.html` repacketizes every audio path — mic and
