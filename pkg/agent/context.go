@@ -241,8 +241,8 @@ func (cb *ContextBuilder) loadSkills() string {
 // convertFileToDataURL converts a local file path to a base64 data URL
 // Returns the original URL if it's already an HTTP/HTTPS URL
 func convertFileToDataURL(filePath string) string {
-	// If it's already a URL, return as-is
-	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+	// If it's already a URL or data URL, return as-is
+	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") || strings.HasPrefix(filePath, "data:") {
 		return filePath
 	}
 

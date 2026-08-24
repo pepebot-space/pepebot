@@ -317,9 +317,13 @@ func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
 		return []map[string]interface{}{
 			{"type": "text", "text": content},
 		}
-	case []interface{}:
+	default:
+		blocks := contentBlocks(msg.Content)
+		if blocks == nil {
+			break
+		}
 		var result []map[string]interface{}
-		for _, block := range content {
+		for _, block := range blocks {
 			if blockMap, ok := block.(map[string]interface{}); ok {
 				switch blockMap["type"] {
 				case "text":
@@ -348,14 +352,17 @@ func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
 				}
 			}
 		}
+		if result == nil {
+			result = []map[string]interface{}{}
+		}
 		return result
-	default:
-		if content == nil || msg.ToolCallID != "" {
-			return []map[string]interface{}{}
-		}
-		return []map[string]interface{}{
-			{"type": "text", "text": fmt.Sprintf("%v", content)},
-		}
+	}
+
+	if msg.Content == nil || msg.ToolCallID != "" {
+		return []map[string]interface{}{}
+	}
+	return []map[string]interface{}{
+		{"type": "text", "text": fmt.Sprintf("%v", msg.Content)},
 	}
 }
 

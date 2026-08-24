@@ -18,6 +18,14 @@ Already running an OpenCode Go model? Nothing breaks — your configured `model`
 
 Any OpenCode Go turn that used a tool died with an HTTP 400. Pepebot was replaying tool calls with a `null` argument object, which the API refuses. Fixed and verified end-to-end on `minimax-m3`, `kimi-k3`, `glm-5.3`, `deepseek-v4-pro` and `qwen3.8-max` — single tool, multiple tools, multi-turn.
 
+### 🖼️ Images finally reach the model
+
+Multimodal was silently broken: an image sent through a channel or the gateway was classified as a generic file (its data URL has no `.png` on the end) and then formatted into the prompt as a Go struct dump. The model just said *"I don't see any image attached."*
+
+Now fixed for both OpenCode Go and Vertex. Verified end-to-end on `kimi-k3`, `qwen3.8-max`, `deepseek-v4-flash-vision-exp` and `minimax-m3`.
+
+PDFs are still not supported on OpenCode Go — that endpoint only accepts image and video blocks.
+
 ## 📦 Installation
 
 ```bash

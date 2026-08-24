@@ -398,8 +398,8 @@ func (p *VertexProvider) buildGenerateContentRequest(messages []Message, tools [
 				if content != "" {
 					parts = append(parts, map[string]interface{}{"text": content})
 				}
-			case []interface{}:
-				for _, block := range content {
+			default:
+				for _, block := range contentBlocks(content) {
 					if blockMap, ok := block.(map[string]interface{}); ok {
 						switch blockMap["type"] {
 						case "text":
@@ -543,9 +543,13 @@ func getMessageContentString(content interface{}) string {
 	switch c := content.(type) {
 	case string:
 		return c
-	case []interface{}:
+	default:
+		blocks := contentBlocks(content)
+		if blocks == nil {
+			return fmt.Sprintf("%v", content)
+		}
 		var parts []string
-		for _, block := range c {
+		for _, block := range blocks {
 			if blockMap, ok := block.(map[string]interface{}); ok {
 				if text, ok := blockMap["text"].(string); ok {
 					parts = append(parts, text)
@@ -553,8 +557,6 @@ func getMessageContentString(content interface{}) string {
 			}
 		}
 		return strings.Join(parts, "\n")
-	default:
-		return fmt.Sprintf("%v", content)
 	}
 }
 

@@ -159,3 +159,54 @@ func toolUseBlock(t *testing.T, request map[string]interface{}) map[string]inter
 	t.Fatal("no tool_use block in assistant message")
 	return nil
 }
+
+// Regression: the agent builds multimodal content as a typed []ContentBlock, but
+// providers used to only recognize the JSON-decoded []interface{} shape, so images
+// fell through to fmt.Sprintf and reached the model as a Go struct dump.
+func TestOpenCodeProvider_MultimodalContent(t *testing.T) {
+	provider := NewOpenCodeProvider("test-key", "")
+
+	typed := []ContentBlock{
+		{Type: "text", Text: "what color?"},
+		{Type: "image_url", ImageURL: &ImageURL{URL: "data:image/png;base64,QUJD", Detail: "auto"}},
+	}
+	generic := []interface{}{
+		map[string]interface{}{"type": "text", "text": "what color?"},
+		map[string]interface{}{"type": "image_url", "image_url": map[string]interface{}{"url": "data:image/png;base64,QUJD"}},
+	}
+
+	for name, content := range map[string]interface{}{"typed blocks": typed, "decoded blocks": generic} {
+		blocks, ok := provider.buildContent(Message{Role: "user", Content: content}).([]map[string]interface{})
+		if !ok || len(blocks) != 2 {
+			t.Fatalf("%s: expected 2 content blocks, got %#v", name, blocks)
+		}
+		if blocks[0]["type"] != "text" || blocks[0]["text"] != "what color?" {
+			t.Errorf("%s: bad text block: %#v", name, blocks[0])
+		}
+		if blocks[1]["type"] != "image" {
+			t.Fatalf("%s: expected an image block, got %#v", name, blocks[1])
+		}
+		source := blocks[1]["source"].(map[string]interface{})
+		if source["media_type"] != "image/png" || source["data"] != "QUJD" {
+			t.Errorf("%s: bad image source: %#v", name, source)
+		}
+	}
+}
+
+// Regression: media reaches the agent as a data URL, which has no file extension —
+// extension-based detection classified images as generic files and the providers
+// dropped them.
+func TestDetectFileType_DataURL(t *testing.T) {
+	cases := map[string]FileType{
+		"data:image/png;base64,QUJD":       FileTypeImage,
+		"data:image/jpeg;base64,QUJD":      FileTypeImage,
+		"data:application/pdf;base64,QUJD": FileTypeDocument,
+		"data:audio/mpeg;base64,QUJD":      FileTypeAudio,
+		"/tmp/photo.png":                   FileTypeImage,
+	}
+	for url, want := range cases {
+		if got, _ := DetectFileType(url); got != want {
+			t.Errorf("DetectFileType(%q) = %q, want %q", truncateString(url, 40), got, want)
+		}
+	}
+}

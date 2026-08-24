@@ -26,6 +26,13 @@ const (
 
 // DetectFileType detects the file type from URL or file path
 func DetectFileType(urlOrPath string) (FileType, string) {
+	// Data URLs carry their own MIME type and have no meaningful extension —
+	// filepath.Ext would pick a stray "." out of the base64 payload.
+	if strings.HasPrefix(urlOrPath, "data:") {
+		mimeType, _ := parseDataURL(urlOrPath)
+		return categorizeByMimeType(mimeType, ""), mimeType
+	}
+
 	// Extract extension from URL or path
 	ext := strings.ToLower(filepath.Ext(urlOrPath))
 	if ext == "" {
