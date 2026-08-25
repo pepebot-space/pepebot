@@ -73,9 +73,10 @@ hyphen makes client tools structurally distinct and impossible to confuse — an
 join is still checked against the gateway's names, because nothing stops a future
 gateway tool from containing a hyphen.
 
-Client tool names are also validated (`^[a-zA-Z0-9_-]{1,64}$`) before they reach the
-upstream session, so a malformed definition fails fast at setup rather than corrupting
-the session.
+Both halves are validated as `^[A-Za-z0-9_]{1,48}$` before they reach the upstream
+session — restricting them to what cannot contain the separator keeps `<app>-<tool>`
+splittable, and a malformed definition fails fast at setup rather than corrupting the
+session.
 
 ## 3. Route
 
@@ -139,9 +140,9 @@ the turn forever.
 | | |
 |---|---|
 | `pkg/live/live.go` | `SetupConfig.Tools`, validation, pending-call table, routing, the two frames |
-| `pkg/live/live_test.go` | name validation, collision rejection, routing choice, timeout path |
-| `examples/live-api/paniki.html` | declare one browser tool (`read_clipboard` or `geolocate`) as a worked example |
-| `docs/live-api.md` | the two frames and the collision rule |
+| `pkg/live/client_tools_test.go` | namespacing, validation, collision rejection, lookup |
+| `examples/live-api/paniki.html` | declares `device_info` and `geolocate` as a worked example |
+| `docs/live-api.md` | the two frames and the naming rule |
 
 ## Check
 
