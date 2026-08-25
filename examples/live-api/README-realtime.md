@@ -95,19 +95,33 @@ Pepebot's own `instructions` and `tools` take precedence over the same keys.
 | | |
 |---|---|
 | `paniki.html` | Browser: mic, barge-in, tool-call trace, model/voice pickers. Serve it and open it. |
-| `paniki_client.py` | Terminal, full duplex microphone. Needs `websockets`, `sounddevice`, `numpy`. |
-| `paniki-client.js` | Terminal, type a message and get `reply-N.wav` back. Only needs `ws`. |
+| `nodejs/paniki-client.js` | Terminal, full duplex: mic via ffmpeg, playback via `speaker`. Type at it too. |
+| `paniki_client.py` | Terminal, full duplex: mic and playback via `sounddevice`. |
 
 ```bash
-python3 paniki_client.py                       # talk to it
-LANG_CODE=en-US VOICE=nenden python3 paniki_client.py
+cd nodejs && npm install && node paniki-client.js     # needs ffmpeg on PATH
+NO_MIC=1 node paniki-client.js                        # type only, replies saved as WAV
+MIC=":1" node paniki-client.js                        # another input device
 
-npm install ws && node paniki-client.js        # type at it
+pip install websockets sounddevice numpy && python3 paniki_client.py
+LANG_CODE=en-US VOICE=nenden python3 paniki_client.py
 ```
+
+The Node client shells out to `ffmpeg` for capture rather than using the `mic`
+package, which needs sox or arecord installed separately. Without ffmpeg it falls
+back to text-only; without `speaker` it writes each reply to `reply-N.wav`.
+
+List input devices: `ffmpeg -f avfoundation -list_devices true -i ""` on macOS,
+`arecord -l` on Linux.
 
 All three connect to Pepebot's `/v1/live`, not to the Realtime server directly, so the
 agent's persona, skills and tools are in play. Each reads `/v1/models` and `/v1/voices`
 from the server at startup, so nothing goes stale on a redeploy.
+
+**If the level meter sits at zero**, the microphone is delivering silence. On macOS a
+denied microphone returns zeroed buffers rather than an error, so it looks exactly like
+a quiet room — both clients say so instead of waiting forever. Run them from a terminal
+app that holds the grant, and check System Settings > Privacy & Security > Microphone.
 
 ## What the session carries
 
