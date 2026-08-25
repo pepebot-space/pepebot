@@ -1,0 +1,48 @@
+name: Trigger Android Release (manual)
+
+# The android build is normally fired by the release workflow on a tag push. When that
+# leg fails — an expired ANDROID_REPO_TOKEN has done it repeatedly — rerunning the
+# whole release just to retry one dispatch rebuilds 16 binaries for nothing. This does
+# only the dispatch, and doubles as a way to verify the token without cutting a tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag to build (e.g. v0.5.18)'
+        required: true
+        type: string
+
+jobs:
+  dispatch:
+    name: Dispatch to pepebot-android
+    runs-on: ubuntu-latest
+    environment: ANDROID
+    env:
+      ANDROID_REPO_TOKEN: ${{ secrets.ANDROID_REPO_TOKEN || vars.ANDROID_REPO_TOKEN }}
+
+    steps:
+      - name: Check the token can reach the Android repo
+        env:
+          GH_TOKEN: ${{ env.ANDROID_REPO_TOKEN }}
+        run: |
+          if [ -z "$ANDROID_REPO_TOKEN" ]; then
+            echo "::error::ANDROID_REPO_TOKEN is empty. Set it in the ANDROID environment."
+            exit 1
+          fi
+          if ! gh api repos/pepebot-space/pepebot-android >/dev/null 2>&1; then
+            echo "::error::ANDROID_REPO_TOKEN cannot reach pepebot-space/pepebot-android. A classic PAT needs the 'repo' scope; a fine-grained PAT needs 'Contents: read and write' AND its resource owner set to the pepebot-space organisation, not a personal account."
+            exit 1
+          fi
+          echo "Token reaches pepebot-space/pepebot-android."
+
+      - name: Trigger pepebot-android release
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ env.ANDROID_REPO_TOKEN }}
+          repository: pepebot-space/pepebot-android
+          event-type: pepebot-release
+          client-payload: '{"version": "${{ inputs.version }}"}'
+
+      - name: Done
+        run: echo "Dispatched pepebot-release for ${{ inputs.version }}"
