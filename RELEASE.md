@@ -1,30 +1,46 @@
-# 🐸 Pepebot v0.5.17 - OpenCode Go: Full Menu, Working Tools
+# 🐸 Pepebot v0.5.18 - Your Agent, Out Loud
 
-**Release Date:** 2026-08-24
+**Release Date:** 2026-08-25
 
 ## 🎉 What's New
 
-### 🚀 Refreshed OpenCode Go model catalog
+### 🎙️ Voice sessions are real agent sessions now
 
-OpenCode Go quietly grew from 3 models to ~30. Pepebot now knows about them.
+The Live API used to be a voice pipe with a personality. On the OpenAI Realtime protocol it was barely even that: tool definitions and the system prompt were only ever injected into a provider setup frame, and Realtime providers do not have one — so both were silently dropped. Voice could talk. It could not *do* anything.
 
-- **New default:** `minimax-m3` (was `minimax-m2.5`) — newer, same high volume limit.
-- **Now selectable:** the whole `kimi-k3` / `glm-5.3` / `deepseek-v4` / `qwen3.8-max` line-up, plus `mimo`, `hy3`, `grok-4.5` and friends.
-- **Onboarding and docs updated**, so `pepebot onboard` no longer offers you a menu from last season.
+That is fixed, and then some. A Realtime voice session now carries:
 
-Already running an OpenCode Go model? Nothing breaks — your configured `model` keeps working. Only the default for fresh setups changed.
+- **Tools** — the agent's full tool registry, executed locally and fed back. Ask it to read a file and it reads the file.
+- **Skills** — the same skills block a text conversation gets. Attached independently of the persona, so setting a system prompt no longer drops them.
+- **Memory** — voice turns are written to the agent's session history. Talk to it, then message it on Telegram with the same session key, and it remembers.
+- **A reply language** — `live.language` (default `id-ID`) or per session via `setup.language`.
 
-### 🐛 Tool calling on OpenCode Go actually works now
+### 🔌 Custom OpenAI Realtime endpoints
 
-Any OpenCode Go turn that used a tool died with an HTTP 400. Pepebot was replaying tool calls with a `null` argument object, which the API refuses. Fixed and verified end-to-end on `minimax-m3`, `kimi-k3`, `glm-5.3`, `deepseek-v4-pro` and `qwen3.8-max` — single tool, multiple tools, multi-turn.
+New `providers.realtime` config block. Point `api_base` at any server speaking the OpenAI Realtime protocol — self-hosted included — and `api_key` may be empty, because most of them run without auth. It is Live-API-only, so an OpenAI key you use for chat is untouched.
 
-### 🖼️ Images finally reach the model
+```json
+{
+  "providers": { "realtime": { "api_base": "http://127.0.0.1:8000/v1", "api_key": "" } },
+  "live": { "enabled": true, "provider": "realtime", "model": "your-model" }
+}
+```
 
-Multimodal was silently broken: an image sent through a channel or the gateway was classified as a generic file (its data URL has no `.png` on the end) and then formatted into the prompt as a Go struct dump. The model just said *"I don't see any image attached."*
+### 🔊 Replies that sound like speech
 
-Now fixed for both OpenCode Go and Vertex. Verified end-to-end on `kimi-k3`, `qwen3.8-max`, `deepseek-v4-flash-vision-exp` and `minimax-m3`.
+Pepebot's `session.update` replaces the upstream server's own instructions — including whatever "this will be spoken" guidance they carried. Which is why answers were coming back as markdown tables and emoji, read out loud symbol by symbol. Every Realtime session now carries an explicit speech directive, so a list is spoken as a sentence instead of a bullet list.
 
-PDFs are still not supported on OpenCode Go — that endpoint only accepts image and video blocks.
+### 🔁 Upstream reconnect
+
+If the upstream connection drops mid-session, the client stays connected while Pepebot rebuilds the other leg — 3 attempts, 1s/2s/4s backoff, replaying the persona, skills, tools and session config, then telling the client with a `{"status":"reconnected"}` frame.
+
+### 🖥️ Three clients to try it with
+
+- `examples/live-api/paniki.html` — browser: mic, barge-in, tool-call trace, model and voice pickers read live from the server
+- `examples/live-api/nodejs/paniki-client.js` — terminal, full duplex, mic via ffmpeg
+- `examples/live-api/paniki_client.py` — terminal, full duplex, mic via sounddevice
+
+All three read `/v1/models` and `/v1/voices` at startup, so nothing goes stale when the server is redeployed.
 
 ## 📦 Installation
 
@@ -41,31 +57,15 @@ brew install pepebot
 
 ## 🚀 Quick Start
 
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": "minimax-m3",
-      "provider": "opencodego"
-    }
-  },
-  "providers": {
-    "opencodego": {
-      "api_key": "YOUR_OPENCODE_API_KEY"
-    }
-  }
-}
-```
-
-Want the live list of what OpenCode Go is serving right now?
-
 ```bash
-curl -H "x-api-key: $OPENCODEGO_API_KEY" https://opencode.ai/zen/go/v1/models
+pepebot gateway                                  # /v1/live on 127.0.0.1:18790
+cd examples/live-api/nodejs && npm install && node paniki-client.js
 ```
+
+Then ask it to do something — list a directory, read a file — and listen to it actually do it.
 
 ## 🔗 Links
 
 - [Changelog](./CHANGELOG.md)
-- [README](./README.md)
-- [OpenCode Go docs](https://opencode.ai/docs/go)
-- [Get an API key](https://opencode.ai/auth)
+- [Live API guide](./docs/live-api.md)
+- [Custom Realtime endpoints](./examples/live-api/README-realtime.md)

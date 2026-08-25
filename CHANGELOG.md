@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.18] - 2026-08-25
 
 ### Added
 - **Custom OpenAI Realtime endpoints as a Live provider**: new `providers.realtime` config block (`api_base`, `api_key`; env `REALTIME_API_BASE` / `REALTIME_API_KEY`) registered as the `realtime` live provider. It reuses the existing `OpenAILiveProvider`, which already derives `ws(s)://<api_base>/realtime?model=...` from the base URL. Live-API-only — it never touches chat completions, so an OpenAI key configured for chat is unaffected. Selectable via `live.provider: "realtime"` or per session with `{"setup":{"provider":"realtime"}}`.
