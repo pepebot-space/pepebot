@@ -31,10 +31,17 @@ jobs:
             exit 1
           fi
           if ! gh api repos/pepebot-space/pepebot-android >/dev/null 2>&1; then
-            echo "::error::ANDROID_REPO_TOKEN cannot reach pepebot-space/pepebot-android. A classic PAT needs the 'repo' scope; a fine-grained PAT needs 'Contents: read and write' AND its resource owner set to the pepebot-space organisation, not a personal account."
+            echo "::error::ANDROID_REPO_TOKEN cannot see pepebot-space/pepebot-android. For a fine-grained PAT, set its resource owner to the pepebot-space organisation (it defaults to your personal account) and grant access to that repository. For a classic PAT, use the 'repo' scope."
             exit 1
           fi
-          echo "Token reaches pepebot-space/pepebot-android."
+          # Read access is not enough: repository_dispatch is a write. Checking the
+          # reported push permission catches a read-only token here, instead of at
+          # dispatch time where the only clue is "Resource not accessible".
+          if [ "$(gh api repos/pepebot-space/pepebot-android --jq '.permissions.push // false')" != "true" ]; then
+            echo "::error::ANDROID_REPO_TOKEN can read pepebot-android but not write to it, and repository_dispatch needs write. Fine-grained PAT: set Repository permissions > Contents to 'Read and write'. Classic PAT: use the 'repo' scope."
+            exit 1
+          fi
+          echo "Token can dispatch to pepebot-space/pepebot-android."
 
       - name: Trigger pepebot-android release
         uses: peter-evans/repository-dispatch@v3
