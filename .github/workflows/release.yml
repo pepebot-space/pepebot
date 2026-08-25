@@ -392,6 +392,18 @@ jobs:
             exit 1
           fi
 
+      # A token that exists but lacks access fails at dispatch time with only
+      # "Resource not accessible by personal access token", which says nothing about
+      # what to change. Check reachability first and name the fix.
+      - name: Check the token can reach the Android repo
+        env:
+          GH_TOKEN: ${{ env.ANDROID_REPO_TOKEN }}
+        run: |
+          if ! gh api repos/pepebot-space/pepebot-android >/dev/null 2>&1; then
+            echo "::error::ANDROID_REPO_TOKEN cannot reach pepebot-space/pepebot-android. A classic PAT needs the 'repo' scope; a fine-grained PAT needs 'Contents: read and write' on that repository. Update the secret in the ANDROID environment."
+            exit 1
+          fi
+
       - name: Get version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
