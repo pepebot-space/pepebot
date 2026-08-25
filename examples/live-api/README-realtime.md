@@ -97,6 +97,8 @@ Pepebot's own `instructions` and `tools` take precedence over the same keys.
 | `paniki.html` | Browser: mic, barge-in, tool-call trace, model/voice pickers. Serve it and open it. |
 | `nodejs/paniki-client.js` | Terminal, full duplex: mic via ffmpeg, playback via `speaker`. Type at it too. |
 | `paniki_client.py` | Terminal, full duplex: mic and playback via `sounddevice`. |
+| `nodejs/paniki-toolcall.js` | Terminal, text: declares client tools this machine runs. Only needs `ws`. |
+| `paniki_toolcall.py` | Same in Python. Only needs `websockets`. |
 
 ```bash
 cd nodejs && npm install && node paniki-client.js     # needs ffmpeg on PATH
@@ -133,8 +135,25 @@ Every Realtime session's `instructions` are assembled by Pepebot in this order:
 3. a speech directive: the reply is spoken, so no markdown, lists, tables or emoji
 4. the reply language from `setup.language` or `live.language` (e.g. `id-ID`)
 
-Conversation turns are appended to the agent's session history under `setup.session_key`,
-so a voice session and a text session on the same key share one memory.
+## Chat sessions
+
+`setup.session_key` names the conversation. Turns are appended to the agent's session
+history under that name, **and replayed back** into a new session with the same name —
+so a conversation survives a reconnect, and a voice session and a text session on the
+same key are one conversation.
+
+Different names are different conversations, with separate memory:
+
+```bash
+SESSION=work node paniki-toolcall.js       # one conversation
+SESSION=rumah node paniki-toolcall.js      # another, knows nothing of the first
+```
+
+The browser demo exposes it as a **Session** field, shown in the header, remembered per
+browser — so two tabs with different names hold two separate conversations.
+
+The last 20 turns are replayed; the upstream server charges for every token of what is
+handed back, so this is a window, not the whole archive.
 
 If the upstream connection drops, Pepebot rebuilds it (3 attempts, 1s/2s/4s backoff) and
 replays all of the above, then sends the client `{"status":"reconnected"}`. Upstream

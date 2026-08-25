@@ -31,6 +31,8 @@ const PANIKI = (process.env.PANIKI_URL || "http://100.104.36.93:8000").replace(/
 const LANGUAGE = process.env.LANG_CODE || "id-ID";
 const VOICE = process.env.VOICE || "";
 const OUT_DIR = process.env.OUT_DIR || ".";
+// One session key per client by default, so separate clients keep separate histories.
+const SESSION = process.env.SESSION || process.env.SESSION_KEY || "js-session";
 
 const RATE = 24000;              // pcm16 mono, both directions
 const FRAME_BYTES = 480 * 2;     // 20ms: low latency, snappy barge-in
@@ -231,7 +233,7 @@ async function main() {
     const setup = {
       provider: "realtime",
       agent: process.env.AGENT || "default",
-      session_key: process.env.SESSION_KEY || "paniki-node",
+      session_key: SESSION,
       enable_tools: true,
       language: LANGUAGE,
     };
@@ -248,7 +250,7 @@ async function main() {
     try { evt = JSON.parse(raw.toString()); } catch { return; }
 
     if (evt.status === "connected") {
-      console.log(`-- proxy: ${evt.provider} -> ${evt.model}`);
+      console.log(`-- proxy: ${evt.provider} -> ${evt.model} | session "${SESSION}"`);
       startMic();
       rl.prompt();
       return;

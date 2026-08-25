@@ -47,6 +47,15 @@ type SkillsSource interface {
 	LiveSkillsPrompt(agentName string) string
 }
 
+// SessionHistory supplies what was said earlier under a session key, so a live session
+// can pick a conversation back up instead of starting blank every time. Turns are plain
+// {"role","content"} maps, oldest first — the same shape ToolExecutor uses for tool
+// definitions, so pkg/agent does not have to import this package. A ToolExecutor may
+// implement it; when it does not, sessions simply start fresh.
+type SessionHistory interface {
+	LiveHistory(sessionKey string, limit int) []map[string]string
+}
+
 // SessionRecorder persists live conversation turns into the agent's session history,
 // so a voice conversation and a text one share the same memory. A ToolExecutor may
 // implement it; when it does not, live sessions simply are not recorded.
@@ -458,6 +467,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 				ls.sendError(clientConn, "Upstream setup failed: "+err.Error())
 				return
 			}
+			ls.replayHistory(upstreamConn, sessionKey)
 			logger.InfoCF("live", "Sent upstream session.update", map[string]interface{}{
 				"provider":      providerName,
 				"tools":         len(toolDefs),
@@ -1158,6 +1168,72 @@ func (ls *LiveServer) handleClientToolResult(session *LiveSession, msgType int, 
 	default:
 	}
 	return true
+}
+
+// maxReplayTurns bounds how much of a conversation is handed back to the model. Enough
+// to carry context across a reconnect or a new client, without re-sending an entire
+// history — and the upstream server charges for every token of it.
+const maxReplayTurns = 20
+
+// replayHistory seeds the upstream conversation with what was said earlier under this
+// session key. Without it the recorded history is write-only: turns are stored and
+// never read back, so every live session starts amnesiac even when its key is reused.
+//
+// The items are added without a response.create, so nothing is generated — they simply
+// become the context the next real turn sees.
+func (ls *LiveServer) replayHistory(upstream *websocket.Conn, sessionKey string) {
+	source, ok := ls.tools.(SessionHistory)
+	if !ok || sessionKey == "" {
+		return
+	}
+
+	turns := source.LiveHistory(sessionKey, maxReplayTurns)
+	sent := 0
+	for _, turn := range turns {
+		content := strings.TrimSpace(turn["content"])
+		if content == "" {
+			continue
+		}
+		// The Realtime API takes input_text for the user side and text for the
+		// assistant side; sending the wrong one has the item rejected.
+		blockType := "input_text"
+		role := turn["role"]
+		switch role {
+		case "assistant":
+			blockType = "text"
+		case "user":
+		default:
+			// system or tool turns are not part of the spoken conversation
+			continue
+		}
+
+		frame, err := json.Marshal(map[string]interface{}{
+			"type": "conversation.item.create",
+			"item": map[string]interface{}{
+				"type":    "message",
+				"role":    role,
+				"content": []map[string]interface{}{{"type": blockType, "text": content}},
+			},
+		})
+		if err != nil {
+			continue
+		}
+		if err := upstream.WriteMessage(websocket.TextMessage, frame); err != nil {
+			logger.WarnCF("live", "Failed to replay a history turn", map[string]interface{}{
+				"session": sessionKey,
+				"error":   err.Error(),
+			})
+			return
+		}
+		sent++
+	}
+
+	if sent > 0 {
+		logger.InfoCF("live", "Replayed session history", map[string]interface{}{
+			"session": sessionKey,
+			"turns":   sent,
+		})
+	}
 }
 
 // buildRealtimeSessionUpdate renders the persona, tool definitions and any

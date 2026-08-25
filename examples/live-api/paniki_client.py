@@ -33,6 +33,8 @@ GATEWAY = os.getenv("PEPEBOT_LIVE_URL", "ws://127.0.0.1:18790/v1/live")
 PANIKI = os.getenv("PANIKI_URL", "http://100.104.36.93:8000")
 LANGUAGE = os.getenv("LANG_CODE", "id-ID")
 VOICE = os.getenv("VOICE", "")
+# One session key per client by default, so separate clients keep separate histories.
+SESSION = os.getenv("SESSION") or os.getenv("SESSION_KEY") or "py-session"
 
 RATE = 24000        # the Realtime API speaks pcm16 mono at this rate
 BLOCK = 480         # 20ms: low latency, and small enough for any frame-based VAD
@@ -174,12 +176,13 @@ async def main():
     def on_mic(indata, _frames, _time, _status):
         mic.put(bytes(indata))
 
+    print(f'-- session "{SESSION}"')
     print(f"-- connecting to {url}")
     async with websockets.connect(url, max_size=None) as ws:
         setup = {
             "provider": "realtime",
             "agent": os.getenv("AGENT", "default"),
-            "session_key": os.getenv("SESSION_KEY", "paniki-python"),
+            "session_key": SESSION,
             "enable_tools": True,
             "language": LANGUAGE,
         }

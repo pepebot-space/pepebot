@@ -55,7 +55,8 @@
     <div class="head">
       <div>
         <h1>Pepebot × Paniki Realtime</h1>
-        <p>Voice + agent tools over Pepebot's <code>/v1/live</code> proxy</p>
+        <p>Voice + agent tools over Pepebot's <code>/v1/live</code> proxy — session
+          <code id="sessionLabel">web-session</code></p>
       </div>
       <div id="status" class="pill">Disconnected</div>
     </div>
@@ -73,6 +74,10 @@
         <div>
           <label for="model">Model <span class="t-dim">(loaded from /v1/models)</span></label>
           <select id="model"></select>
+        </div>
+        <div>
+          <label for="session">Session <span class="t-dim">(separate name = separate memory)</span></label>
+          <input id="session" />
         </div>
         <div>
           <label for="lang">Reply language</label>
@@ -136,7 +141,7 @@
 
   const RATE = 24000;               // Paniki speaks pcm16 mono at this rate
   const FRAME = RATE / 50;          // 20ms frames: low latency, snappy barge-in
-  const SESSION_KEY = 'pepebot_paniki_session';
+  const SESSION_STORE = 'pepebot_paniki_session';
 
   let ws = null, playCtx = null, micCtx = null, micStream = null,
       micSource = null, micProc = null, nextPlayAt = 0, ready = false,
@@ -155,13 +160,22 @@
     statusEl.className = 'pill' + (cls ? ' ' + cls : '');
   }
 
-  function sessionKey() {
-    let k = localStorage.getItem(SESSION_KEY);
-    if (!k) { k = `paniki-web:${Date.now()}`; localStorage.setItem(SESSION_KEY, k); }
-    return k;
+  // The session name is the memory boundary: Pepebot files the conversation under it,
+  // so two tabs with different names hold two separate conversations, and reusing a
+  // name picks the earlier one back up. Remembered per browser so a reload continues
+  // where it left off.
+  function sessionName() {
+    return $('session').value.trim() || 'web-session';
+  }
+
+  function rememberSession() {
+    try { localStorage.setItem(SESSION_STORE, sessionName()); } catch { /* private mode */ }
+    $('sessionLabel').textContent = sessionName();
   }
 
   gatewayEl.value = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname || '127.0.0.1'}:18790/v1/live`;
+  try { $('session').value = localStorage.getItem(SESSION_STORE) || 'web-session'; } catch { $('session').value = 'web-session'; }
+  $('sessionLabel').textContent = $('session').value;
 
   // ---------- model discovery ----------
   // The model changes whenever the server is redeployed, so never hardcode it:
@@ -293,6 +307,7 @@
 
   function connect() {
     if (ws && ws.readyState === WebSocket.OPEN) return;
+    rememberSession();
     const url = gatewayEl.value.trim();
     const model = modelEl.value.trim();
     if (!model) { log('Pick a model first', 'err'); return; }
@@ -312,7 +327,7 @@
         provider: 'realtime',
         model,
         agent: 'default',
-        session_key: sessionKey(),
+        session_key: sessionName(),
         enable_tools: true,
         language: $('lang').value,
         // Tools this page owns and runs itself. Pepebot namespaces them as
@@ -347,7 +362,7 @@
 
   function handle(evt) {
     if (evt.status === 'connected') {
-      log(`Proxy: ${evt.provider} -> ${evt.model}`, 'ok');
+      log(`Proxy: ${evt.provider} -> ${evt.model} | session "${sessionName()}"`, 'ok');
       return;
     }
 
@@ -530,6 +545,7 @@
   testBtn.addEventListener('click', sendTestAudio);
   $('send').addEventListener('click', sendText);
   $('text').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText(); });
+  $('session').addEventListener('change', rememberSession);
   $('refresh').addEventListener('click', () => { loadModels(); loadVoices(); });
   $('voices').addEventListener('click', loadVoices);
   panikiEl.addEventListener('change', () => { loadModels(); loadVoices(); });
