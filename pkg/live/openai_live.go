@@ -22,10 +22,6 @@ type OpenAILiveProvider struct {
 
 // NewOpenAILiveProvider creates a new OpenAI compatible Realtime API provider
 func NewOpenAILiveProvider(name, apiBase, apiKey string) (*OpenAILiveProvider, error) {
-	if apiKey == "" {
-		return nil, fmt.Errorf("%s live: api_key is required", name)
-	}
-
 	if apiBase == "" {
 		// Default to OpenAI if not provided
 		apiBase = "https://api.openai.com/v1"
@@ -34,9 +30,16 @@ func NewOpenAILiveProvider(name, apiBase, apiKey string) (*OpenAILiveProvider, e
 	// Clean up trailing slashes
 	apiBase = strings.TrimSuffix(apiBase, "/")
 
+	// Self-hosted OpenAI-compatible realtime servers commonly run without auth;
+	// only the real OpenAI endpoint always needs a key.
+	if apiKey == "" && strings.Contains(apiBase, "api.openai.com") {
+		return nil, fmt.Errorf("%s live: api_key is required for %s", name, apiBase)
+	}
+
 	logger.InfoCF("live", "OpenAI-compatible Live provider initialized", map[string]interface{}{
 		"provider": name,
 		"api_base": apiBase,
+		"auth":     apiKey != "",
 	})
 
 	return &OpenAILiveProvider{
@@ -68,7 +71,9 @@ func (p *OpenAILiveProvider) BuildUpstreamURL(model string) string {
 // AuthHeaders returns the required OpenAI Realtime API headers
 func (p *OpenAILiveProvider) AuthHeaders() (http.Header, error) {
 	headers := http.Header{}
-	headers.Set("Authorization", "Bearer "+p.apiKey)
+	if p.apiKey != "" {
+		headers.Set("Authorization", "Bearer "+p.apiKey)
+	}
 	headers.Set("OpenAI-Beta", "realtime=v1")
 	return headers, nil
 }

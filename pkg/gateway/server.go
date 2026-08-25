@@ -60,10 +60,15 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 			}
 		}
 
-		// Register OpenAI Live provider if configured
-		if cfg.Providers.OpenAI.APIKey != "" {
+		// Register OpenAI Live provider if configured. A bare api_base is enough:
+		// self-hosted OpenAI-compatible realtime servers often need no api_key.
+		if cfg.Providers.OpenAI.APIKey != "" || cfg.Providers.OpenAI.APIBase != "" {
 			openaiLive, err := live.NewOpenAILiveProvider("openai", cfg.Providers.OpenAI.APIBase, cfg.Providers.OpenAI.APIKey)
-			if err == nil {
+			if err != nil {
+				logger.WarnCF("gateway", "Failed to init OpenAI Live provider", map[string]interface{}{
+					"error": err.Error(),
+				})
+			} else {
 				gs.liveServer.RegisterProvider("openai", openaiLive)
 			}
 		}
@@ -73,6 +78,19 @@ func NewGatewayServer(cfg *config.Config, agentManager *agent.AgentManager, msgB
 			maiaLive, err := live.NewOpenAILiveProvider("maiarouter", cfg.Providers.MAIARouter.APIBase, cfg.Providers.MAIARouter.APIKey)
 			if err == nil {
 				gs.liveServer.RegisterProvider("maiarouter", maiaLive)
+			}
+		}
+
+		// Register a custom OpenAI-Realtime-compatible Live endpoint. These speak the
+		// OpenAI Realtime event protocol on <api_base>/realtime and often need no key.
+		if cfg.Providers.Realtime.APIBase != "" {
+			realtimeLive, err := live.NewOpenAILiveProvider("realtime", cfg.Providers.Realtime.APIBase, cfg.Providers.Realtime.APIKey)
+			if err != nil {
+				logger.WarnCF("gateway", "Failed to init Realtime Live provider", map[string]interface{}{
+					"error": err.Error(),
+				})
+			} else {
+				gs.liveServer.RegisterProvider("realtime", realtimeLive)
 			}
 		}
 

@@ -5,7 +5,8 @@
   "description": "Node.js live client based on examples/live-api/index.html",
   "main": "client.js",
   "scripts": {
-    "start": "node client.js"
+    "start": "node client.js",
+    "paniki": "node paniki-client.js"
   },
   "dependencies": {
     "mic": "^2.1.2",

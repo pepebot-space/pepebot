@@ -40,6 +40,19 @@ type ToolExecutor interface {
 }
 
 // SystemPromptSource optionally supplies an agent's persona prompt for use as the
+// SkillsSource supplies the agent's skills block for a Live session. Separate from
+// SystemPromptSource so skills are included no matter which prompt source wins.
+type SkillsSource interface {
+	LiveSkillsPrompt(agentName string) string
+}
+
+// SessionRecorder persists live conversation turns into the agent's session history,
+// so a voice conversation and a text one share the same memory. A ToolExecutor may
+// implement it; when it does not, live sessions simply are not recorded.
+type SessionRecorder interface {
+	RecordLiveTurn(sessionKey, role, content string)
+}
+
 // Live systemInstruction. A ToolExecutor may implement it; resolution is opt-in
 // via live.use_agent_prompt and only used when no explicit prompt is set.
 type SystemPromptSource interface {
@@ -63,6 +76,10 @@ type SetupConfig struct {
 	EnableTools *bool `json:"enable_tools,omitempty"`
 	// SystemPrompt sets the session systemInstruction (highest precedence override).
 	SystemPrompt string `json:"system_prompt,omitempty"`
+	// Language is a BCP-47 code (e.g. "id-ID") the model should reply in. Overrides
+	// live.language for this session. Applied on the OpenAI Realtime protocol, where
+	// the only lever is the instructions text.
+	Language string `json:"language,omitempty"`
 }
 
 // LiveServer manages WebSocket live sessions
@@ -87,6 +104,32 @@ type LiveSession struct {
 	enableTools  bool
 	createdAt    time.Time
 	upstreamMu   sync.Mutex
+
+	// Everything a reconnect needs to rebuild the upstream leg identically.
+	liveProvider LiveProvider
+	setupFrames  [][]byte
+}
+
+// upstream returns the current upstream connection, which changes on a reconnect.
+func (s *LiveSession) upstream() *websocket.Conn {
+	s.upstreamMu.Lock()
+	defer s.upstreamMu.Unlock()
+	return s.upstreamConn
+}
+
+// writeUpstream serializes writes against tool results and reconnects.
+func (s *LiveSession) writeUpstream(msgType int, data []byte) error {
+	s.upstreamMu.Lock()
+	defer s.upstreamMu.Unlock()
+	return s.upstreamConn.WriteMessage(msgType, data)
+}
+
+func (s *LiveSession) replaceUpstream(conn *websocket.Conn) *websocket.Conn {
+	s.upstreamMu.Lock()
+	defer s.upstreamMu.Unlock()
+	old := s.upstreamConn
+	s.upstreamConn = conn
+	return old
 }
 
 func supportsLiveVideo(provider string) bool {
@@ -253,11 +296,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		"url": upstreamURL,
 	})
 
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 15 * time.Second,
-	}
-
-	upstreamConn, resp, err := dialer.Dial(upstreamURL, headers)
+	upstreamConn, resp, err := dialUpstream(upstreamURL, headers)
 	if err != nil {
 		errDetail := err.Error()
 		if resp != nil {
@@ -270,14 +309,14 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		ls.sendError(clientConn, "Upstream connection failed: "+errDetail)
 		return
 	}
-	defer upstreamConn.Close()
-
 	logger.InfoCF("live", "Upstream connected", map[string]interface{}{
 		"provider": providerName,
 		"model":    model,
 	})
 
-	// Step 5: Send provider-specific setup message to upstream (e.g. BidiGenerateContentSetup for Vertex)
+	// Step 5: Send provider-specific setup message to upstream (e.g. BidiGenerateContentSetup for Vertex).
+	// Whatever we send here is kept so a reconnect can replay it.
+	var setupFrames [][]byte
 	setupData := provider.SetupMessage(model)
 	if enableTools && ls.tools != nil && setupData != nil {
 		if toolDefs, err := ls.tools.GetToolDefinitions(agentName); err != nil {
@@ -315,7 +354,54 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		})
 	}
 
+	// Providers on the OpenAI Realtime protocol have no setup frame — model selection
+	// rides in the URL — so the persona and tools go up as a session.update instead.
+	// Without this, both are silently dropped for those providers.
+	if _, isOpenAI := provider.(*OpenAILiveProvider); isOpenAI {
+		var toolDefs []map[string]interface{}
+		if enableTools && ls.tools != nil {
+			defs, err := ls.tools.GetToolDefinitions(agentName)
+			if err != nil {
+				logger.WarnCF("live", "Failed to load tool definitions for live session", map[string]interface{}{
+					"agent": agentName,
+					"error": err.Error(),
+				})
+			} else {
+				toolDefs = defs
+			}
+		}
+		lang := strings.TrimSpace(setupMsg.Setup.Language)
+		if lang == "" {
+			lang = strings.TrimSpace(ls.config.Live.Language)
+		}
+		skillsPrompt := ""
+		if src, ok := ls.tools.(SkillsSource); ok {
+			skillsPrompt = src.LiveSkillsPrompt(agentName)
+		}
+		prompt := liveInstructions(sysPrompt, skillsPrompt, lang)
+		update := buildRealtimeSessionUpdate(prompt, toolDefs, ls.config.Live.RealtimeSession)
+		if update != nil {
+			setupFrames = append(setupFrames, update)
+			if err := upstreamConn.WriteMessage(websocket.TextMessage, update); err != nil {
+				logger.ErrorCF("live", "Failed to send upstream session.update", map[string]interface{}{
+					"error": err.Error(),
+				})
+				ls.sendError(clientConn, "Upstream setup failed: "+err.Error())
+				return
+			}
+			logger.InfoCF("live", "Sent upstream session.update", map[string]interface{}{
+				"provider":      providerName,
+				"tools":         len(toolDefs),
+				"prompt_chars":  len(prompt),
+				"prompt_source": promptSource,
+				"skills_chars":  len(skillsPrompt),
+				"language":      lang,
+			})
+		}
+	}
+
 	if setupData != nil {
+		setupFrames = append(setupFrames, setupData)
 		if err := upstreamConn.WriteMessage(websocket.TextMessage, setupData); err != nil {
 			logger.ErrorCF("live", "Failed to send upstream setup message", map[string]interface{}{
 				"error": err.Error(),
@@ -343,10 +429,18 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		sessionKey:   sessionKey,
 		enableTools:  enableTools,
 		createdAt:    time.Now(),
+		liveProvider: provider,
+		setupFrames:  setupFrames,
 	}
 
 	ls.addSession(session)
 	defer ls.removeSession(session)
+	// Close whichever upstream connection is current — a reconnect swaps it.
+	defer func() {
+		if conn := session.upstream(); conn != nil {
+			conn.Close()
+		}
+	}()
 
 	// Send confirmation to client
 	confirmMsg, _ := json.Marshal(map[string]interface{}{
@@ -389,6 +483,84 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 	})
 }
 
+func dialUpstream(url string, headers http.Header) (*websocket.Conn, *http.Response, error) {
+	dialer := websocket.Dialer{HandshakeTimeout: 15 * time.Second}
+	return dialer.Dial(url, headers)
+}
+
+// reconnectUpstream rebuilds the upstream leg after it drops, without disturbing the
+// client connection. The upstream conversation state is gone either way, so the setup
+// frames (persona, tools, session config) are replayed and the client is told to
+// treat the session as fresh.
+func (ls *LiveServer) reconnectUpstream(ctx context.Context, session *LiveSession) bool {
+	if session.liveProvider == nil {
+		return false
+	}
+
+	const attempts = 3
+	backoff := time.Second
+
+	for attempt := 1; attempt <= attempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+
+		headers, err := session.liveProvider.AuthHeaders()
+		if err != nil {
+			logger.WarnCF("live", "Reconnect auth failed", map[string]interface{}{"error": err.Error()})
+			continue
+		}
+
+		conn, _, err := dialUpstream(session.liveProvider.BuildUpstreamURL(session.model), headers)
+		if err != nil {
+			logger.WarnCF("live", "Upstream reconnect failed", map[string]interface{}{
+				"attempt": attempt,
+				"error":   err.Error(),
+			})
+			continue
+		}
+
+		failed := false
+		for _, frame := range session.setupFrames {
+			if err := conn.WriteMessage(websocket.TextMessage, frame); err != nil {
+				logger.WarnCF("live", "Reconnect setup replay failed", map[string]interface{}{"error": err.Error()})
+				conn.Close()
+				failed = true
+				break
+			}
+		}
+		if failed {
+			continue
+		}
+
+		if old := session.replaceUpstream(conn); old != nil {
+			old.Close()
+		}
+
+		logger.InfoCF("live", "Upstream reconnected", map[string]interface{}{
+			"provider": session.provider,
+			"model":    session.model,
+			"attempt":  attempt,
+			"frames":   len(session.setupFrames),
+		})
+
+		notice, _ := json.Marshal(map[string]interface{}{
+			"status":   "reconnected",
+			"provider": session.provider,
+			"model":    session.model,
+			"session":  session.sessionKey,
+			"note":     "upstream conversation state was reset",
+		})
+		session.clientConn.WriteMessage(websocket.TextMessage, notice)
+		return true
+	}
+
+	return false
+}
+
 // proxyMessages forwards messages from src to dst until context is cancelled or connection closes
 func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, src, dst *websocket.Conn, direction string) {
 	for {
@@ -398,9 +570,15 @@ func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, s
 		default:
 		}
 
+		if direction == "upstream→client" {
+			// A reconnect swaps the connection under us, so re-read it each pass.
+			src = session.upstream()
+		}
+
 		msgType, data, err := src.ReadMessage()
 		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+			normalClose := websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway)
+			if normalClose {
 				logger.DebugCF("live", "Connection closed normally", map[string]interface{}{
 					"direction": direction,
 				})
@@ -410,8 +588,18 @@ func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, s
 					"error":     err.Error(),
 				})
 			}
+
+			// An upstream that drops mid-session is worth recovering from; the client
+			// is still here. A client that hangs up ends the session, as before.
+			if direction == "upstream→client" && !normalClose && ctx.Err() == nil {
+				if ls.reconnectUpstream(ctx, session) {
+					continue
+				}
+			}
 			return
 		}
+
+		ls.recordTurn(session, direction, msgType, data)
 
 		if direction == "upstream→client" {
 			// Run tool calls off the proxy loop so a slow tool (up to 90s) never
@@ -422,9 +610,7 @@ func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, s
 
 		var writeErr error
 		if direction == "client→upstream" {
-			session.upstreamMu.Lock()
-			writeErr = dst.WriteMessage(msgType, data)
-			session.upstreamMu.Unlock()
+			writeErr = session.writeUpstream(msgType, data)
 		} else {
 			writeErr = dst.WriteMessage(msgType, data)
 		}
@@ -439,6 +625,82 @@ func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, s
 	}
 }
 
+// recordTurn writes finished conversation turns into the agent's session history.
+// Only the OpenAI Realtime protocol is covered: it transcribes both directions by
+// default, while Gemini live sessions do not request transcription at all, so there
+// is nothing there to record.
+func (ls *LiveServer) recordTurn(session *LiveSession, direction string, msgType int, data []byte) {
+	recorder, ok := ls.tools.(SessionRecorder)
+	if !ok || session.sessionKey == "" {
+		return
+	}
+	if msgType != websocket.TextMessage && msgType != websocket.BinaryMessage {
+		return
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+
+	role, text := "", ""
+	switch payload["type"] {
+	case "conversation.item.input_audio_transcription.completed":
+		// What the user said, as heard by the server.
+		role, text = "user", stringField(payload, "transcript")
+	case "response.audio_transcript.done":
+		// What the assistant said. Text-only replies also carry a transcript here.
+		role, text = "assistant", stringField(payload, "transcript")
+	case "conversation.item.create":
+		// A typed turn never passes through transcription, so catch it on the way out.
+		if direction != "client→upstream" {
+			return
+		}
+		item, _ := payload["item"].(map[string]interface{})
+		if item == nil || item["type"] == "function_call_output" {
+			return
+		}
+		role, text = "user", inputTextOf(item)
+	default:
+		return
+	}
+
+	if text = strings.TrimSpace(text); text == "" {
+		return
+	}
+
+	recorder.RecordLiveTurn(session.sessionKey, role, text)
+	logger.DebugCF("live", "Recorded live turn", map[string]interface{}{
+		"session": session.sessionKey,
+		"role":    role,
+		"chars":   len(text),
+	})
+}
+
+func stringField(payload map[string]interface{}, key string) string {
+	v, _ := payload[key].(string)
+	return v
+}
+
+// inputTextOf pulls the text out of a conversation item's content blocks.
+func inputTextOf(item map[string]interface{}) string {
+	blocks, _ := item["content"].([]interface{})
+	var parts []string
+	for _, raw := range blocks {
+		block, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if t := block["type"]; t != "input_text" && t != "text" {
+			continue
+		}
+		if text, _ := block["text"].(string); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
 func (ls *LiveServer) handleUpstreamToolCalls(ctx context.Context, session *LiveSession, msgType int, data []byte) {
 	if !session.enableTools || ls.tools == nil {
 		return
@@ -449,6 +711,13 @@ func (ls *LiveServer) handleUpstreamToolCalls(ctx context.Context, session *Live
 
 	var payload map[string]interface{}
 	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+
+	// OpenAI Realtime reports a call as one response.output_item.done carrying the
+	// name, call_id and complete arguments; Gemini uses a toolCall envelope.
+	if payload["type"] == "response.output_item.done" {
+		ls.handleRealtimeToolCall(ctx, session, payload)
 		return
 	}
 
@@ -532,6 +801,188 @@ func (ls *LiveServer) handleUpstreamToolCalls(ctx context.Context, session *Live
 			"error": err.Error(),
 		})
 	}
+}
+
+// handleRealtimeToolCall executes one OpenAI Realtime function call and feeds the
+// result back as a function_call_output item, then asks for the follow-up response.
+func (ls *LiveServer) handleRealtimeToolCall(ctx context.Context, session *LiveSession, payload map[string]interface{}) {
+	item, ok := payload["item"].(map[string]interface{})
+	if !ok || item["type"] != "function_call" {
+		return
+	}
+
+	name, _ := item["name"].(string)
+	callID, _ := item["call_id"].(string)
+	if name == "" || callID == "" {
+		return
+	}
+
+	// arguments arrive as a JSON string, and an argument-less call may send "" or {}.
+	args := map[string]interface{}{}
+	if raw, _ := item["arguments"].(string); strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), &args); err != nil {
+			logger.WarnCF("live", "Bad tool call arguments", map[string]interface{}{
+				"tool":  name,
+				"error": err.Error(),
+			})
+			args = map[string]interface{}{}
+		}
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	toolCtx = tools.WithSessionKey(toolCtx, session.sessionKey)
+	result, err := ls.tools.ExecuteTool(toolCtx, session.agent, name, args)
+	cancel()
+
+	output := result
+	if err != nil {
+		output = "Error: " + err.Error()
+	}
+
+	logger.InfoCF("live", "Executed live tool call", map[string]interface{}{
+		"agent":   session.agent,
+		"tool":    name,
+		"call_id": callID,
+		"failed":  err != nil,
+		"chars":   len(output),
+	})
+
+	frames := make([][]byte, 0, 2)
+	resultFrame, marshalErr := json.Marshal(map[string]interface{}{
+		"type": "conversation.item.create",
+		"item": map[string]interface{}{
+			"type":    "function_call_output",
+			"call_id": callID,
+			"output":  output,
+		},
+	})
+	if marshalErr != nil {
+		return
+	}
+	frames = append(frames, resultFrame, []byte(`{"type":"response.create"}`))
+
+	session.upstreamMu.Lock()
+	defer session.upstreamMu.Unlock()
+	for _, frame := range frames {
+		if err := session.upstreamConn.WriteMessage(websocket.TextMessage, frame); err != nil {
+			logger.WarnCF("live", "Failed to write tool result upstream", map[string]interface{}{
+				"agent": session.agent,
+				"tool":  name,
+				"error": err.Error(),
+			})
+			return
+		}
+	}
+}
+
+// speechDirective keeps replies speakable. Realtime servers usually carry guidance
+// like this in their own default instructions — and Pepebot's session.update replaces
+// those wholesale, so without re-stating it the model happily emits markdown tables
+// and emoji that a TTS voice then reads out character by character.
+const speechDirective = "Your reply will be converted to speech and read aloud, never displayed. " +
+	"Write it as plain spoken sentences: no markdown, no headings, no bullet or numbered lists, " +
+	"no tables, no code blocks, no emoji, no asterisks or underscores for emphasis. " +
+	"Say symbols and abbreviations as words. When you list several things, say them in one sentence " +
+	"separated by commas. Keep it to a sentence or two unless more detail is asked for."
+
+// liveInstructions assembles the session instructions: the agent persona, its skills,
+// the rules that make the output speakable, then the requested reply language.
+func liveInstructions(prompt, skills, languageCode string) string {
+	parts := make([]string, 0, 4)
+	if p := strings.TrimSpace(prompt); p != "" {
+		parts = append(parts, p)
+	}
+	if s := strings.TrimSpace(skills); s != "" {
+		parts = append(parts, s)
+	}
+	parts = append(parts, speechDirective)
+	if directive := replyLanguageDirective(languageCode); directive != "" {
+		parts = append(parts, directive)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// replyLanguages maps the BCP-47 codes worth naming explicitly to a language name a
+// model reliably understands. Anything else falls through as the code itself.
+var replyLanguages = map[string]string{
+	"id": "Indonesian", "en": "English", "jv": "Javanese", "su": "Sundanese",
+	"ms": "Malay", "ja": "Japanese", "ko": "Korean", "zh": "Chinese",
+	"ar": "Arabic", "es": "Spanish", "fr": "French", "de": "German",
+}
+
+// replyLanguageDirective renders the reply-language rule. The Realtime protocol has no
+// language field — transcription and output language are whatever the server was built
+// with — so instructions are the only lever.
+func replyLanguageDirective(code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return ""
+	}
+
+	name, ok := replyLanguages[strings.ToLower(strings.SplitN(code, "-", 2)[0])]
+	if !ok {
+		name = code
+	}
+	return fmt.Sprintf("Always reply in %s.", name)
+}
+
+// buildRealtimeSessionUpdate renders the persona, tool definitions and any
+// live.realtime_session passthrough as an OpenAI Realtime session.update. Tool schemas are converted from the chat-completions
+// shape Pepebot uses internally ({type, function:{...}}) to the flat Realtime shape.
+// Returns nil when there is nothing to send.
+func buildRealtimeSessionUpdate(systemPrompt string, toolDefs []map[string]interface{}, extra map[string]interface{}) []byte {
+	session := map[string]interface{}{}
+
+	// Config passthrough first, so agent-owned instructions and tools below win on
+	// a key collision.
+	for k, v := range extra {
+		session[k] = v
+	}
+
+	if prompt := strings.TrimSpace(systemPrompt); prompt != "" {
+		session["instructions"] = prompt
+	}
+
+	realtimeTools := make([]map[string]interface{}, 0, len(toolDefs))
+	for _, def := range toolDefs {
+		fn, ok := def["function"].(map[string]interface{})
+		if !ok {
+			// Already flat (name at the top level) — pass it through.
+			if _, hasName := def["name"]; hasName {
+				realtimeTools = append(realtimeTools, def)
+			}
+			continue
+		}
+		name, _ := fn["name"].(string)
+		if name == "" {
+			continue
+		}
+		tool := map[string]interface{}{"type": "function", "name": name}
+		if desc, ok := fn["description"].(string); ok && desc != "" {
+			tool["description"] = desc
+		}
+		if params, ok := fn["parameters"]; ok && params != nil {
+			tool["parameters"] = params
+		}
+		realtimeTools = append(realtimeTools, tool)
+	}
+	if len(realtimeTools) > 0 {
+		session["tools"] = realtimeTools
+		session["tool_choice"] = "auto"
+	}
+
+	if len(session) == 0 {
+		return nil
+	}
+
+	update, err := json.Marshal(map[string]interface{}{
+		"type":    "session.update",
+		"session": session,
+	})
+	if err != nil {
+		return nil
+	}
+	return update
 }
 
 func injectGeminiToolsIntoSetup(setupData []byte, toolDefs []map[string]interface{}) []byte {

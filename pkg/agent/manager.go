@@ -266,6 +266,48 @@ func (am *AgentManager) LiveSystemPrompt(agentName string) string {
 	return strings.TrimSpace(b.String())
 }
 
+// LiveSkillsPrompt returns the agent's skills block for a Live session. Kept separate
+// from the persona so skills survive whichever prompt source wins — a live.system_prompt
+// or a per-session override would otherwise silently drop them.
+func (am *AgentManager) LiveSkillsPrompt(agentName string) string {
+	if agentName == "" {
+		agentName = am.defaultAgent
+	}
+
+	agentLoop, err := am.GetOrCreateAgent(agentName)
+	if err != nil {
+		logger.WarnCF("agent", "Could not load skills for live prompt", map[string]interface{}{
+			"agent": agentName,
+			"error": err.Error(),
+		})
+		return ""
+	}
+	return strings.TrimSpace(agentLoop.SkillsPrompt())
+}
+
+// RecordLiveTurn appends a live conversation turn to the agent's session history, so
+// a voice session and a text session on the same session key share one memory.
+func (am *AgentManager) RecordLiveTurn(sessionKey, role, content string) {
+	if sessionKey == "" || strings.TrimSpace(content) == "" {
+		return
+	}
+
+	sessions := am.GetSessions()
+	if sessions == nil {
+		return
+	}
+
+	sessions.AddMessage(sessionKey, role, content)
+	if sess := sessions.GetSession(sessionKey); sess != nil {
+		if err := sessions.Save(sess); err != nil {
+			logger.WarnCF("agent", "Failed to persist live turn", map[string]interface{}{
+				"session": sessionKey,
+				"error":   err.Error(),
+			})
+		}
+	}
+}
+
 // ExecuteTool executes a tool using the selected agent's tool registry.
 func (am *AgentManager) ExecuteTool(ctx context.Context, agentName, toolName string, args map[string]interface{}) (string, error) {
 	if agentName == "" {

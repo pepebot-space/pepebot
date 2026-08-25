@@ -86,6 +86,14 @@ type ProvidersConfig struct {
 	Gemini     GeminiConfig     `json:"gemini"`
 	Vertex     VertexConfig     `json:"vertex"`
 	OpenCodeGo OpenCodeGoConfig `json:"opencodego"`
+	Realtime   RealtimeConfig   `json:"realtime"`
+}
+
+// RealtimeConfig points at a custom OpenAI-Realtime-compatible live endpoint.
+// Only the Live API uses it; api_key may be empty for servers without auth.
+type RealtimeConfig struct {
+	APIKey  string `json:"api_key" env:"PEPEBOT_PROVIDERS_REALTIME_API_KEY"`
+	APIBase string `json:"api_base" env:"PEPEBOT_PROVIDERS_REALTIME_API_BASE"`
 }
 
 type MAIARouterConfig struct {
@@ -160,6 +168,11 @@ type LiveConfig struct {
 	UseAgentPrompt      bool                   `json:"use_agent_prompt,omitempty" env:"PEPEBOT_LIVE_USE_AGENT_PROMPT"`
 	GenerationConfig    map[string]interface{} `json:"generation_config,omitempty"`
 	RealtimeInputConfig map[string]interface{} `json:"realtime_input_config,omitempty"`
+	// RealtimeSession is merged into the session.update sent to OpenAI-Realtime
+	// providers, for whatever fields that server lets a client set (voice,
+	// temperature, max_response_output_tokens, turn_detection, ...). Pepebot's own
+	// instructions and tools take precedence over the same keys here.
+	RealtimeSession map[string]interface{} `json:"realtime_session,omitempty"`
 }
 
 type WebSearchConfig struct {
@@ -394,6 +407,13 @@ func overlayNativeEnvVars(cfg *Config) {
 	}
 
 	// OpenCode Go
+	if val := os.Getenv("REALTIME_API_KEY"); val != "" {
+		cfg.Providers.Realtime.APIKey = val
+	}
+	if val := os.Getenv("REALTIME_API_BASE"); val != "" {
+		cfg.Providers.Realtime.APIBase = val
+	}
+
 	if val := os.Getenv("OPENCODEGO_API_KEY"); val != "" {
 		cfg.Providers.OpenCodeGo.APIKey = val
 	}

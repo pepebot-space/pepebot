@@ -553,6 +553,29 @@ For voice sessions, `realtime_input_config.automaticActivityDetection` helps red
 Pepebot includes a WebSocket proxy for real-time multimodal streaming (audio, video, text) using the Gemini Live API or OpenAI Realtime API. 
 The WebSocket endpoint is available at `ws://localhost:18790/v1/live`.
 
+**Self-hosted OpenAI Realtime servers**: any server that speaks the OpenAI Realtime event protocol on `<api_base>/realtime` works as the `realtime` live provider. This is a Live-API-only provider — it never affects chat completions. Point `providers.realtime.api_base` at it — `api_key` may be left empty, and no `Authorization` header is sent when it is:
+
+```json
+{
+  "providers": {
+    "realtime": { "api_base": "http://127.0.0.1:8000/v1", "api_key": "" }
+  },
+  "live": { "enabled": true, "provider": "realtime", "model": "google/gemma-4-31B-it" }
+}
+```
+
+An `http://` base becomes `ws://` and `https://` becomes `wss://` automatically. Clients can also select it per session with `{"setup": {"provider": "realtime"}}` without changing `live.provider`.
+
+Agent tools and the agent persona work on this provider too: Pepebot sends its tool definitions and the resolved system prompt as a `session.update`, executes any `function_call` the model makes, and returns a `function_call_output`. Whatever else the upstream server lets a client set goes in `live.realtime_session`, merged into that same frame:
+
+```json
+"live": {
+  "realtime_session": { "voice": "JV-00027", "temperature": 0.2, "max_response_output_tokens": 200 }
+}
+```
+
+Pepebot's own `instructions` and `tools` win over the same keys there.
+
 For Vertex/Gemini Live sessions, Pepebot can now expose and execute local agent tools automatically (same tool registry used by normal agent mode). You can select the target agent directly in the setup message:
 
 ```json
