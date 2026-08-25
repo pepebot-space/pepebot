@@ -90,6 +90,25 @@ Ask for a voice the server does not have and it says so:
 `unknown_voice — No voice 'echo'. Available: JV-00027, JV-00264, JV-00658, ...`.
 Pepebot's own `instructions` and `tools` take precedence over the same keys.
 
+## Clients
+
+| | |
+|---|---|
+| `paniki.html` | Browser: mic, barge-in, tool-call trace, model/voice pickers. Serve it and open it. |
+| `paniki_client.py` | Terminal, full duplex microphone. Needs `websockets`, `sounddevice`, `numpy`. |
+| `paniki-client.js` | Terminal, type a message and get `reply-N.wav` back. Only needs `ws`. |
+
+```bash
+python3 paniki_client.py                       # talk to it
+LANG_CODE=en-US VOICE=nenden python3 paniki_client.py
+
+npm install ws && node paniki-client.js        # type at it
+```
+
+All three connect to Pepebot's `/v1/live`, not to the Realtime server directly, so the
+agent's persona, skills and tools are in play. Each reads `/v1/models` and `/v1/voices`
+from the server at startup, so nothing goes stale on a redeploy.
+
 ## What the session carries
 
 Every Realtime session's `instructions` are assembled by Pepebot in this order:

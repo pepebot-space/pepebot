@@ -87,23 +87,11 @@
         </div>
         <div>
           <label for="voice">Voice <span class="t-dim">(blank = whatever live.realtime_session sets)</span></label>
-          <select id="voice">
-            <option value="">(server default)</option>
-            <option value="JV-00264">JV-00264</option>
-            <option value="JV-00027">JV-00027</option>
-            <option value="JV-00658">JV-00658</option>
-            <option value="JV-01392">JV-01392</option>
-            <option value="JV-01519">JV-01519</option>
-            <option value="JV-01932">JV-01932</option>
-            <option value="JV-02059">JV-02059</option>
-            <option value="JV-02326">JV-02326</option>
-          </select>
+          <select id="voice"><option value="">(server default)</option></select>
         </div>
-      </div>
-
       <div class="grid">
-        <button id="refresh">Reload models</button>
-        <button id="voices">Discover voices</button>
+        <button id="refresh">Reload models & voices</button>
+        <button id="voices">Reload voices</button>
       </div>
 
       <div class="grid">
@@ -126,11 +114,11 @@
       <div id="log"></div>
 
       <p class="note">
-        Paniki fixes <code>modalities</code>, <code>input_audio_format</code>,
-        <code>output_audio_format</code> and <code>input_audio_transcription</code>
-        server-side, so this page never sends them. It also leaves
-        <code>instructions</code> alone — Pepebot already injected the agent persona and
-        its tools, and a client <code>session.update</code> would overwrite them.
+        Models and voices come from Paniki's <code>/v1/models</code> and
+        <code>/v1/voices</code>, so nothing here goes stale on a redeploy. Paniki fixes
+        <code>modalities</code> and the audio formats server-side, so this page never
+        sends them — and it leaves <code>instructions</code> alone, because Pepebot has
+        already put the agent persona, its skills and its tools there.
       </p>
     </div>
   </div>
@@ -198,29 +186,35 @@
     }
   }
 
-  // Paniki has no voices endpoint, but it names every available voice in the
-  // unknown_voice error — so ask for one that cannot exist and read the answer.
-  function discoverVoices() {
-    if (!ready) { log('Connect first', 'err'); return; }
-    log('Asking the server which voices it has…', 'dim');
-    send({ type: 'session.update', session: { voice: '__list_voices__' } });
-  }
+  async function loadVoices() {
+    const base = panikiEl.value.trim().replace(/\/+$/, '');
+    try {
+      const res = await fetch(`${base}/v1/voices`);
+      const body = await res.json();
+      const voices = body.data || [];
+      if (!voices.length) throw new Error('no voices listed');
 
-  function fillVoices(message) {
-    const listed = message.split('Available:')[1];
-    if (!listed) return;
-    const names = listed.replace(/\.\.\.\s*$/, '').split(',')
-      .map((v) => v.trim()).filter(Boolean);
-    if (!names.length) return;
-    const current = voiceEl.value;
-    voiceEl.innerHTML = '<option value="">(server default)</option>';
-    for (const name of names) {
-      const opt = document.createElement('option');
-      opt.value = opt.textContent = name;
-      voiceEl.appendChild(opt);
+      const current = voiceEl.value;
+      voiceEl.innerHTML = '';
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = body.default ? `(server default: ${body.default})` : '(server default)';
+      voiceEl.appendChild(blank);
+
+      // Named aliases first — they are the ones a human can actually remember.
+      const named = voices.filter((v) => v.alias_for);
+      const raw = voices.filter((v) => !v.alias_for);
+      for (const v of [...named, ...raw]) {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = v.alias_for ? `${v.id} → ${v.alias_for}` : v.id;
+        voiceEl.appendChild(opt);
+      }
+      voiceEl.value = current;
+      log(`Voices: ${voices.length} available, default ${body.default || '?'}`, 'ok');
+    } catch (err) {
+      log(`Could not read ${base}/v1/voices (${err.message})`, 'err');
     }
-    voiceEl.value = current;
-    log(`Voices: ${names.join(', ')}`, 'ok');
   }
 
   // ---------- audio ----------
@@ -385,7 +379,6 @@
       case 'error': {
         const err = evt.error || {};
         log(`Server error [${err.code || '?'}]: ${err.message || ''}`, 'err');
-        if (err.code === 'unknown_voice') fillVoices(err.message || '');
         return;
       }
     }
@@ -472,12 +465,13 @@
   testBtn.addEventListener('click', sendTestAudio);
   $('send').addEventListener('click', sendText);
   $('text').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText(); });
-  $('refresh').addEventListener('click', loadModels);
-  $('voices').addEventListener('click', discoverVoices);
-  panikiEl.addEventListener('change', loadModels);
+  $('refresh').addEventListener('click', () => { loadModels(); loadVoices(); });
+  $('voices').addEventListener('click', loadVoices);
+  panikiEl.addEventListener('change', () => { loadModels(); loadVoices(); });
 
-  log('Ready. Reading the model list from Paniki…', 'dim');
+  log('Ready. Reading models and voices from Paniki…', 'dim');
   loadModels();
+  loadVoices();
 </script>
 </body>
 </html>
