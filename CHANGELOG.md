@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Client-declared tools in Live sessions**: an app connecting to `/v1/live` can register tools of its own and execute them on its own device — camera, GPS, screen, sensors, anything the gateway host does not have. Declared in the setup message as `app` plus `tools` (the flat Realtime shape), merged into the session alongside the agent's own tools.
+  - **Namespaced by app**: a tool declared as `take_photo` under `app: "rover"` reaches the model as `rover-take_photo`, and the client is asked for it by the bare name it declared. Gateway tools are all `snake_case`, so the hyphen makes client tools structurally distinct; the joined name is still checked against the gateway's names in case a gateway tool ever contains one.
+  - **Two new frames**: Pepebot sends `{"type":"tool_call","call_id","name","arguments"}` to the client, and the client answers `{"type":"tool_result","call_id","output"}` or `{"type":"tool_result","call_id","error"}`. An error reaches the model as `Error: <message>`, the same shape a failed gateway tool produces. `tool_result` is consumed by the proxy and never forwarded — upstream only sees the `function_call_output` built from it.
+  - **Bounded wait**: a device can be slow, backgrounded or gone, so each call has a deadline (`setup.client_tool_timeout_ms`, default 30s, capped at 90s). On expiry the model is told the tool timed out and the turn completes instead of hanging.
+  - **Declarations are validated at setup**: `app` and tool names must match `^[A-Za-z0-9_]{1,48}$`, duplicates and gateway collisions are refused, and the error names what to fix rather than leaving the model calling a tool that never answers.
+  - `examples/live-api/paniki.html` declares `device_info` and `geolocate` as a worked example. Verified against a live model: it called `web-device_info`, the browser answered `Asia/Jakarta`, and the reply came back in Indonesian.
+  - Tests: `TestNamespaceClientTools`, `TestNamespaceClientTools_Rejects`, `TestNamespaceClientTools_Empty`, `TestSessionClientToolLookup`.
+
 ## [0.5.18] - 2026-08-25
 
 ### Added

@@ -66,11 +66,12 @@ Touches `SetupConfig` in `pkg/live/live.go`.
 `buildRealtimeSessionUpdate` already flattens the agent's tools; client tools are
 appended to that list.
 
-**Name collisions are the one real hazard.** A client that declares `exec` would
-otherwise shadow — or be shadowed by — the gateway's `exec`, and which one runs would
-depend on map ordering. Rule: **gateway tools win, and a colliding client tool is
-rejected at setup** with an error frame naming the clash. Silently dropping it would
-leave the model calling a tool that never answers.
+**Names are namespaced by app.** A client declares `take_photo` and sets
+`setup.app: "rover"`; the model sees `rover-take_photo`, and the client is asked for it
+by the bare name it declared. Gateway tools are all `snake_case`, so joining with a
+hyphen makes client tools structurally distinct and impossible to confuse — and the
+join is still checked against the gateway's names, because nothing stops a future
+gateway tool from containing a hyphen.
 
 Client tool names are also validated (`^[a-zA-Z0-9_-]{1,64}$`) before they reach the
 upstream session, so a malformed definition fails fast at setup rather than corrupting

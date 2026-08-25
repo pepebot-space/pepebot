@@ -86,6 +86,62 @@ Fitur unggulan di Live API adalah **Integrasi Agent**, di mana alur *real-time v
 
 > Tools bekerja untuk provider Vertex/Gemini maupun provider dengan protokol OpenAI Realtime (`openai`, `maiarouter`, `realtime`). Untuk protokol Realtime, definisi tool dikirim lewat `session.update`, dan panggilan tool dibaca dari `response.output_item.done` (`item.type == "function_call"`) lalu hasilnya dibalas sebagai item `function_call_output` diikuti `response.create`.
 
+### Tools milik aplikasi klien
+
+Aplikasi yang terhubung bisa mendaftarkan tool-nya sendiri dan mengeksekusinya di
+device-nya sendiri — kamera, GPS, layar, sensor, apa pun yang gateway tidak punya.
+Deklarasikan di setup, dengan `app` sebagai namespace-nya:
+
+```json
+{
+  "setup": {
+    "provider": "realtime",
+    "app": "rover",
+    "client_tool_timeout_ms": 30000,
+    "tools": [
+      {
+        "name": "take_photo",
+        "description": "Take a photo with the device camera.",
+        "parameters": {"type": "object", "properties": {
+          "camera": {"type": "string", "enum": ["front", "back"]}}}
+      }
+    ]
+  }
+}
+```
+
+Model melihatnya sebagai `rover-take_photo`; klien ditanya dengan nama aslinya
+(`take_photo`). Tool gateway semuanya `snake_case`, jadi tanda hubung membuat tool
+klien tidak mungkin menabrak tool gateway. Nama `app` dan nama tool harus cocok
+`^[A-Za-z0-9_]{1,48}$` — deklarasi yang salah ditolak saat setup dengan pesan yang
+menyebut masalahnya, bukan didiamkan.
+
+Saat model memanggilnya, Pepebot mengirim ke klien:
+
+```json
+{"type": "tool_call", "call_id": "call_abc", "name": "take_photo",
+ "arguments": {"camera": "back"}}
+```
+
+Klien menjawab dengan salah satu dari:
+
+```json
+{"type": "tool_result", "call_id": "call_abc", "output": "seekor kucing di keyboard"}
+{"type": "tool_result", "call_id": "call_abc", "error": "izin kamera ditolak"}
+```
+
+`error` sampai ke model sebagai `Error: <pesan>` — bentuk yang sama dengan tool gateway
+yang gagal, jadi model bisa menyebutkannya alih-alih menggantung. Frame `tool_result`
+tidak diteruskan ke upstream; upstream hanya melihat `function_call_output` yang
+dibentuk Pepebot darinya.
+
+Klien yang lambat, ter-background, atau hilang dibatasi
+`client_tool_timeout_ms` (default 30 detik, maksimum 90 detik). Lewat batas itu model
+diberi tahu `Error: client tool timed out` dan turn tetap selesai.
+
+Contoh lengkap ada di `examples/live-api/paniki.html`, yang mendaftarkan
+`device_info` dan `geolocate`.
+
 ### Konfigurasi `live.realtime_session`
 
 Field apa pun yang diizinkan server Realtime upstream (misalnya `voice`, `temperature`, `max_response_output_tokens`, `turn_detection`) bisa diisi di sini dan akan digabungkan ke `session.update`. `instructions` dan `tools` milik Pepebot selalu menang jika ada key yang sama.

@@ -114,6 +114,10 @@
       <div id="log"></div>
 
       <p class="note">
+        This page declares tools of its own — <code>device_info</code> and
+        <code>geolocate</code> — which Pepebot registers as <code>web-*</code> and
+        routes back here to run in the browser. Ask "what timezone am I in?" and the
+        browser answers, not the gateway.
         Models and voices come from Paniki's <code>/v1/models</code> and
         <code>/v1/voices</code>, so nothing here goes stale on a redeploy. Paniki fixes
         <code>modalities</code> and the audio formats server-side, so this page never
@@ -311,6 +315,22 @@
         session_key: sessionKey(),
         enable_tools: true,
         language: $('lang').value,
+        // Tools this page owns and runs itself. Pepebot namespaces them as
+        // "web-<name>" so they cannot collide with the agent's own tools, and asks
+        // us for them by the bare name below.
+        app: APP,
+        tools: [
+          {
+            name: 'device_info',
+            description: "Get details about the user's device: browser timezone, local time, language and screen size.",
+            parameters: { type: 'object', properties: {} },
+          },
+          {
+            name: 'geolocate',
+            description: 'Get the current geographic location of the user\'s device, as latitude and longitude.',
+            parameters: { type: 'object', properties: {} },
+          },
+        ],
       }});
     };
 
@@ -328,6 +348,14 @@
   function handle(evt) {
     if (evt.status === 'connected') {
       log(`Proxy: ${evt.provider} -> ${evt.model}`, 'ok');
+      return;
+    }
+
+    // Pepebot routes a call to one of our declared tools here. Whatever we answer
+    // becomes the tool result the model sees, so failures are reported, not swallowed.
+    if (evt.type === 'tool_call') {
+      log(`Tool call for us: ${evt.name}(${JSON.stringify(evt.arguments || {})})`, 'tool');
+      runClientTool(evt);
       return;
     }
 
@@ -361,16 +389,14 @@
         log(`Bot: ${(evt.transcript || '').trim()}`, 'ok');
         return;
 
-      case 'response.output_item.added':
-        if (evt.item && evt.item.type === 'function_call') log(`Tool call: ${evt.item.name}`, 'tool');
+      case 'response.output_item.done': {
+        // Trace only; the call itself arrives as a tool_call frame when it is ours.
+        if (!evt.item || evt.item.type !== 'function_call') return;
+        const ours = evt.item.name.startsWith(APP + '-');
+        const who = ours ? 'routed to this page' : 'running on the gateway';
+        log(`Tool call: ${evt.item.name}(${evt.item.arguments || ''}) — ${who}`, 'tool');
         return;
-
-      case 'response.output_item.done':
-        // Pepebot runs the tool and returns the result; this is just the trace.
-        if (evt.item && evt.item.type === 'function_call') {
-          log(`Tool call: ${evt.item.name}(${evt.item.arguments || ''}) — Pepebot is executing it`, 'tool');
-        }
-        return;
+      }
 
       case 'response.done':
         log('Turn complete', 'dim');
@@ -381,6 +407,45 @@
         log(`Server error [${err.code || '?'}]: ${err.message || ''}`, 'err');
         return;
       }
+    }
+  }
+
+  const APP = 'web';
+
+  const clientTools = {
+    // Needs no permission, so it demonstrates the round trip anywhere.
+    device_info: () => {
+      const d = new Date();
+      return [
+        `browser timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+        `local time ${d.toLocaleTimeString([], { hour12: false })}`,
+        `language ${navigator.language}`,
+        `screen ${screen.width} by ${screen.height}`,
+      ].join(', ');
+    },
+    geolocate: () => new Promise((resolve, reject) => {
+      if (!navigator.geolocation) return reject(new Error('this browser has no geolocation'));
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve(`latitude ${pos.coords.latitude.toFixed(5)}, longitude ${pos.coords.longitude.toFixed(5)}`),
+        (err) => reject(new Error(err.message)),
+        { timeout: 10000 },
+      );
+    }),
+  };
+
+  async function runClientTool(evt) {
+    const tool = clientTools[evt.name];
+    if (!tool) {
+      send({ type: 'tool_result', call_id: evt.call_id, error: `this client has no tool named ${evt.name}` });
+      return;
+    }
+    try {
+      const output = await tool(evt.arguments || {});
+      log(`Tool result: ${output}`, 'tool');
+      send({ type: 'tool_result', call_id: evt.call_id, output: String(output) });
+    } catch (err) {
+      log(`Tool failed: ${err.message}`, 'err');
+      send({ type: 'tool_result', call_id: evt.call_id, error: err.message });
     }
   }
 

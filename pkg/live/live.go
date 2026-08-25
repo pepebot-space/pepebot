@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -80,6 +81,16 @@ type SetupConfig struct {
 	// live.language for this session. Applied on the OpenAI Realtime protocol, where
 	// the only lever is the instructions text.
 	Language string `json:"language,omitempty"`
+	// App namespaces the tools this client declares. Required when Tools is set, so a
+	// client can never shadow one of the gateway's own tools.
+	App string `json:"app,omitempty"`
+	// Tools are declared by the client and executed on the client. Same flat shape the
+	// Realtime API uses: {name, description, parameters}. The model sees them as
+	// "<app>-<name>"; the client is asked for them by the bare name it declared.
+	Tools []map[string]interface{} `json:"tools,omitempty"`
+	// ClientToolTimeoutMs bounds the wait for a client tool result (default 30s,
+	// capped at 90s to match gateway tool execution).
+	ClientToolTimeoutMs int `json:"client_tool_timeout_ms,omitempty"`
 }
 
 // LiveServer manages WebSocket live sessions
@@ -108,6 +119,22 @@ type LiveSession struct {
 	// Everything a reconnect needs to rebuild the upstream leg identically.
 	liveProvider LiveProvider
 	setupFrames  [][]byte
+
+	// Tools the client declared and executes itself: upstream name -> the bare name
+	// the client knows it by. Read-only after setup.
+	clientTools       map[string]string
+	clientToolTimeout time.Duration
+
+	// Calls waiting on a client result, keyed by the upstream call id.
+	pendingMu sync.Mutex
+	pending   map[string]chan string
+}
+
+// clientTool reports whether a tool call belongs to the client, and under which name
+// the client declared it.
+func (s *LiveSession) clientTool(name string) (string, bool) {
+	bare, ok := s.clientTools[name]
+	return bare, ok
 }
 
 // upstream returns the current upstream connection, which changes on a reconnect.
@@ -354,6 +381,17 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		})
 	}
 
+	// Client tool registration happens inside the Realtime branch below; the session
+	// needs it afterwards.
+	var clientToolNames map[string]string
+	clientToolTimeout := 30 * time.Second
+	if ms := setupMsg.Setup.ClientToolTimeoutMs; ms > 0 {
+		clientToolTimeout = time.Duration(ms) * time.Millisecond
+		if clientToolTimeout > 90*time.Second {
+			clientToolTimeout = 90 * time.Second
+		}
+	}
+
 	// Providers on the OpenAI Realtime protocol have no setup frame — model selection
 	// rides in the URL — so the persona and tools go up as a session.update instead.
 	// Without this, both are silently dropped for those providers.
@@ -374,6 +412,37 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		if lang == "" {
 			lang = strings.TrimSpace(ls.config.Live.Language)
 		}
+		// Client-declared tools ride alongside the gateway's, namespaced so they can
+		// never shadow one. A bad declaration fails the session now rather than
+		// leaving the model calling something that never answers.
+		gatewayNames := make(map[string]bool, len(toolDefs))
+		for _, def := range toolDefs {
+			if fn, ok := def["function"].(map[string]interface{}); ok {
+				if name, _ := fn["name"].(string); name != "" {
+					gatewayNames[name] = true
+				}
+			} else if name, _ := def["name"].(string); name != "" {
+				gatewayNames[name] = true
+			}
+		}
+
+		clientDefs, names, err := namespaceClientTools(setupMsg.Setup.App, setupMsg.Setup.Tools, gatewayNames)
+		if err != nil {
+			logger.WarnCF("live", "Rejected client tool declaration", map[string]interface{}{
+				"error": err.Error(),
+			})
+			ls.sendError(clientConn, err.Error())
+			return
+		}
+		clientToolNames = names
+		if len(clientDefs) > 0 {
+			toolDefs = append(toolDefs, clientDefs...)
+			logger.InfoCF("live", "Registered client tools", map[string]interface{}{
+				"app":   setupMsg.Setup.App,
+				"tools": len(clientDefs),
+			})
+		}
+
 		skillsPrompt := ""
 		if src, ok := ls.tools.(SkillsSource); ok {
 			skillsPrompt = src.LiveSkillsPrompt(agentName)
@@ -431,6 +500,10 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 		createdAt:    time.Now(),
 		liveProvider: provider,
 		setupFrames:  setupFrames,
+
+		clientTools:       clientToolNames,
+		clientToolTimeout: clientToolTimeout,
+		pending:           map[string]chan string{},
 	}
 
 	ls.addSession(session)
@@ -597,6 +670,12 @@ func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, s
 				}
 			}
 			return
+		}
+
+		// A tool_result answers a client tool; it is consumed here and never forwarded,
+		// because upstream only ever sees the function_call_output built from it.
+		if direction == "client→upstream" && ls.handleClientToolResult(session, msgType, data) {
+			continue
 		}
 
 		ls.recordTurn(session, direction, msgType, data)
@@ -829,14 +908,23 @@ func (ls *LiveServer) handleRealtimeToolCall(ctx context.Context, session *LiveS
 		}
 	}
 
-	toolCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	toolCtx = tools.WithSessionKey(toolCtx, session.sessionKey)
-	result, err := ls.tools.ExecuteTool(toolCtx, session.agent, name, args)
-	cancel()
+	var output string
+	var err error
 
-	output := result
-	if err != nil {
-		output = "Error: " + err.Error()
+	if bare, isClient := session.clientTool(name); isClient {
+		// The client owns this one: ask it, and pass whatever it says straight through.
+		output = ls.callClientTool(ctx, session, callID, bare, args)
+	} else {
+		toolCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		toolCtx = tools.WithSessionKey(toolCtx, session.sessionKey)
+		var result string
+		result, err = ls.tools.ExecuteTool(toolCtx, session.agent, name, args)
+		cancel()
+
+		output = result
+		if err != nil {
+			output = "Error: " + err.Error()
+		}
 	}
 
 	logger.InfoCF("live", "Executed live tool call", map[string]interface{}{
@@ -924,6 +1012,152 @@ func replyLanguageDirective(code string) string {
 		name = code
 	}
 	return fmt.Sprintf("Always reply in %s.", name)
+}
+
+// Gateway tools are all snake_case, so joining an app name and a tool name with a
+// hyphen keeps client tools structurally distinct and splittable back apart.
+const clientToolSeparator = "-"
+
+// Both halves are restricted to what cannot contain the separator, so "<app>-<tool>"
+// always splits cleanly, and to what the Realtime tool-name grammar accepts.
+var toolNameHalf = regexp.MustCompile(`^[A-Za-z0-9_]{1,48}$`)
+
+// namespaceClientTools validates the tools a client declared and rewrites their names
+// as "<app>-<tool>". Returns the upstream definitions and a map from the upstream name
+// back to the bare name the client knows, or an error describing what to fix.
+func namespaceClientTools(app string, decls []map[string]interface{}, gatewayNames map[string]bool) ([]map[string]interface{}, map[string]string, error) {
+	if len(decls) == 0 {
+		return nil, nil, nil
+	}
+	if !toolNameHalf.MatchString(app) {
+		return nil, nil, fmt.Errorf("setup.app must be set to a short name matching %s when declaring tools", toolNameHalf)
+	}
+
+	defs := make([]map[string]interface{}, 0, len(decls))
+	names := make(map[string]string, len(decls))
+
+	for i, decl := range decls {
+		bare, _ := decl["name"].(string)
+		if !toolNameHalf.MatchString(bare) {
+			return nil, nil, fmt.Errorf("setup.tools[%d].name %q must match %s", i, bare, toolNameHalf)
+		}
+
+		full := app + clientToolSeparator + bare
+		if gatewayNames[full] {
+			// Namespacing makes this near-impossible, but a silent shadow would leave
+			// the model calling a tool that never answers.
+			return nil, nil, fmt.Errorf("client tool %q collides with a gateway tool", full)
+		}
+		if _, dup := names[full]; dup {
+			return nil, nil, fmt.Errorf("client tool %q declared twice", bare)
+		}
+
+		def := map[string]interface{}{"type": "function", "name": full}
+		if desc, ok := decl["description"].(string); ok && desc != "" {
+			def["description"] = desc
+		}
+		if params, ok := decl["parameters"]; ok && params != nil {
+			def["parameters"] = params
+		}
+		defs = append(defs, def)
+		names[full] = bare
+	}
+
+	return defs, names, nil
+}
+
+// callClientTool asks the client to run one of its own tools and waits for the answer.
+// A device can be slow, backgrounded or gone, so the wait is bounded: on expiry the
+// model is told the tool timed out rather than the turn hanging forever.
+func (ls *LiveServer) callClientTool(ctx context.Context, session *LiveSession, callID, bare string, args map[string]interface{}) string {
+	result := make(chan string, 1)
+
+	session.pendingMu.Lock()
+	if session.pending == nil {
+		session.pending = map[string]chan string{}
+	}
+	session.pending[callID] = result
+	session.pendingMu.Unlock()
+
+	defer func() {
+		session.pendingMu.Lock()
+		delete(session.pending, callID)
+		session.pendingMu.Unlock()
+	}()
+
+	frame, err := json.Marshal(map[string]interface{}{
+		"type":      "tool_call",
+		"call_id":   callID,
+		"name":      bare,
+		"arguments": args,
+	})
+	if err != nil {
+		return "Error: could not encode the tool call"
+	}
+	if err := session.clientConn.WriteMessage(websocket.TextMessage, frame); err != nil {
+		return "Error: could not reach the client to run this tool"
+	}
+
+	timeout := session.clientToolTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	select {
+	case output := <-result:
+		return output
+	case <-time.After(timeout):
+		logger.WarnCF("live", "Client tool timed out", map[string]interface{}{
+			"tool":    bare,
+			"call_id": callID,
+			"timeout": timeout.String(),
+		})
+		return "Error: client tool timed out"
+	case <-ctx.Done():
+		return "Error: session ended before the tool answered"
+	}
+}
+
+// handleClientToolResult consumes a tool_result frame from the client, handing it to
+// whichever call is waiting. Reports whether the frame was consumed: these never go
+// upstream — the upstream only sees the function_call_output built from them.
+func (ls *LiveServer) handleClientToolResult(session *LiveSession, msgType int, data []byte) bool {
+	if msgType != websocket.TextMessage || len(session.clientTools) == 0 {
+		return false
+	}
+
+	var frame struct {
+		Type   string `json:"type"`
+		CallID string `json:"call_id"`
+		Output string `json:"output"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal(data, &frame); err != nil || frame.Type != "tool_result" {
+		return false
+	}
+
+	output := frame.Output
+	if frame.Error != "" {
+		output = "Error: " + frame.Error
+	}
+
+	session.pendingMu.Lock()
+	waiter := session.pending[frame.CallID]
+	session.pendingMu.Unlock()
+
+	if waiter == nil {
+		// Late or unknown result — the call already timed out, or was never made.
+		logger.DebugCF("live", "Dropped an unmatched tool_result", map[string]interface{}{
+			"call_id": frame.CallID,
+		})
+		return true
+	}
+
+	select {
+	case waiter <- output:
+	default:
+	}
+	return true
 }
 
 // buildRealtimeSessionUpdate renders the persona, tool definitions and any
