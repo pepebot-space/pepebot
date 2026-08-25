@@ -392,33 +392,31 @@ jobs:
             exit 1
           fi
 
-      # A token that exists but lacks access fails at dispatch time with only
-      # "Resource not accessible by personal access token", which says nothing about
-      # what to change. Check reachability first and name the fix.
-      - name: Check the token can reach the Android repo
-        env:
-          GH_TOKEN: ${{ env.ANDROID_REPO_TOKEN }}
-        run: |
-          if ! gh api repos/pepebot-space/pepebot-android >/dev/null 2>&1; then
-            echo "::error::ANDROID_REPO_TOKEN cannot see pepebot-space/pepebot-android. For a fine-grained PAT, set its resource owner to the pepebot-space organisation (it defaults to your personal account) and grant access to that repository. For a classic PAT, use the 'repo' scope."
-            exit 1
-          fi
-          # Read access is not enough: repository_dispatch is a write. Checking the
-          # reported push permission catches a read-only token here, instead of at
-          # dispatch time where the only clue is "Resource not accessible".
-          if [ "$(gh api repos/pepebot-space/pepebot-android --jq '.permissions.push // false')" != "true" ]; then
-            echo "::error::ANDROID_REPO_TOKEN can read pepebot-android but not write to it, and repository_dispatch needs write. Fine-grained PAT: set Repository permissions > Contents to 'Read and write'. Classic PAT: use the 'repo' scope."
-            exit 1
-          fi
-
       - name: Get version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      
+
+      # Dispatch directly rather than guessing at permissions first: for a
+      # fine-grained PAT, .permissions.push reflects the *user's* role on the repo,
+      # not what the token was granted, so a preflight can pass and the dispatch
+      # still fail. One call, and a message that names the fix.
       - name: Trigger pepebot-android release
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ env.ANDROID_REPO_TOKEN }}
-          repository: pepebot-space/pepebot-android
-          event-type: pepebot-release
-          client-payload: '{"version": "${{ steps.version.outputs.VERSION }}"}'
+        env:
+          GH_TOKEN: ${{ env.ANDROID_REPO_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::ANDROID_REPO_TOKEN is empty. Set it in the ANDROID environment."
+            exit 1
+          fi
+
+          if gh api repos/pepebot-space/pepebot-android/dispatches -X POST \
+              -f event_type=pepebot-release \
+              -f "client_payload[version]=$VERSION"
+          then
+            echo "Dispatched pepebot-release for $VERSION"
+            exit 0
+          fi
+
+          echo "::error::Dispatch to pepebot-space/pepebot-android was refused. repository_dispatch is a write, so the token needs write access to that repository: a classic PAT with the 'repo' scope, or a fine-grained PAT whose resource owner is the pepebot-space organisation (it defaults to your personal account) with Repository permissions > Contents set to 'Read and write'."
+          exit 1
