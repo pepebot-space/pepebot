@@ -28,61 +28,86 @@ One shape works, and it is the OpenAI Realtime one:
 
 Then `{"type":"response.create"}` as usual.
 
-**Two other shapes are accepted and silently ignored.** This is the failure mode to
-watch for — no error comes back, the model simply answers as if it saw nothing:
+**Four shapes are read**, so an integrator coming from another API does not have to
+guess which dialect this one speaks:
 
-| shape | result |
-|-------|--------|
-| `{"type":"input_image","image_url":"data:..."}` | **"Red"** — correct |
-| `{"type":"image","source":{"type":"base64","media_type":...,"data":...}}` | "Unknown" — block dropped |
-| `{"type":"input_image","data":"...","media_type":"image/png"}` | "Unknown" — block dropped |
+| shape | |
+|-------|--|
+| `input_image` + `image_url` (a `data:` URL, or `{url}`) | ✅ |
+| `image_url` + `image_url.url` | ✅ |
+| `image` + `source.base64` (Anthropic style) | ✅ |
+| `input_image` + `data` (+ `mime_type`) | ✅ |
 
-If the model keeps answering vaguely about an image you are certain you sent, check the
-block shape before anything else. An Anthropic-style `source` object is the easy
-mistake to make.
+And the two ways to get it wrong are errors rather than silence:
 
-## Video: repeated frames, not a stream
+| | |
+|-------|--|
+| an image part with nothing readable in it | `unreadable_image` |
+| a remote `http(s)` URL | `remote_image` — refused, not fetched |
 
-There is no streaming event. Every plausible name is rejected:
+The remote refusal is deliberate: a server that fetches URLs on a client's behalf is an
+SSRF tool. Encode the bytes yourself.
+
+> Earlier versions of this document said two of those four shapes were silently ignored.
+> That was true when measured and was fixed server-side; `_item_image()` had been
+> returning the same `None` for "no image here" and "an image I could not read", which is
+> why one produced a wrong answer instead of an error.
+
+## Video: repeated frames, and they are consumed
+
+There is no streaming event, and there does not need to be one. **Only the newest image
+is retained** — a new frame replaces the previous one — so frames sent as items are
+consumed rather than accumulated, which is the property a frame channel would have given.
+
+Measured: thirty red frames followed by one blue, then "what colour is the last image?"
 
 ```
-input_image_buffer.append      → unknown_type
-input_video_buffer.append      → unknown_type
-realtime_input / realtimeInput → unknown_type
-input_media_buffer.append      → unknown_type
-conversation.item.append_image → unknown_type
+30 red frames + 1 blue → "Biru"     45s
+1 frame                → "Merah"    43s
 ```
 
-So a video feed is a sequence of image items. The model reads the most recent one:
+Thirty-one frames cost the same as one. Send a frame with no `response.create` and
+nothing is generated — it just replaces the current image. That is what makes a camera
+feed workable: push frames as they arrive, ask only when you want an answer.
+
+The server says so itself, so there is no need to guess:
 
 ```
-frame (red)   → "what colour is the most recent image?" → Red
-frame (green) → "and now?"                              → Green
+GET /v1/realtime → images: {
+  "retention": "only the newest image is kept; a new one replaces it",
+  "camera_feed": "send frames as items -- they are consumed, not accumulated",
+  "video_channel": false,
+  "max_bytes": 8388608
+}
 ```
 
-Send a frame with **no** `response.create` and nothing is generated — it just becomes
-context the next turn sees. That is what makes a camera feed workable: push frames as
-they come, and only ask a question when you want an answer.
+### The tradeoff: one image at a time
 
-### Pace it, or it gets expensive
+Retention is also a limit. The model can only ever see the most recent image, so
+"compare these two" does not work:
 
-Every frame stays in the conversation as an item, and the upstream server charges for
-the tokens of each one on every subsequent turn. This is nothing like an audio stream,
-where frames are consumed and dropped.
+```
+frame (red), frame (green), "name the colour of the first and second image"
+→ "Saya hanya bisa melihat satu gambar, warnanya hijau."
+```
 
-Practical shape for a camera:
+For a feed that is exactly right. For before-and-after, or two documents side by side,
+put both images in **one** `conversation.item.create` content array instead of two items,
+or ask about each one as it arrives and let the model keep the answer in the
+conversation rather than the image.
 
-- **One frame every second or two**, not 30 a second
-- Better: **one frame on demand** — a client tool the agent calls when it wants to look
-  (see below), rather than a constant feed
-- Downscale first. 640×480 JPEG is plenty for "what am I looking at"; a 4K PNG is
-  megabytes of base64 for no extra understanding
-- If a session runs long, reconnect periodically: the conversation restarts and the
-  accumulated frames go with it
+### Practical shape
 
-For a genuine continuous video stream, Vertex/Gemini Live is the provider that has one
-(`realtimeInput` with inline video, which `examples/live-api/index-video.html` uses).
-The Realtime protocol does not.
+- Downscale first. 640×480 JPEG is plenty for "what am I looking at"; the cap is 8MB per
+  image but a 4K PNG buys no extra understanding
+- JPEG is accepted, which matters because camera frames are JPEG
+- Frames are cheap now, but the *turns* are not: a question per frame is a full
+  response each time. Push frames freely, ask sparingly
+
+For a genuine video channel — frames outside the conversation entirely — Vertex/Gemini
+Live has one (`realtimeInput` with inline video, used by
+`examples/live-api/index-video.html`). The Realtime protocol does not, and for a
+latest-frame feed it does not need one.
 
 ## Through Pepebot
 

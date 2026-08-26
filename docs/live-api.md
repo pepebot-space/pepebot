@@ -153,18 +153,18 @@ tidak ada perubahan di sisi Pepebot. Hanya satu bentuk yang benar-benar dibaca:
   {"type":"input_text","text":"Ini warna apa?"}]}}
 ```
 
-Bentuk lain (`image` + `source.base64`, misalnya) **diterima tanpa error tapi
-diabaikan** — model menjawab seolah tidak melihat apa pun. Itu jenis kegagalan yang
-paling menipu, jadi periksa bentuk block-nya lebih dulu kalau jawabannya mengambang.
+Empat bentuk block dibaca — `input_image`+`image_url`, `image_url`+`image_url.url`,
+`image`+`source.base64` (gaya Anthropic), dan `input_image`+`data`. Yang salah
+menghasilkan error, bukan diabaikan: part tanpa gambar terbaca → `unreadable_image`,
+URL remote → `remote_image` (ditolak, tidak di-fetch, supaya server ini tidak jadi alat
+SSRF).
 
-Untuk "video": tidak ada event streaming di protokol Realtime — kirim frame berturut-turut
-sebagai item, dan model membaca yang terbaru. Tapi setiap frame **menetap** di percakapan
-dan ditagih ulang setiap turn, jadi pakai satu frame per detik atau on-demand, bukan 30
-frame per detik.
+Untuk "video": tidak ada event streaming, dan tidak perlu — **hanya gambar terbaru yang
+disimpan**, jadi frame yang dikirim sebagai item dikonsumsi, bukan menumpuk. 30 frame
+merah lalu satu biru dijawab "Biru", dan tidak lebih lambat dari satu frame.
 
-Agent **tidak bisa** mengirim gambar balik lewat sesi live (protokolnya hanya
-menghasilkan teks dan audio). Gunakan client tool seperti `show_image` yang ditampilkan
-oleh aplikasinya sendiri.
+Konsekuensinya: model hanya bisa melihat satu gambar sekaligus, jadi "bandingkan dua
+gambar ini" tidak jalan kecuali keduanya ditaruh dalam satu item.
 
 Rinciannya, termasuk cara mem-probe server Realtime lain: **[docs/live-vision.md](./live-vision.md)**.
 
