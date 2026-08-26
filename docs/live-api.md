@@ -81,7 +81,7 @@ Fitur unggulan di Live API adalah **Integrasi Agent**, di mana alur *real-time v
 - **`provider`** *(string)*: Provider AI yang akan digunakan. Bisa mengikuti env `PEPEBOT_LIVE_PROVIDER`.
 - **`model`** *(string)*: Model AI *real-time* yang spesifik dipakai oleh sesi.
 - **`agent`** *(string)*: Nama agen dari workspace tempat instruksi / persona disimpan (misalnya `default`, atau nama file spesifik agen Anda). Pepebot secara otomatis akan menarik *system prompt* agen ini dan menyuntikkannya ke dalam instruksi *upstream* API suara.
-- **`session_key`** *(string)*: Kunci unik untuk *state* sesi. Digunakan Pepebot unuk memanjangkan obrolan *(Chat History)* pada sesi yang berlanjut.
+- **`session_key`** *(string)*: Nama percakapan. Ini batas memori — lihat [Sesi per device](#sesi-per-device) di bawah.
 - **`enable_tools`** *(boolean)*: Set ke `true` jika Anda menghendaki agen di dalam percakapan suara ini diizinkan untuk memanggil ekstensi tools (misalnya web search, scraping, dll).
 
 > Tools bekerja untuk provider Vertex/Gemini maupun provider dengan protokol OpenAI Realtime (`openai`, `maiarouter`, `realtime`). Untuk protokol Realtime, definisi tool dikirim lewat `session.update`, dan panggilan tool dibaca dari `response.output_item.done` (`item.type == "function_call"`) lalu hasilnya dibalas sebagai item `function_call_output` diikuti `response.create`.
@@ -141,6 +141,46 @@ diberi tahu `Error: client tool timed out` dan turn tetap selesai.
 
 Contoh lengkap ada di `examples/live-api/paniki.html`, yang mendaftarkan
 `device_info` dan `geolocate`.
+
+### Sesi per device
+
+`setup.session_key` menamai percakapan, dan **itu batas memorinya**. Setiap device kirim
+key-nya sendiri, maka masing-masing punya percakapan sendiri:
+
+```json
+{"setup": {"provider": "realtime", "session_key": "rover-01"}}
+{"setup": {"provider": "realtime", "session_key": "hp-ibnu"}}
+{"setup": {"provider": "realtime", "session_key": "kios-lobi-3"}}
+```
+
+Yang terjadi dengan key itu:
+
+- **Turn disimpan** ke session history agent di bawah nama itu
+- **Dan diputar ulang** (20 turn terakhir) saat ada sesi baru dengan nama yang sama —
+  jadi percakapan bertahan melewati reconnect, ganti client, bahkan restart gateway
+- **Key yang sama = satu percakapan**, meski beda transport. Sesi suara dan chat teks
+  dengan key sama saling ingat
+- **Key berbeda = percakapan berbeda**, tidak saling tahu apa pun
+
+Terukur:
+
+```
+[rover-01] "Ingat angka favoritku 77."   -> "Siap, sudah kucatat."
+[rover-01] KONEKSI BARU, key sama        -> "Angka favoritmu 77."
+[hp-ibnu]  pertanyaan sama               -> "Aku tidak tahu."
+```
+
+Kalau `session_key` tidak dikirim, Pepebot membuat key sekali-pakai
+(`live:<provider>:<agent>:<timestamp>`) — sesi jalan normal tapi tidak ada yang bisa
+melanjutkannya. Untuk device tetap, kirim key yang stabil: id device, nomor seri, atau
+nomor telepon.
+
+Dua puluh turn itu jendela, bukan arsip — server upstream menagih setiap token yang
+dikirim balik.
+
+Di client yang ada: `SESSION=nama` untuk client terminal, dan field **Session** di
+`paniki.html` (tampil di header, diingat per browser, jadi dua tab bisa jadi dua
+percakapan). Rinciannya: [examples/live-api/README-realtime.md](../examples/live-api/README-realtime.md#chat-sessions).
 
 ### Gambar dan video di sesi Realtime
 
