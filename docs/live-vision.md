@@ -9,14 +9,15 @@ you what yours accepts.
 
 | | |
 |---|---|
-| Send an image to the model | **Yes** — one shape works, see below |
-| Send a stream of frames ("video") | **Yes, as repeated items.** There is no streaming event |
+| Send an image to the model | **Yes** — four block shapes are read |
+| Send a stream of frames ("video") | **Yes, as items.** No streaming event, and none needed: only the newest image is kept, so frames are consumed |
+| Show the model two images at once | **Only within one item** — retention keeps just the latest |
 | Have the agent send an image back | **No** — the protocol has no image output; use a client tool |
 | Pepebot changes needed | **None.** The proxy forwards client frames verbatim |
 
 ## Sending an image
 
-One shape works, and it is the OpenAI Realtime one:
+The OpenAI Realtime shape:
 
 ```json
 {"type": "conversation.item.create",
