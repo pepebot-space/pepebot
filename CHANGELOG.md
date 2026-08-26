@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.19] - 2026-08-27
+
+### Fixed
+- **Concurrent writes to a Live client connection crashed the gateway**: the client socket previously had exactly one writer (the upstream→client pump), so it needed no mutex. Routing a client tool call added a second writer from its own goroutine, and gorilla refuses that with `panic: concurrent write to websocket connection` — which took the whole gateway down mid-session on the test server and left systemd restarting it. Every post-setup write now goes through `session.writeClient`, matching how upstream writes already go through `writeUpstream`. Regression test hammers it from eight goroutines and reproduces the panic when the mutex is removed.
+- **`examples/live-api/paniki.html` layout**: an edit to the voice picker had swallowed the fields grid's closing tag, so every control below it was nested inside the two-column grid.
+- **`docs/live-vision.md` corrected before release**: its warning that image frames accumulate and are re-billed each turn was measured before the upstream server changed retention to latest-image-only, and was wrong by the time it was written. Thirty-one frames now cost the same as one; the real tradeoff — only the newest image is visible, so two images cannot be compared across items — is documented instead.
 
 ### Added
 - **`docs/live-vision.md`**: what a Realtime Live session can and cannot do with images, measured against the Paniki server rather than assumed. Sending an image needs `input_image` with a data URL in `image_url`; an Anthropic-style `source` object is accepted and **silently ignored**, so the model answers plausibly and wrongly instead of erroring. There is no streaming event (six candidate names all rejected), so video is a sequence of image items — which the model does track, but each frame stays in the conversation and is billed again every turn. Getting an image back out is not possible on the protocol; a client tool that displays it is the way. No Pepebot changes were needed: the proxy already forwards client frames verbatim, verified through the deployed gateway.

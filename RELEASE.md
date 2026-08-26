@@ -1,46 +1,49 @@
-# 🐸 Pepebot v0.5.18 - Your Agent, Out Loud
+# 🐸 Pepebot v0.5.19 - The Device Answers Back
 
-**Release Date:** 2026-08-25
+**Release Date:** 2026-08-27
 
 ## 🎉 What's New
 
-### 🎙️ Voice sessions are real agent sessions now
+### 🔧 Apps bring their own tools
 
-The Live API used to be a voice pipe with a personality. On the OpenAI Realtime protocol it was barely even that: tool definitions and the system prompt were only ever injected into a provider setup frame, and Realtime providers do not have one — so both were silently dropped. Voice could talk. It could not *do* anything.
+Until now the agent could only use tools that run on the gateway host. A phone, a rover, a browser tab has things that host will never have — a camera, GPS, a clipboard, a screen, motors.
 
-That is fixed, and then some. A Realtime voice session now carries:
-
-- **Tools** — the agent's full tool registry, executed locally and fed back. Ask it to read a file and it reads the file.
-- **Skills** — the same skills block a text conversation gets. Attached independently of the persona, so setting a system prompt no longer drops them.
-- **Memory** — voice turns are written to the agent's session history. Talk to it, then message it on Telegram with the same session key, and it remembers.
-- **A reply language** — `live.language` (default `id-ID`) or per session via `setup.language`.
-
-### 🔌 Custom OpenAI Realtime endpoints
-
-New `providers.realtime` config block. Point `api_base` at any server speaking the OpenAI Realtime protocol — self-hosted included — and `api_key` may be empty, because most of them run without auth. It is Live-API-only, so an OpenAI key you use for chat is untouched.
+An app connecting to `/v1/live` can now declare its own tools and execute them itself:
 
 ```json
-{
-  "providers": { "realtime": { "api_base": "http://127.0.0.1:8000/v1", "api_key": "" } },
-  "live": { "enabled": true, "provider": "realtime", "model": "your-model" }
-}
+{"setup": {"provider": "realtime", "app": "rover",
+           "tools": [{"name": "take_photo", "description": "...", "parameters": {...}}]}}
 ```
 
-### 🔊 Replies that sound like speech
+The model sees `rover-take_photo`; the app is asked for it by the bare name and answers with a `tool_result`. Gateway tools are all `snake_case`, so the hyphen makes a collision structurally impossible rather than merely forbidden — and a slow or absent device hits a deadline instead of wedging the turn.
 
-Pepebot's `session.update` replaces the upstream server's own instructions — including whatever "this will be spoken" guidance they carried. Which is why answers were coming back as markdown tables and emoji, read out loud symbol by symbol. Every Realtime session now carries an explicit speech directive, so a list is spoken as a sentence instead of a bullet list.
+Try it: `node examples/live-api/nodejs/paniki-toolcall.js` declares `device_info`, `read_clipboard` and `notify`. Ask what's on your clipboard and watch your own machine answer.
 
-### 🔁 Upstream reconnect
+### 💬 Named sessions, one per device
 
-If the upstream connection drops mid-session, the client stays connected while Pepebot rebuilds the other leg — 3 attempts, 1s/2s/4s backoff, replaying the persona, skills, tools and session config, then telling the client with a `{"status":"reconnected"}` frame.
+`setup.session_key` names the conversation, and that name is the memory boundary:
 
-### 🖥️ Three clients to try it with
+```json
+{"setup": {"session_key": "rover-01"}}
+{"setup": {"session_key": "hp-ibnu"}}
+```
 
-- `examples/live-api/paniki.html` — browser: mic, barge-in, tool-call trace, model and voice pickers read live from the server
-- `examples/live-api/nodejs/paniki-client.js` — terminal, full duplex, mic via ffmpeg
-- `examples/live-api/paniki_client.py` — terminal, full duplex, mic via sounddevice
+Same key, new connection? It remembers. Different key? A separate conversation that knows nothing of the first. Voice and text on the same key are one conversation.
 
-All three read `/v1/models` and `/v1/voices` at startup, so nothing goes stale when the server is redeployed.
+This also fixes something v0.5.18 got half-right. That release recorded live turns into session history — but nothing ever read them back, so a session started amnesiac even when its key was reused. It does now: the last 20 turns are replayed as context.
+
+### 🔁 A dropped upstream no longer ends the session
+
+If the upstream connection fails mid-conversation, the client stays connected while Pepebot rebuilds the other leg — 3 attempts with backoff, replaying persona, skills, tools and session config, then a `{"status":"reconnected"}` frame. Caught a real outage during testing and behaved.
+
+### 🖼️ Images, honestly documented
+
+`docs/live-vision.md` covers what a Realtime session can and cannot do with images — measured against a live server, not assumed. Four block shapes work, video is frames-as-items (they are consumed, not accumulated), and the agent cannot send an image back over the protocol at all; a client tool that displays it is the answer.
+
+## 🐛 Fixed
+
+- **A gateway crash.** Routing a client tool call added a second writer to the client socket, and gorilla panics on concurrent writes — it took the whole gateway down mid-session on the test server. Found by deploying before merging, not by the test suite: nothing in it opened a real socket with two writers. Now it does.
+- **CI can name a broken Android release token.** The release workflow's Android leg failed on eight consecutive releases with only `Resource not accessible by personal access token`. It now says which token setting to change, and `android-dispatch.yml` re-fires a release without rebuilding sixteen binaries.
 
 ## 📦 Installation
 
@@ -58,14 +61,16 @@ brew install pepebot
 ## 🚀 Quick Start
 
 ```bash
-pepebot gateway                                  # /v1/live on 127.0.0.1:18790
-cd examples/live-api/nodejs && npm install && node paniki-client.js
+pepebot gateway                                   # /v1/live on 127.0.0.1:18790
+cd examples/live-api/nodejs && npm install
+SESSION=laptop node paniki-toolcall.js
 ```
 
-Then ask it to do something — list a directory, read a file — and listen to it actually do it.
+Then ask it what's on your clipboard.
 
 ## 🔗 Links
 
 - [Changelog](./CHANGELOG.md)
-- [Live API guide](./docs/live-api.md)
-- [Custom Realtime endpoints](./examples/live-api/README-realtime.md)
+- [Live API guide](./docs/live-api.md) — including per-device sessions
+- [Images and video](./docs/live-vision.md)
+- [Custom Realtime endpoints and client tools](./examples/live-api/README-realtime.md)
