@@ -137,6 +137,18 @@ type LiveSession struct {
 	// Calls waiting on a client result, keyed by the upstream call id.
 	pendingMu sync.Mutex
 	pending   map[string]chan string
+
+	// The client connection has more than one writer: the upstream pump forwards to
+	// it, and a client tool call is written from its own goroutine. gorilla panics on
+	// a concurrent write, so every write after setup goes through this.
+	clientMu sync.Mutex
+}
+
+// writeClient serializes writes to the client connection.
+func (s *LiveSession) writeClient(msgType int, data []byte) error {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+	return s.clientConn.WriteMessage(msgType, data)
 }
 
 // clientTool reports whether a tool call belongs to the client, and under which name
@@ -637,7 +649,7 @@ func (ls *LiveServer) reconnectUpstream(ctx context.Context, session *LiveSessio
 			"session":  session.sessionKey,
 			"note":     "upstream conversation state was reset",
 		})
-		session.clientConn.WriteMessage(websocket.TextMessage, notice)
+		session.writeClient(websocket.TextMessage, notice)
 		return true
 	}
 
@@ -701,7 +713,7 @@ func (ls *LiveServer) proxyMessages(ctx context.Context, session *LiveSession, s
 		if direction == "client→upstream" {
 			writeErr = session.writeUpstream(msgType, data)
 		} else {
-			writeErr = dst.WriteMessage(msgType, data)
+			writeErr = session.writeClient(msgType, data)
 		}
 
 		if writeErr != nil {
@@ -1104,7 +1116,7 @@ func (ls *LiveServer) callClientTool(ctx context.Context, session *LiveSession, 
 	if err != nil {
 		return "Error: could not encode the tool call"
 	}
-	if err := session.clientConn.WriteMessage(websocket.TextMessage, frame); err != nil {
+	if err := session.writeClient(websocket.TextMessage, frame); err != nil {
 		return "Error: could not reach the client to run this tool"
 	}
 
