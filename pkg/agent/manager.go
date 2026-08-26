@@ -308,6 +308,34 @@ func (am *AgentManager) RecordLiveTurn(sessionKey, role, content string) {
 	}
 }
 
+// LiveHistory returns the last turns recorded under a session key, oldest first, so a
+// Live session can pick the conversation back up.
+func (am *AgentManager) LiveHistory(sessionKey string, limit int) []map[string]string {
+	if sessionKey == "" || limit <= 0 {
+		return nil
+	}
+
+	sessions := am.GetSessions()
+	if sessions == nil {
+		return nil
+	}
+
+	history := sessions.GetHistory(sessionKey)
+	if len(history) > limit {
+		history = history[len(history)-limit:]
+	}
+
+	turns := make([]map[string]string, 0, len(history))
+	for _, msg := range history {
+		content, ok := msg.Content.(string)
+		if !ok || strings.TrimSpace(content) == "" {
+			continue
+		}
+		turns = append(turns, map[string]string{"role": msg.Role, "content": content})
+	}
+	return turns
+}
+
 // ExecuteTool executes a tool using the selected agent's tool registry.
 func (am *AgentManager) ExecuteTool(ctx context.Context, agentName, toolName string, args map[string]interface{}) (string, error) {
 	if agentName == "" {

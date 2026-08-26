@@ -55,7 +55,8 @@
     <div class="head">
       <div>
         <h1>Pepebot × Paniki Realtime</h1>
-        <p>Voice + agent tools over Pepebot's <code>/v1/live</code> proxy</p>
+        <p>Voice + agent tools over Pepebot's <code>/v1/live</code> proxy — session
+          <code id="sessionLabel">web-session</code></p>
       </div>
       <div id="status" class="pill">Disconnected</div>
     </div>
@@ -75,6 +76,10 @@
           <select id="model"></select>
         </div>
         <div>
+          <label for="session">Session <span class="t-dim">(separate name = separate memory)</span></label>
+          <input id="session" />
+        </div>
+        <div>
           <label for="lang">Reply language</label>
           <select id="lang">
             <option value="id-ID" selected>Indonesia</option>
@@ -89,6 +94,8 @@
           <label for="voice">Voice <span class="t-dim">(blank = whatever live.realtime_session sets)</span></label>
           <select id="voice"><option value="">(server default)</option></select>
         </div>
+      </div>
+
       <div class="grid">
         <button id="refresh">Reload models & voices</button>
         <button id="voices">Reload voices</button>
@@ -114,6 +121,10 @@
       <div id="log"></div>
 
       <p class="note">
+        This page declares tools of its own — <code>device_info</code> and
+        <code>geolocate</code> — which Pepebot registers as <code>web-*</code> and
+        routes back here to run in the browser. Ask "what timezone am I in?" and the
+        browser answers, not the gateway.
         Models and voices come from Paniki's <code>/v1/models</code> and
         <code>/v1/voices</code>, so nothing here goes stale on a redeploy. Paniki fixes
         <code>modalities</code> and the audio formats server-side, so this page never
@@ -132,7 +143,7 @@
 
   const RATE = 24000;               // Paniki speaks pcm16 mono at this rate
   const FRAME = RATE / 50;          // 20ms frames: low latency, snappy barge-in
-  const SESSION_KEY = 'pepebot_paniki_session';
+  const SESSION_STORE = 'pepebot_paniki_session';
 
   let ws = null, playCtx = null, micCtx = null, micStream = null,
       micSource = null, micProc = null, nextPlayAt = 0, ready = false,
@@ -151,13 +162,22 @@
     statusEl.className = 'pill' + (cls ? ' ' + cls : '');
   }
 
-  function sessionKey() {
-    let k = localStorage.getItem(SESSION_KEY);
-    if (!k) { k = `paniki-web:${Date.now()}`; localStorage.setItem(SESSION_KEY, k); }
-    return k;
+  // The session name is the memory boundary: Pepebot files the conversation under it,
+  // so two tabs with different names hold two separate conversations, and reusing a
+  // name picks the earlier one back up. Remembered per browser so a reload continues
+  // where it left off.
+  function sessionName() {
+    return $('session').value.trim() || 'web-session';
+  }
+
+  function rememberSession() {
+    try { localStorage.setItem(SESSION_STORE, sessionName()); } catch { /* private mode */ }
+    $('sessionLabel').textContent = sessionName();
   }
 
   gatewayEl.value = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname || '127.0.0.1'}:18790/v1/live`;
+  try { $('session').value = localStorage.getItem(SESSION_STORE) || 'web-session'; } catch { $('session').value = 'web-session'; }
+  $('sessionLabel').textContent = $('session').value;
 
   // ---------- model discovery ----------
   // The model changes whenever the server is redeployed, so never hardcode it:
@@ -289,6 +309,7 @@
 
   function connect() {
     if (ws && ws.readyState === WebSocket.OPEN) return;
+    rememberSession();
     const url = gatewayEl.value.trim();
     const model = modelEl.value.trim();
     if (!model) { log('Pick a model first', 'err'); return; }
@@ -308,9 +329,25 @@
         provider: 'realtime',
         model,
         agent: 'default',
-        session_key: sessionKey(),
+        session_key: sessionName(),
         enable_tools: true,
         language: $('lang').value,
+        // Tools this page owns and runs itself. Pepebot namespaces them as
+        // "web-<name>" so they cannot collide with the agent's own tools, and asks
+        // us for them by the bare name below.
+        app: APP,
+        tools: [
+          {
+            name: 'device_info',
+            description: "Get details about the user's device: browser timezone, local time, language and screen size.",
+            parameters: { type: 'object', properties: {} },
+          },
+          {
+            name: 'geolocate',
+            description: 'Get the current geographic location of the user\'s device, as latitude and longitude.',
+            parameters: { type: 'object', properties: {} },
+          },
+        ],
       }});
     };
 
@@ -327,7 +364,15 @@
 
   function handle(evt) {
     if (evt.status === 'connected') {
-      log(`Proxy: ${evt.provider} -> ${evt.model}`, 'ok');
+      log(`Proxy: ${evt.provider} -> ${evt.model} | session "${sessionName()}"`, 'ok');
+      return;
+    }
+
+    // Pepebot routes a call to one of our declared tools here. Whatever we answer
+    // becomes the tool result the model sees, so failures are reported, not swallowed.
+    if (evt.type === 'tool_call') {
+      log(`Tool call for us: ${evt.name}(${JSON.stringify(evt.arguments || {})})`, 'tool');
+      runClientTool(evt);
       return;
     }
 
@@ -361,16 +406,14 @@
         log(`Bot: ${(evt.transcript || '').trim()}`, 'ok');
         return;
 
-      case 'response.output_item.added':
-        if (evt.item && evt.item.type === 'function_call') log(`Tool call: ${evt.item.name}`, 'tool');
+      case 'response.output_item.done': {
+        // Trace only; the call itself arrives as a tool_call frame when it is ours.
+        if (!evt.item || evt.item.type !== 'function_call') return;
+        const ours = evt.item.name.startsWith(APP + '-');
+        const who = ours ? 'routed to this page' : 'running on the gateway';
+        log(`Tool call: ${evt.item.name}(${evt.item.arguments || ''}) — ${who}`, 'tool');
         return;
-
-      case 'response.output_item.done':
-        // Pepebot runs the tool and returns the result; this is just the trace.
-        if (evt.item && evt.item.type === 'function_call') {
-          log(`Tool call: ${evt.item.name}(${evt.item.arguments || ''}) — Pepebot is executing it`, 'tool');
-        }
-        return;
+      }
 
       case 'response.done':
         log('Turn complete', 'dim');
@@ -381,6 +424,45 @@
         log(`Server error [${err.code || '?'}]: ${err.message || ''}`, 'err');
         return;
       }
+    }
+  }
+
+  const APP = 'web';
+
+  const clientTools = {
+    // Needs no permission, so it demonstrates the round trip anywhere.
+    device_info: () => {
+      const d = new Date();
+      return [
+        `browser timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+        `local time ${d.toLocaleTimeString([], { hour12: false })}`,
+        `language ${navigator.language}`,
+        `screen ${screen.width} by ${screen.height}`,
+      ].join(', ');
+    },
+    geolocate: () => new Promise((resolve, reject) => {
+      if (!navigator.geolocation) return reject(new Error('this browser has no geolocation'));
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve(`latitude ${pos.coords.latitude.toFixed(5)}, longitude ${pos.coords.longitude.toFixed(5)}`),
+        (err) => reject(new Error(err.message)),
+        { timeout: 10000 },
+      );
+    }),
+  };
+
+  async function runClientTool(evt) {
+    const tool = clientTools[evt.name];
+    if (!tool) {
+      send({ type: 'tool_result', call_id: evt.call_id, error: `this client has no tool named ${evt.name}` });
+      return;
+    }
+    try {
+      const output = await tool(evt.arguments || {});
+      log(`Tool result: ${output}`, 'tool');
+      send({ type: 'tool_result', call_id: evt.call_id, output: String(output) });
+    } catch (err) {
+      log(`Tool failed: ${err.message}`, 'err');
+      send({ type: 'tool_result', call_id: evt.call_id, error: err.message });
     }
   }
 
@@ -465,6 +547,7 @@
   testBtn.addEventListener('click', sendTestAudio);
   $('send').addEventListener('click', sendText);
   $('text').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText(); });
+  $('session').addEventListener('change', rememberSession);
   $('refresh').addEventListener('click', () => { loadModels(); loadVoices(); });
   $('voices').addEventListener('click', loadVoices);
   panikiEl.addEventListener('change', () => { loadModels(); loadVoices(); });
