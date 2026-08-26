@@ -142,6 +142,32 @@ diberi tahu `Error: client tool timed out` dan turn tetap selesai.
 Contoh lengkap ada di `examples/live-api/paniki.html`, yang mendaftarkan
 `device_info` dan `geolocate`.
 
+### Gambar dan video di sesi Realtime
+
+Klien bisa mengirim gambar ke model — proxy meneruskan frame klien apa adanya, jadi
+tidak ada perubahan di sisi Pepebot. Hanya satu bentuk yang benar-benar dibaca:
+
+```json
+{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[
+  {"type":"input_image","image_url":"data:image/png;base64,..."},
+  {"type":"input_text","text":"Ini warna apa?"}]}}
+```
+
+Bentuk lain (`image` + `source.base64`, misalnya) **diterima tanpa error tapi
+diabaikan** — model menjawab seolah tidak melihat apa pun. Itu jenis kegagalan yang
+paling menipu, jadi periksa bentuk block-nya lebih dulu kalau jawabannya mengambang.
+
+Untuk "video": tidak ada event streaming di protokol Realtime — kirim frame berturut-turut
+sebagai item, dan model membaca yang terbaru. Tapi setiap frame **menetap** di percakapan
+dan ditagih ulang setiap turn, jadi pakai satu frame per detik atau on-demand, bukan 30
+frame per detik.
+
+Agent **tidak bisa** mengirim gambar balik lewat sesi live (protokolnya hanya
+menghasilkan teks dan audio). Gunakan client tool seperti `show_image` yang ditampilkan
+oleh aplikasinya sendiri.
+
+Rinciannya, termasuk cara mem-probe server Realtime lain: **[docs/live-vision.md](./live-vision.md)**.
+
 ### Konfigurasi `live.realtime_session`
 
 Field apa pun yang diizinkan server Realtime upstream (misalnya `voice`, `temperature`, `max_response_output_tokens`, `turn_detection`) bisa diisi di sini dan akan digabungkan ke `session.update`. `instructions` dan `tools` milik Pepebot selalu menang jika ada key yang sama.

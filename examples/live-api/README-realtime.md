@@ -159,6 +159,18 @@ If the upstream connection drops, Pepebot rebuilds it (3 attempts, 1s/2s/4s back
 replays all of the above, then sends the client `{"status":"reconnected"}`. Upstream
 conversation state does not survive that — only the session configuration does.
 
+## Images and video
+
+A client can send images to the model with no Pepebot change — the proxy forwards client
+frames verbatim. One block shape works (`input_image` + a data URL in `image_url`); the
+Anthropic-style `source` object is accepted and silently ignored, which reads as the
+model being vague rather than as an error.
+
+There is no streaming event, so a video feed is a sequence of image items — and each one
+stays in the conversation and is billed again every turn, so pace it.
+
+Full detail, including how to probe a different server: **[docs/live-vision.md](../../docs/live-vision.md)**.
+
 ## Frame size
 
 Small frames are still the better default — **20ms (480 samples, 960 bytes)** keeps
