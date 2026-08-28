@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **A provider name repeated in the model id is no longer sent to the API**: with `provider: "maiarouter"` and a model of `maiarouter/zai/glm-5.3-flash`, the request went out carrying that whole string and the upstream refused it — `litellm.BadRequestError: You passed in model=maiarouter/zai/glm-5.3-flash. There are no healthy deployments for this model.` Choosing the endpoint is the config's job, so the provider key is now stripped from the front of the model before the request is built, on both the streaming and non-streaming paths.
+  - Only the configured provider key is removed, never a vendor namespace: OpenRouter genuinely wants `anthropic/claude-3.5-sonnet` and MAIA genuinely wants `maia/gemini-2.5-flash`, so `maia/` is left alone even when `maia` is the configured alias.
+  - The prefixed value typically comes from an agent registry entry rather than `config.json` — the entry carries the composed model with an empty `provider`, which is why the symptom survives fixing the config.
+  - Test: `TestModelForProvider`.
+
 ## [0.5.19] - 2026-08-27
 
 ### Fixed
