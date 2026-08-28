@@ -23,17 +23,44 @@ import (
 type HTTPProvider struct {
 	apiKey     string
 	apiBase    string
+	provider   string
 	httpClient *http.Client
 }
 
 func NewHTTPProvider(apiKey, apiBase string) *HTTPProvider {
+	return NewHTTPProviderFor("", apiKey, apiBase)
+}
+
+// NewHTTPProviderFor records which provider key selected this endpoint, so the model id
+// can have that name stripped back off if it was repeated there. See modelForProvider.
+func NewHTTPProviderFor(provider, apiKey, apiBase string) *HTTPProvider {
 	return &HTTPProvider{
-		apiKey:  apiKey,
-		apiBase: apiBase,
+		apiKey:   apiKey,
+		apiBase:  apiBase,
+		provider: strings.ToLower(provider),
 		httpClient: &http.Client{
 			Timeout: 0,
 		},
 	}
+}
+
+// modelForProvider drops a provider name repeated at the front of a model id. Choosing
+// the endpoint is the config's job; carrying the provider name into the model as well
+// only gets the request rejected — MAIA Router answers "no healthy deployments for
+// model=maiarouter/zai/glm-5.3-flash" for exactly this.
+//
+// Only the configured provider key is stripped, never a vendor namespace: OpenRouter
+// genuinely wants "anthropic/claude-3.5-sonnet", and MAIA genuinely wants
+// "maia/gemini-2.5-flash", so "maia" is left alone even when it is the configured alias.
+func modelForProvider(provider, model string) string {
+	if provider == "" || provider == "maia" {
+		return model
+	}
+	prefix := provider + "/"
+	if strings.HasPrefix(strings.ToLower(model), prefix) {
+		return model[len(prefix):]
+	}
+	return model
 }
 
 func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) (*LLMResponse, error) {
@@ -47,7 +74,7 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 	}
 
 	logger.DebugCF("provider", "HTTP chat request", map[string]interface{}{
-		"model":          model,
+		"model":          modelForProvider(p.provider, model),
 		"api_base":       p.apiBase,
 		"messages":       len(messages),
 		"tools":          len(tools),
@@ -57,7 +84,7 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 	})
 
 	requestBody := map[string]interface{}{
-		"model":    model,
+		"model":    modelForProvider(p.provider, model),
 		"messages": messages,
 	}
 
@@ -202,7 +229,7 @@ func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model
 	}
 
 	requestBody := map[string]interface{}{
-		"model":    model,
+		"model":    modelForProvider(p.provider, model),
 		"messages": messages,
 		"stream":   true,
 	}
@@ -388,7 +415,7 @@ func CreateProviderWithOverrides(cfg *config.Config, overrideModel, overrideProv
 		if apiBase == "" {
 			return nil, fmt.Errorf("no API base configured for provider: %s", provider)
 		}
-		return NewHTTPProvider(apiKey, apiBase), nil
+		return NewHTTPProviderFor(provider, apiKey, apiBase), nil
 	}
 
 	// Fallback: auto-detect provider from model prefix/name

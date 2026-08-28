@@ -1,49 +1,27 @@
-# 🐸 Pepebot v0.5.19 - The Device Answers Back
+# 🐸 Pepebot v0.5.20 - Just the Model, Please
 
-**Release Date:** 2026-08-27
+**Release Date:** 2026-08-29
 
-## 🎉 What's New
+## 🐛 What's Fixed
 
-### 🔧 Apps bring their own tools
+### The provider name no longer travels inside the model id
 
-Until now the agent could only use tools that run on the gateway host. A phone, a rover, a browser tab has things that host will never have — a camera, GPS, a clipboard, a screen, motors.
+With `provider: "maiarouter"` set and a model of `maiarouter/zai/glm-5.3-flash`, the whole string went to the API — and the upstream refused it:
 
-An app connecting to `/v1/live` can now declare its own tools and execute them itself:
-
-```json
-{"setup": {"provider": "realtime", "app": "rover",
-           "tools": [{"name": "take_photo", "description": "...", "parameters": {...}}]}}
+```
+litellm.BadRequestError: You passed in model=maiarouter/zai/glm-5.3-flash.
+There are no healthy deployments for this model.
 ```
 
-The model sees `rover-take_photo`; the app is asked for it by the bare name and answers with a `tool_result`. Gateway tools are all `snake_case`, so the hyphen makes a collision structurally impossible rather than merely forbidden — and a slow or absent device hits a deadline instead of wedging the turn.
+Choosing the endpoint is the config's job. The provider key is now stripped from the front of the model before the request is built, on both the streaming and non-streaming paths.
 
-Try it: `node examples/live-api/nodejs/paniki-toolcall.js` declares `device_info`, `read_clipboard` and `notify`. Ask what's on your clipboard and watch your own machine answer.
+Only that key is removed, never a vendor namespace — OpenRouter genuinely wants `anthropic/claude-3.5-sonnet` and MAIA genuinely wants `maia/gemini-2.5-flash`, so `maia/` survives even when `maia` is the configured alias.
 
-### 💬 Named sessions, one per device
+Worth knowing if you hit this: the composed value usually lives in the **agent registry** entry (`workspace/agents/registry.json`), not in `config.json` — which is why the symptom outlives fixing the config. This release makes it harmless either way.
 
-`setup.session_key` names the conversation, and that name is the memory boundary:
+### The debug log now tells the truth
 
-```json
-{"setup": {"session_key": "rover-01"}}
-{"setup": {"session_key": "hp-ibnu"}}
-```
-
-Same key, new connection? It remembers. Different key? A separate conversation that knows nothing of the first. Voice and text on the same key are one conversation.
-
-This also fixes something v0.5.18 got half-right. That release recorded live turns into session history — but nothing ever read them back, so a session started amnesiac even when its key was reused. It does now: the last 20 turns are replayed as context.
-
-### 🔁 A dropped upstream no longer ends the session
-
-If the upstream connection fails mid-conversation, the client stays connected while Pepebot rebuilds the other leg — 3 attempts with backoff, replaying persona, skills, tools and session config, then a `{"status":"reconnected"}` frame. Caught a real outage during testing and behaved.
-
-### 🖼️ Images, honestly documented
-
-`docs/live-vision.md` covers what a Realtime session can and cannot do with images — measured against a live server, not assumed. Four block shapes work, video is frames-as-items (they are consumed, not accumulated), and the agent cannot send an image back over the protocol at all; a client tool that displays it is the answer.
-
-## 🐛 Fixed
-
-- **A gateway crash.** Routing a client tool call added a second writer to the client socket, and gorilla panics on concurrent writes — it took the whole gateway down mid-session on the test server. Found by deploying before merging, not by the test suite: nothing in it opened a real socket with two writers. Now it does.
-- **CI can name a broken Android release token.** The release workflow's Android leg failed on eight consecutive releases with only `Resource not accessible by personal access token`. It now says which token setting to change, and `android-dispatch.yml` re-fires a release without rebuilding sixteen binaries.
+`pepebot agent -v` reported the model as configured, so it agreed with `config.json` while the wire carried something else. It now prints what is actually sent — which is how you would have caught the above in a minute instead of an afternoon.
 
 ## 📦 Installation
 
@@ -58,19 +36,15 @@ brew tap pepebot-space/tap https://github.com/pepebot-space/homebrew-tap
 brew install pepebot
 ```
 
-## 🚀 Quick Start
+## 🔎 Checking your own setup
 
 ```bash
-pepebot gateway                                   # /v1/live on 127.0.0.1:18790
-cd examples/live-api/nodejs && npm install
-SESSION=laptop node paniki-toolcall.js
+pepebot agent -v -m "hi" 2>&1 | grep "HTTP chat request"
 ```
 
-Then ask it what's on your clipboard.
+The `model=` in that line is exactly what leaves the machine.
 
 ## 🔗 Links
 
 - [Changelog](./CHANGELOG.md)
-- [Live API guide](./docs/live-api.md) — including per-device sessions
-- [Images and video](./docs/live-vision.md)
-- [Custom Realtime endpoints and client tools](./examples/live-api/README-realtime.md)
+- [README](./README.md)
