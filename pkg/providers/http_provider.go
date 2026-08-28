@@ -74,7 +74,7 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 	}
 
 	logger.DebugCF("provider", "HTTP chat request", map[string]interface{}{
-		"model":          model,
+		"model":          modelForProvider(p.provider, model),
 		"api_base":       p.apiBase,
 		"messages":       len(messages),
 		"tools":          len(tools),
