@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/caarlos0/env/v11"
+
+	"github.com/pepebot-space/pepebot/pkg/memory"
 )
 
 type Config struct {
@@ -17,7 +19,20 @@ type Config struct {
 	Gateway   GatewayConfig   `json:"gateway"`
 	Live      LiveConfig      `json:"live"`
 	Tools     ToolsConfig     `json:"tools"`
+	Memory    MemoryConfig    `json:"memory"`
 	mu        sync.RWMutex
+}
+
+// MemoryConfig bounds the agent's long-term notes and the background review
+// that writes to them. Both limits are in characters; the review costs one
+// auxiliary LLM call every ReviewInterval turns, so it is worth turning off on
+// a busy deployment rather than paying for it silently.
+type MemoryConfig struct {
+	Enabled        bool `json:"enabled" env:"PEPEBOT_MEMORY_ENABLED"`
+	CharLimit      int  `json:"char_limit" env:"PEPEBOT_MEMORY_CHAR_LIMIT"`
+	UserCharLimit  int  `json:"user_char_limit" env:"PEPEBOT_MEMORY_USER_CHAR_LIMIT"`
+	Review         bool `json:"review" env:"PEPEBOT_MEMORY_REVIEW"`
+	ReviewInterval int  `json:"review_interval" env:"PEPEBOT_MEMORY_REVIEW_INTERVAL"`
 }
 
 type AgentsConfig struct {
@@ -190,6 +205,13 @@ type ToolsConfig struct {
 
 func DefaultConfig() *Config {
 	return &Config{
+		Memory: MemoryConfig{
+			Enabled:        true,
+			CharLimit:      memory.DefaultNotesLimit,
+			UserCharLimit:  memory.DefaultProfileLimit,
+			Review:         true,
+			ReviewInterval: 5,
+		},
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
 				Workspace:         "~/.pepebot/workspace",

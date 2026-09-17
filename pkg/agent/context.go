@@ -11,11 +11,14 @@ import (
 	"time"
 
 	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/memory"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/skills"
 )
 
 type ContextBuilder struct {
+	notes          *memory.Store
+	profile        *memory.Store
 	workspace      string
 	agentPromptDir string
 	skillsLoader   *skills.SkillsLoader
@@ -48,6 +51,32 @@ func NewContextBuilderWithAgentDir(workspace, agentPromptDir string) *ContextBui
 }
 
 // SkillsLoader returns the underlying skills loader for external use (e.g. workflow skill steps)
+// SetMemory attaches the bounded memory stores. Without them the builder falls
+// back to loading MEMORY.md and USER.md as plain bootstrap files, which is what
+// callers that have no memory configured (subagents, Live sessions) still do.
+func (cb *ContextBuilder) SetMemory(notes, profile *memory.Store) {
+	cb.notes, cb.profile = notes, profile
+}
+
+// MemoryPrompt renders the memory block for the system prompt: the entries plus
+// how full each store is. The capacity line is for the agent, not decoration —
+// it is what lets it consolidate before a write fails.
+func (cb *ContextBuilder) MemoryPrompt() string {
+	if cb.notes == nil {
+		return ""
+	}
+	blocks := []string{}
+	for _, s := range []*memory.Store{cb.notes, cb.profile} {
+		if r := s.Render(); r != "" {
+			blocks = append(blocks, r)
+		}
+	}
+	if len(blocks) == 0 {
+		return ""
+	}
+	return "## Memory\n\n" + strings.Join(blocks, "\n\n") + "\n"
+}
+
 func (cb *ContextBuilder) SkillsLoader() *skills.SkillsLoader {
 	return cb.skillsLoader
 }
@@ -106,12 +135,14 @@ When (and only when) creating workflows, use the correct step type:
 - For LLM decisions: use GOAL step ({"goal":"..."}).
 
 ## Memory Instructions
-When the user asks you to remember, save, or note something:
-- You MUST use the write_file tool to write to %s/memory/MEMORY.md
-- First read_file the current MEMORY.md, then write_file with updated content
-- NEVER just say "I'll remember that" without actually calling write_file
-- If you don't call write_file, the information WILL BE LOST`,
-		now, workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
+When the user asks you to remember, save, or note something, call the memory tool
+- memory(action="add", target="memory", content="...") for facts about projects, environment or conventions
+- target="user" for the user's own preferences and communication style
+- Correct a wrong entry with action="replace" and fix old_text; drop one with action="remove"
+- NEVER just say "I'll remember that" without calling the tool — the information WILL BE LOST
+- Both stores are size-limited. If a write fails because a store is full, consolidate two
+  related entries into one with replace, or remove something stale, then retry`,
+		now, workspacePath, workspacePath, workspacePath, workspacePath)
 }
 
 func (cb *ContextBuilder) LoadBootstrapFiles() string {
@@ -122,6 +153,12 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 		"TOOLS.md",
 		"IDENTITY.md",
 		"memory/MEMORY.md",
+	}
+
+	// When memory is bounded, these two are rendered by MemoryPrompt with their
+	// capacity header instead of being pasted in raw and unlimited.
+	if cb.notes != nil {
+		bootstrapFiles = []string{"AGENTS.md", "SOUL.md", "TOOLS.md", "IDENTITY.md"}
 	}
 
 	var result string
@@ -155,6 +192,10 @@ func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary str
 	bootstrapContent := cb.LoadBootstrapFiles()
 	if bootstrapContent != "" {
 		systemPrompt += "\n\n" + bootstrapContent
+	}
+
+	if memoryPrompt := cb.MemoryPrompt(); memoryPrompt != "" {
+		systemPrompt += "\n\n" + memoryPrompt
 	}
 
 	if skillsPrompt := cb.SkillsPrompt(); skillsPrompt != "" {
