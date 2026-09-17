@@ -1,27 +1,39 @@
-# 🐸 Pepebot v0.5.20 - Just the Model, Please
+# 🐸 Pepebot v0.5.21 - Skills That Fit, Attachments That Arrive
 
-**Release Date:** 2026-08-29
+**Release Date:** 2026-09-17
+
+## ⚡ What's New
+
+### Your skills no longer eat the whole context window
+
+Pepebot used to paste every `SKILL.md` into the prompt, in full, on every single message. With a real skills folder that is fatal: 89 skills came to roughly **335,000 tokens** before the user had typed a word, so a 128k model refused outright — and the requests that did fit were paying for all 89 skills to use at most one.
+
+Pepebot now sends the **catalogue, not the contents**: each skill's name, description and where it lives. When a task needs a skill, the agent opens that one file and follows it.
+
+Same 89 skills, same machine: **~7k tokens instead of ~335k — a 97.9% cut**, and nothing had to be disabled to make it fit. If you parked skills to get under a limit, you can put them all back.
 
 ## 🐛 What's Fixed
 
-### The provider name no longer travels inside the model id
+### Skill frontmatter finally does something
 
-With `provider: "maiarouter"` set and a model of `maiarouter/zai/glm-5.3-flash`, the whole string went to the API — and the upstream refused it:
+The `---` block at the top of every `SKILL.md` was being read with a JSON parser, through a regex that could not match more than one line. In other words: never. Descriptions came out blank, `requires:` gated nothing, and MCP servers declared by a skill were quietly ignored.
+
+It now parses as the YAML it always was. Your descriptions show up, a skill that needs a missing tool is correctly marked unavailable, and skill-provided MCP servers actually register.
+
+### Documents reach the model as real bytes
+
+Attach a file on Discord and the bot used to answer with an error:
 
 ```
-litellm.BadRequestError: You passed in model=maiarouter/zai/glm-5.3-flash.
-There are no healthy deployments for this model.
+Error processing message: LLM call failed: API error:
+messages[0].content[0].file must contain at least one of file_id, file_url, or file_data
 ```
 
-Choosing the endpoint is the config's job. The provider key is now stripped from the front of the model before the request is built, on both the streaming and non-streaming paths.
+The attachment was handed over as a bare CDN link, in a field that only accepts inline data — and those signed, expiring links were never fetchable by the provider anyway. Pepebot now downloads the file and sends the actual bytes.
 
-Only that key is removed, never a vendor namespace — OpenRouter genuinely wants `anthropic/claude-3.5-sonnet` and MAIA genuinely wants `maia/gemini-2.5-flash`, so `maia/` survives even when `maia` is the configured alias.
+A file that can't be fetched, or is over 20 MB, degrades to a plain-text note instead of killing the whole message. Images are unchanged and still travel as links, so ordinary requests stay small.
 
-Worth knowing if you hit this: the composed value usually lives in the **agent registry** entry (`workspace/agents/registry.json`), not in `config.json` — which is why the symptom outlives fixing the config. This release makes it harmless either way.
-
-### The debug log now tells the truth
-
-`pepebot agent -v` reported the model as configured, so it agreed with `config.json` while the wire carried something else. It now prints what is actually sent — which is how you would have caught the above in a minute instead of an afternoon.
+> Whether a document is *understood* is still up to your model — some vision models accept images but reject PDFs. Pepebot's side of the handoff is now correct either way.
 
 ## 📦 Installation
 
@@ -29,22 +41,15 @@ Worth knowing if you hit this: the composed value usually lives in the **agent r
 curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.sh | bash
 ```
 
-Or with Homebrew:
+## 🚀 Quick Start
 
 ```bash
-brew tap pepebot-space/tap https://github.com/pepebot-space/homebrew-tap
-brew install pepebot
+pepebot onboard
+pepebot gateway
 ```
-
-## 🔎 Checking your own setup
-
-```bash
-pepebot agent -v -m "hi" 2>&1 | grep "HTTP chat request"
-```
-
-The `model=` in that line is exactly what leaves the machine.
 
 ## 🔗 Links
 
-- [Changelog](./CHANGELOG.md)
-- [README](./README.md)
+- [Changelog](CHANGELOG.md)
+- [Documentation](docs/README.md)
+- [Installation Guide](docs/install.md)
