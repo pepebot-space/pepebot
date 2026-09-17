@@ -3,6 +3,8 @@ package agent
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,37 +215,25 @@ func (cb *ContextBuilder) AddAssistantMessage(messages []providers.Message, cont
 	return messages
 }
 
-// SkillsPrompt renders the skills block that goes into a system prompt: the summary
-// of every skill plus the full definitions. Shared with Live sessions so a voice
-// conversation knows about the same skills a text one does.
+// SkillsPrompt renders the skills block that goes into a system prompt: every skill's
+// name, description and location, and nothing more. Shared with Live sessions so a
+// voice conversation knows about the same skills a text one does.
+//
+// The full SKILL.md bodies deliberately stay out. Injecting all of them does not
+// scale — on one deployment 89 skills came to roughly 335k tokens of prompt before
+// the user had typed anything, which no context window survives, and every request
+// paid for all of them to use at most one. The summary carries each skill's
+// <location>, so the agent opens the one it needs with read_file instead.
 func (cb *ContextBuilder) SkillsPrompt() string {
-	var parts []string
-	if summary := cb.skillsLoader.BuildSkillsSummary(); summary != "" {
-		parts = append(parts, "## Available Skills\n\n"+summary)
-	}
-	if content := cb.loadSkills(); content != "" {
-		parts = append(parts, content)
-	}
-	return strings.Join(parts, "\n\n")
-}
-
-func (cb *ContextBuilder) loadSkills() string {
-	allSkills := cb.skillsLoader.ListSkills(true)
-	if len(allSkills) == 0 {
+	summary := cb.skillsLoader.BuildSkillsSummary()
+	if summary == "" {
 		return ""
 	}
 
-	var skillNames []string
-	for _, s := range allSkills {
-		skillNames = append(skillNames, s.Name)
-	}
-
-	content := cb.skillsLoader.LoadSkillsForContext(skillNames)
-	if content == "" {
-		return ""
-	}
-
-	return "# Skill Definitions\n\n" + content
+	return "## Available Skills\n\n" + summary + "\n\n" +
+		"Each skill's full instructions are in the SKILL.md at its <location>. " +
+		"When a task calls for a skill, read that file first with read_file and " +
+		"follow it — do not work from the description alone."
 }
 
 // convertFileToDataURL converts a local file path to a base64 data URL
@@ -280,6 +270,51 @@ func convertFileToDataURL(filePath string) string {
 	})
 
 	return dataURL
+}
+
+// maxInlineFileBytes caps how much of a remote attachment we base64 into a
+// request body. ponytail: hard cap, switch to a provider file-upload API if
+// bigger documents ever matter.
+const maxInlineFileBytes = 20 << 20
+
+// fetchRemoteAsDataURL downloads an http(s) attachment and returns it as a
+// base64 data URL. Returns "" when it cannot be inlined, so the caller can drop
+// the block instead of sending one the provider will reject.
+func fetchRemoteAsDataURL(url string) string {
+	resp, err := http.Get(url)
+	if err != nil {
+		logger.ErrorCF("agent", "Failed to fetch remote attachment", map[string]interface{}{"url": url, "error": err.Error()})
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.ErrorCF("agent", "Remote attachment fetch returned non-200", map[string]interface{}{"url": url, "status": resp.StatusCode})
+		return ""
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxInlineFileBytes+1))
+	if err != nil || len(data) == 0 {
+		logger.ErrorCF("agent", "Failed to read remote attachment", map[string]interface{}{"url": url, "error": fmt.Sprintf("%v", err)})
+		return ""
+	}
+	if len(data) > maxInlineFileBytes {
+		logger.WarnCF("agent", "Remote attachment too large to inline", map[string]interface{}{"url": url, "limit": maxInlineFileBytes})
+		return ""
+	}
+
+	_, mimeType := providers.DetectFileType(url)
+	if mimeType == "" {
+		mimeType = resp.Header.Get("Content-Type")
+	}
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	if idx := strings.Index(mimeType, ";"); idx > 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data))
 }
 
 // buildUserMessage creates a user message with optional media attachments for multimodal support
@@ -324,10 +359,22 @@ func (cb *ContextBuilder) buildUserMessage(text string, media []string) provider
 			// All other file types (documents, audio, video) use file format
 			// Format: { "type": "file", "file": { "file_data": "data:mime/type;base64,..." } }
 			// Reference: https://developers.openai.com/api/docs/guides/pdf-files
+			// file_data only accepts a base64 data URL, so remote attachments
+			// (Discord CDN links etc.) must be fetched and inlined first.
+			if !strings.HasPrefix(processedURL, "data:") {
+				processedURL = fetchRemoteAsDataURL(processedURL)
+			}
+			if processedURL == "" {
+				content = append(content, providers.ContentBlock{
+					Type: "text",
+					Text: fmt.Sprintf("[attachment could not be read: %s]", mediaURL),
+				})
+				continue
+			}
 			content = append(content, providers.ContentBlock{
 				Type: "file",
 				File: &providers.FileData{
-					FileData: processedURL, // Already in data URL format from convertFileToDataURL
+					FileData: processedURL,
 				},
 			})
 		}

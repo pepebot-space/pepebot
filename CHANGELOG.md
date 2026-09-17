@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.21] - 2026-09-17
+
+### Changed
+- **The system prompt lists skills instead of inlining them**: every available `SKILL.md` used to be pasted into the prompt in full. That does not scale — on one deployment 89 skills came to roughly 335k tokens before the user had typed anything, so every request died with `ContextWindowExceededError` on a 128k model, and the ones that fit still paid for all 89 to use at most one. The prompt now carries only the summary block — each skill's name, description and `<location>` — plus an instruction to open the one it needs with `read_file`. Same deployment, same 89 skills: ~7k tokens, a 97.9% reduction, and no skills had to be disabled to make it fit.
+  - `ContextBuilder.SkillsPrompt()` replaces the old summary+bodies path (`loadSkills()` is gone); Live sessions share it, so a voice conversation knows about the same skills a text one does.
+  - Test: `TestSkillsPromptCarriesSummaryNotBodies` fails if a skill body ever reaches the prompt again.
+
+### Fixed
+- **`SKILL.md` frontmatter was never actually parsed**, three bugs deep, so a skill's metadata had no effect on anything:
+  - The extraction regex had no `(?s)` flag, so it could not span lines — and every real frontmatter is multi-line, meaning the block matched nothing and the metadata came back empty.
+  - What it did extract was handed to `json.Unmarshal`, but frontmatter is YAML. It now parses with `gopkg.in/yaml.v3`.
+  - Consequences, all now fixed: descriptions came out empty (the skills summary listed names and nothing else), `requires` never gated availability, and skill-declared MCP servers were never registered.
+- **`requires.bins` gated nothing**: `checkRequirements` returned `true` as soon as any one binary was found — and `true` again when none were — so a skill needing a missing tool was still offered. It is now exactly "nothing is missing", sharing one code path with the text that reports what is missing, so the two cannot drift.
+  - Tests: `TestSkillFrontmatterIsParsed`, `TestSkillWithoutFrontmatterStillLists`.
+- **Remote attachments are inlined before they reach the LLM**: a Discord (or any channel) attachment arrives as an `https://` link, and that link was written straight into the `file_data` field of the `file` content block. `file_data` only accepts a base64 data URL, so the upstream rejected the whole request — `litellm.BadRequestError: ZaiException - messages[0].content[0].file must contain at least one of file_id, file_url, or file_data` — and every message carrying a document died with `Error processing message`. Non-image attachments are now fetched and base64-encoded in `buildUserMessage` before the block is built.
+  - Images are untouched: `image_url` legitimately takes a URL, and inlining them would bloat every request for no gain.
+  - A fetch that fails, returns non-200, or exceeds the 20 MB inline cap degrades to a `[attachment could not be read: …]` text block, so one bad attachment no longer 400s the entire conversation.
+  - Signed, expiring CDN links (Discord's `?ex=…&hm=…`) were never fetchable by the provider anyway, which is why passing the URL through could not have worked for any model.
+  - Tests: `TestBuildUserMessageInlinesRemoteFile`, `TestBuildUserMessageUnreachableFileDegrades`.
+- **Empty `file_id` is no longer sent alongside `file_data`**: `contentBlocks` emitted both keys unconditionally, so a request carried `"file_id": ""`. Only keys with a value are emitted now.
+
 ## [0.5.20] - 2026-08-29
 
 ### Fixed

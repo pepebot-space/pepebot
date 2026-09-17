@@ -1,8 +1,9 @@
 package skills
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/pepebot-space/pepebot/pkg/logger"
+	"gopkg.in/yaml.v3"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,19 +22,19 @@ type SkillMetadata struct {
 }
 
 type SkillMCPConfig struct {
-	Name        string            `json:"name"`
-	Transport   string            `json:"transport"`
-	Description string            `json:"description,omitempty"`
-	URL         string            `json:"url,omitempty"`
-	Command     string            `json:"command,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
+	Name        string            `json:"name" yaml:"name"`
+	Transport   string            `json:"transport" yaml:"transport"`
+	Description string            `json:"description,omitempty" yaml:"description"`
+	URL         string            `json:"url,omitempty" yaml:"url"`
+	Command     string            `json:"command,omitempty" yaml:"command"`
+	Args        []string          `json:"args,omitempty" yaml:"args"`
+	Env         map[string]string `json:"env,omitempty" yaml:"env"`
+	Headers     map[string]string `json:"headers,omitempty" yaml:"headers"`
 }
 
 type SkillRequirements struct {
-	Bins []string `json:"bins"`
-	Env  []string `json:"env"`
+	Bins []string `json:"bins" yaml:"bins"`
+	Env  []string `json:"env" yaml:"env"`
 }
 
 type SkillInfo struct {
@@ -236,15 +237,22 @@ func (sl *SkillsLoader) getSkillMetadata(skillPath string) *SkillMetadata {
 		}
 	}
 
+	// SKILL.md frontmatter is YAML. This used to be json.Unmarshal, which fails on
+	// every well-formed skill — so descriptions came out empty, `requires` never
+	// gated availability, and skill-declared MCP servers were never registered.
 	var metadata struct {
-		Name        string             `json:"name"`
-		Description string             `json:"description"`
-		Always      bool               `json:"always"`
-		Requires    *SkillRequirements `json:"requires"`
-		MCP         []SkillMCPConfig   `json:"mcp"`
+		Name        string             `yaml:"name"`
+		Description string             `yaml:"description"`
+		Always      bool               `yaml:"always"`
+		Requires    *SkillRequirements `yaml:"requires"`
+		MCP         []SkillMCPConfig   `yaml:"mcp"`
 	}
 
-	if err := json.Unmarshal([]byte(frontmatter), &metadata); err != nil {
+	if err := yaml.Unmarshal([]byte(frontmatter), &metadata); err != nil {
+		logger.WarnCF("skills", "Could not parse SKILL.md frontmatter", map[string]interface{}{
+			"path":  skillPath,
+			"error": err.Error(),
+		})
 		return nil
 	}
 
@@ -294,7 +302,9 @@ func (sl *SkillsLoader) SyncMCPRegistry() error {
 }
 
 func (sl *SkillsLoader) extractFrontmatter(content string) string {
-	re := regexp.MustCompile(`^---\n(.*?)\n---`)
+	// (?s) so the block can span lines — without it a multi-line frontmatter, which
+	// is every real one, never matched and the metadata came back empty.
+	re := regexp.MustCompile(`(?s)^---\r?\n(.*?)\r?\n---`)
 	match := re.FindStringSubmatch(content)
 	if len(match) > 1 {
 		return match[1]
@@ -307,26 +317,15 @@ func (sl *SkillsLoader) stripFrontmatter(content string) string {
 	return re.ReplaceAllString(content, "")
 }
 
+// checkRequirements reports whether everything a skill declares is present. It is
+// exactly "nothing is missing", so it cannot drift from what the summary tells the
+// user is missing.
+//
+// It used to return true as soon as any one binary was found, and true again when
+// none were — so `requires.bins` never gated anything. That went unnoticed because
+// the frontmatter it reads never parsed, leaving requires nil.
 func (sl *SkillsLoader) checkRequirements(requires *SkillRequirements) bool {
-	if requires == nil {
-		return true
-	}
-
-	for _, bin := range requires.Bins {
-		if _, err := exec.LookPath(bin); err != nil {
-			continue
-		} else {
-			return true
-		}
-	}
-
-	for _, env := range requires.Env {
-		if os.Getenv(env) == "" {
-			return false
-		}
-	}
-
-	return true
+	return sl.getMissingRequirements(requires) == ""
 }
 
 func (sl *SkillsLoader) getMissingRequirements(requires *SkillRequirements) string {

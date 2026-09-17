@@ -105,10 +105,16 @@ func contentBlocks(content interface{}) []interface{} {
 				}
 			}
 			if b.File != nil {
-				block["file"] = map[string]interface{}{
-					"file_data": b.File.FileData,
-					"file_id":   b.File.FileID,
+				// Only emit the keys that carry a value: providers reject a
+				// file object whose file_data/file_id are both empty strings.
+				file := map[string]interface{}{}
+				if b.File.FileData != "" {
+					file["file_data"] = b.File.FileData
 				}
+				if b.File.FileID != "" {
+					file["file_id"] = b.File.FileID
+				}
+				block["file"] = file
 			}
 			blocks = append(blocks, block)
 		}
