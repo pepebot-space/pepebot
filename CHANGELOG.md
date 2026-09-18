@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.22] - 2026-09-18
+
+### Added
+- **Bounded memory with a background review** (`pkg/memory`, `docs/memory.md`): the agent now curates `MEMORY.md` and `USER.md` through a dedicated `memory` tool (`add` / `replace` / `remove`, substring matching on `old_text`) instead of rewriting whole files with `write_file`, and both stores are rendered into the system prompt with a capacity header.
+  - **The limit is the feature.** There is no auto-compaction: a write past the ceiling fails with `MEMORY is full (2,340/2,200 chars)` and the agent must consolidate or remove an entry itself. Dropping the oldest entry to make room would silently discard something the user asked to be remembered. Defaults are 2,200 chars for notes and 1,375 for the user profile — one deployment's `MEMORY.md` had reached 14,559 chars (~3.6k tokens) paid on every single request.
+  - **A store already over its limit can still shrink.** Any workspace predating this change is over; a write that reduces the size is allowed through even while still over, so the agent can dig out rather than being frozen at its current size.
+  - **Background review after every `review_interval` turns** (default 5) replays the recent conversation and decides what is worth keeping. It runs in a goroutine, never blocks the reply, and gets no tools — it returns JSON that is applied through the same stores, so limits, duplicate checks and scanning still apply. This is what makes memory work with models that are unreliable at tool calling: in testing a model answered "noted!" without calling the tool, and the review saved the fact anyway.
+  - **Entries are scanned before they are accepted**: instruction overrides (`ignore previous instructions`), credential material (`BEGIN OPENSSH PRIVATE KEY`), and invisible or bidi characters are refused. Memory is written from conversation and read back as the agent's own notes in every later session, so an injected instruction would be a persistent prompt injection.
+  - Legacy `MEMORY.md` files without `§` delimiters are read as a single entry, so nothing is lost on upgrade.
+  - Config: `memory.enabled`, `memory.char_limit`, `memory.user_char_limit`, `memory.review`, `memory.review_interval`, with matching `PEPEBOT_MEMORY_*` overrides.
+  - Tests: `pkg/memory` (limit refusal, shrink-while-over, duplicates, injection scan, legacy files) and `pkg/agent` (prompt rendering, no double-inlining, review JSON parsing).
+
+### Changed
+- `MEMORY.md` and `USER.md` are no longer pasted into the prompt as raw bootstrap files when memory is enabled; they are rendered once, bounded, with their capacity header.
+- The system prompt's memory instructions now point at the `memory` tool instead of `read_file` + `write_file`, and tell the agent what to do when a store is full.
+
 ## [0.5.21] - 2026-09-17
 
 ### Changed

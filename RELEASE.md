@@ -1,39 +1,53 @@
-# 🐸 Pepebot v0.5.21 - Skills That Fit, Attachments That Arrive
+# 🐸 Pepebot v0.5.22 - Memory That Stays Small
 
-**Release Date:** 2026-09-17
+**Release Date:** 2026-09-18
 
 ## ⚡ What's New
 
-### Your skills no longer eat the whole context window
+### Your bot remembers you — without the notes taking over the prompt
 
-Pepebot used to paste every `SKILL.md` into the prompt, in full, on every single message. With a real skills folder that is fatal: 89 skills came to roughly **335,000 tokens** before the user had typed a word, so a 128k model refused outright — and the requests that did fit were paying for all 89 skills to use at most one.
+Pepebot has always kept long-term notes in `MEMORY.md`. The problem was that nothing stopped them growing: on one live deployment that file had reached **14,559 characters — about 3,600 tokens paid on every single message**, most of it irrelevant to whatever was just asked.
 
-Pepebot now sends the **catalogue, not the contents**: each skill's name, description and where it lives. When a task needs a skill, the agent opens that one file and follows it.
+Memory is now **bounded and curated**. Two stores, each with a ceiling:
 
-Same 89 skills, same machine: **~7k tokens instead of ~335k — a 97.9% cut**, and nothing had to be disabled to make it fit. If you parked skills to get under a limit, you can put them all back.
+| Store | Holds | Limit |
+|---|---|---|
+| `MEMORY.md` | projects, environment, conventions | 2,200 chars |
+| `USER.md` | your preferences and style | 1,375 chars |
 
-## 🐛 What's Fixed
+The agent sees how full they are right in its prompt (`MEMORY [67% — 1,474/2,200 chars]`) and edits single entries through a new `memory` tool instead of rewriting whole files.
 
-### Skill frontmatter finally does something
+**When a store is full, the write fails.** That is deliberate. Pepebot will not quietly delete the oldest thing you asked it to remember to make room — it consolidates two entries into one, or drops something stale, and tells you it did.
 
-The `---` block at the top of every `SKILL.md` was being read with a JSON parser, through a regex that could not match more than one line. In other words: never. Descriptions came out blank, `requires:` gated nothing, and MCP servers declared by a skill were quietly ignored.
+Already have a huge `MEMORY.md`? Nothing is lost. It keeps working, keeps being read, and the agent is allowed to shrink it even while it is still over the line.
 
-It now parses as the YAML it always was. Your descriptions show up, a skill that needs a missing tool is correctly marked unavailable, and skill-provided MCP servers actually register.
+### It learns without being told to
 
-### Documents reach the model as real bytes
+After every few turns, pepebot quietly reviews the conversation in the background and decides whether anything is worth keeping — a preference you stated, a correction you had to repeat twice, how your machine is set up. It never blocks your reply, and it has no tools, so it can only write memory.
 
-Attach a file on Discord and the bot used to answer with an error:
+This also covers a very real failure: in testing, the model replied "noted!" and never called the memory tool at all. The background review saved the fact anyway.
 
+### Nothing dangerous gets into memory
+
+Memory is written from conversation and read back as the agent's own notes forever after — so anything hidden in there would come back every session. Entries carrying instruction overrides, private keys, or invisible characters are refused at the door.
+
+## 🔧 Configuration
+
+```json
+{
+  "memory": {
+    "enabled": true,
+    "char_limit": 2200,
+    "user_char_limit": 1375,
+    "review": true,
+    "review_interval": 5
+  }
+}
 ```
-Error processing message: LLM call failed: API error:
-messages[0].content[0].file must contain at least one of file_id, file_url, or file_data
-```
 
-The attachment was handed over as a bare CDN link, in a field that only accepts inline data — and those signed, expiring links were never fetchable by the provider anyway. Pepebot now downloads the file and sends the actual bytes.
+Set `review: false` to keep the memory tool but stop the automatic reviews — it is one extra model call per interval.
 
-A file that can't be fetched, or is over 20 MB, degrades to a plain-text note instead of killing the whole message. Images are unchanged and still travel as links, so ordinary requests stay small.
-
-> Whether a document is *understood* is still up to your model — some vision models accept images but reject PDFs. Pepebot's side of the handoff is now correct either way.
+Full details: [docs/memory.md](docs/memory.md)
 
 ## 📦 Installation
 
@@ -51,5 +65,6 @@ pepebot gateway
 ## 🔗 Links
 
 - [Changelog](CHANGELOG.md)
+- [Memory Guide](docs/memory.md)
 - [Documentation](docs/README.md)
 - [Installation Guide](docs/install.md)

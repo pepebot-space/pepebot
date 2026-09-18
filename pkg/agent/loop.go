@@ -19,6 +19,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/mcp"
+	"github.com/pepebot-space/pepebot/pkg/memory"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/session"
 	"github.com/pepebot-space/pepebot/pkg/tools"
@@ -40,7 +41,30 @@ type AgentLoop struct {
 	mcpRuntime     *mcp.Runtime
 	running        bool
 	summarizing    sync.Map
+	reviewing      sync.Map
+	memoryCfg      config.MemoryConfig
+	notes          *memory.Store
+	profile        *memory.Store
 	agentName      string
+}
+
+// attachMemory gives the loop its bounded memory stores, registers the tool the
+// agent curates them with, and lets the context builder render them. Disabled
+// memory leaves every store nil and the tool unregistered, so nothing downstream
+// has to test a flag.
+func (al *AgentLoop) attachMemory(cfg *config.Config) {
+	al.memoryCfg = cfg.Memory
+	if !cfg.Memory.Enabled {
+		return
+	}
+	al.notes = memory.Notes(al.workspace, cfg.Memory.CharLimit)
+	al.profile = memory.Profile(al.workspace, cfg.Memory.UserCharLimit)
+	al.tools.Register(tools.NewMemoryTool(al.notes, al.profile))
+	al.contextBuilder.SetMemory(al.notes, al.profile)
+}
+
+func (al *AgentLoop) memoryStores() (*memory.Store, *memory.Store) {
+	return al.notes, al.profile
 }
 
 // agentGoalProcessor implements workflow.GoalProcessor using the agent's LLM provider.
@@ -148,7 +172,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 	contextBuilder := NewContextBuilder(workspace)
 	workflowHelper.SetSkillProvider(contextBuilder.SkillsLoader())
 
-	return &AgentLoop{
+	al := &AgentLoop{
 		bus:            bus,
 		provider:       provider,
 		workspace:      workspace,
@@ -165,6 +189,8 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		summarizing:    sync.Map{},
 		agentName:      "default",
 	}
+	al.attachMemory(cfg)
+	return al
 }
 
 // NewAgentLoopWithDefinition creates a new agent loop with specific agent definition
@@ -249,7 +275,7 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 
 	workflowHelper.SetSkillProvider(contextBuilder.SkillsLoader())
 
-	return &AgentLoop{
+	al := &AgentLoop{
 		bus:            bus,
 		provider:       provider,
 		workspace:      workspace,
@@ -266,6 +292,8 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 		summarizing:    sync.Map{},
 		agentName:      agentName,
 	}
+	al.attachMemory(cfg)
+	return al
 }
 
 func (al *AgentLoop) Run(ctx context.Context) error {
@@ -447,6 +475,8 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 				}
 			}
 
+			al.maybeReview(msg.SessionKey)
+
 			al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
 			return nil
 		}
@@ -498,6 +528,8 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 
 	al.sessions.AddMessage(msg.SessionKey, "user", msg.Content)
 	al.sessions.AddMessage(msg.SessionKey, "assistant", "I've completed processing but have no response to give.")
+	al.maybeReview(msg.SessionKey)
+
 	al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
 
 	return nil
@@ -656,6 +688,8 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			}()
 		}
 	}
+
+	al.maybeReview(msg.SessionKey)
 
 	al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
 
