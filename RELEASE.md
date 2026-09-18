@@ -1,6 +1,6 @@
 # 🐸 Pepebot v0.5.22 - Memory That Stays Small
 
-**Release Date:** 2026-09-17
+**Release Date:** 2026-09-18
 
 ## ⚡ What's New
 

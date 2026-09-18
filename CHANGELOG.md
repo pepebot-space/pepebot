@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.22] - 2026-09-17
+## [0.5.22] - 2026-09-18
 
 ### Added
 - **Bounded memory with a background review** (`pkg/memory`, `docs/memory.md`): the agent now curates `MEMORY.md` and `USER.md` through a dedicated `memory` tool (`add` / `replace` / `remove`, substring matching on `old_text`) instead of rewriting whole files with `write_file`, and both stores are rendered into the system prompt with a capacity header.
