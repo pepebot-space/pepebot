@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.23"
+const version = "0.5.24"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -207,6 +207,7 @@ func printHelp() {
 	fmt.Println("  gateway     Start pepebot gateway")
 	fmt.Println("              Options:")
 	fmt.Println("                -v, --verbose    Enable verbose logging (show DEBUG logs)")
+	fmt.Println("                --media <path|url>  Attach an image, PDF, audio or video (repeatable)")
 	fmt.Println("  status      Show pepebot status")
 	fmt.Println("  cron        Manage scheduled tasks")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
@@ -987,6 +988,7 @@ func agentCmd() {
 	sessionKey := "cli:default"
 	agentName := "" // empty = use default agent
 	verbose := false
+	var media []string
 
 	args := os.Args[2:]
 	for i := 0; i < len(args); i++ {
@@ -1006,6 +1008,14 @@ func agentCmd() {
 		case "-a", "--agent":
 			if i+1 < len(args) {
 				agentName = args[i+1]
+				i++
+			}
+		case "--media":
+			// Repeatable. Local path or http(s) URL — the same media list a
+			// channel message carries, so this exercises the attachment path
+			// that was previously only reachable from Telegram or Discord.
+			if i+1 < len(args) {
+				media = append(media, args[i+1])
 				i++
 			}
 		default:
@@ -1060,7 +1070,7 @@ func agentCmd() {
 
 	if message != "" {
 		ctx := context.Background()
-		response, err := agentLoop.ProcessDirect(ctx, message, nil, sessionKey)
+		response, err := agentLoop.ProcessDirect(ctx, message, media, sessionKey)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)

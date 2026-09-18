@@ -1,4 +1,4 @@
-# 🐸 Pepebot v0.5.23 - Your Bot Can See Again
+# 🐸 Pepebot v0.5.24 - Your Bot Can See Again
 
 **Release Date:** 2026-09-18
 
@@ -17,6 +17,15 @@ Files that can't be fetched, or are over 20 MB, still degrade to a short text no
 ### CI is green again
 
 `go test ./...` also runs `go vet`, and seven stray `fmt.Println("…\n")` calls were failing its checks — so the test job had been red on every release for a while, no matter how the tests did. Fixed, with byte-identical output.
+
+### Attach a file straight from the terminal
+
+```bash
+pepebot agent -m "Tulisan apa di gambar ini?" --media ./foto.png
+pepebot agent -m "Ringkas laporan ini" --media https://example.com/laporan.pdf
+```
+
+Repeatable, and it takes the same path a Discord or Telegram attachment does — which is how the image fix above was verified end to end instead of by eye.
 
 ## 📦 Installation
 
