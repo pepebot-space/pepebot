@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.24] - 2026-09-18
+
+### Added
+- **`pepebot agent --media <path|url>`** (repeatable): attaches an image, PDF, audio or video to a CLI message, using the same media list a channel message carries. Until now the attachment path was only reachable from Telegram or Discord, so an image bug could not be reproduced or verified without a real chat client — which is how the image-URL failure fixed in v0.5.23 went unnoticed. With it, the fix verifies end to end: a remote PNG containing the word "KOPI" is fetched, inlined, and read back correctly by `zai/glm-4.5v` through pepebot's own code path.
+
 ## [0.5.23] - 2026-09-18
 
 ### Fixed
