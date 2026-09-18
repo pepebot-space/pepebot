@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.23] - 2026-09-18
+
+### Fixed
+- **Images sent to the bot are now inlined instead of passed as a link**: a channel attachment arrives as a signed, expiring CDN URL (Discord's `?ex=…&hm=…`), and images were handed to the model as that bare URL — which requires the *provider* to fetch it. Measured against the live endpoint, `zai/glm-4.5v` rejects every remote image URL with `litellm.BadRequestError: ZaiException - 图片输入格式/解析错误`, including a plain public URL with no signing at all, while the identical image inlined as base64 is described correctly. So every image a user sent failed, and the bot looked like it could not see.
+  - Images now take the same path documents took in v0.5.21: fetched, base64-encoded, 20 MB cap, and a `[attachment could not be read: …]` text placeholder when the fetch fails, so one dead attachment no longer 400s the conversation. The fetch and guard live once, before the type switch, rather than being duplicated per branch.
+  - v0.5.21 deliberately left images as URLs to keep requests small. That assumption held only for providers that can fetch them; expiring CDN links were never reliably fetchable by anyone, so correctness wins over payload size here.
+  - Tests: `TestBuildUserMessageInlinesRemoteImage`, `TestBuildUserMessageUnreachableImageDegrades`.
+- **CI is green again**: `go test ./...` runs `go vet`, and seven `fmt.Println("…\n")` calls in `cmd/pepebot/main.go` failed its redundant-newline check, so the test job had been failing on every release since before v0.5.21 regardless of the tests themselves. Rewritten as `fmt.Print("…\n\n")` — byte-identical output.
+
 ## [0.5.22] - 2026-09-18
 
 ### Added

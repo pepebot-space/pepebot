@@ -386,6 +386,22 @@ func (cb *ContextBuilder) buildUserMessage(text string, media []string) provider
 
 		fileType, _ := providers.DetectFileType(mediaURL)
 
+		// Everything remote is inlined, images included. Passing the URL through
+		// only works if the provider can fetch it, and channel attachments are
+		// signed, expiring CDN links (Discord's ?ex=&hm=) that it cannot: z.ai
+		// answers every one of them with "图片输入格式/解析错误". Inlining costs
+		// request size; not inlining costs the whole request.
+		if !strings.HasPrefix(processedURL, "data:") {
+			processedURL = fetchRemoteAsDataURL(processedURL)
+		}
+		if processedURL == "" {
+			content = append(content, providers.ContentBlock{
+				Type: "text",
+				Text: fmt.Sprintf("[attachment could not be read: %s]", mediaURL),
+			})
+			continue
+		}
+
 		switch fileType {
 		case providers.FileTypeImage:
 			// Images use image_url format
@@ -400,18 +416,6 @@ func (cb *ContextBuilder) buildUserMessage(text string, media []string) provider
 			// All other file types (documents, audio, video) use file format
 			// Format: { "type": "file", "file": { "file_data": "data:mime/type;base64,..." } }
 			// Reference: https://developers.openai.com/api/docs/guides/pdf-files
-			// file_data only accepts a base64 data URL, so remote attachments
-			// (Discord CDN links etc.) must be fetched and inlined first.
-			if !strings.HasPrefix(processedURL, "data:") {
-				processedURL = fetchRemoteAsDataURL(processedURL)
-			}
-			if processedURL == "" {
-				content = append(content, providers.ContentBlock{
-					Type: "text",
-					Text: fmt.Sprintf("[attachment could not be read: %s]", mediaURL),
-				})
-				continue
-			}
 			content = append(content, providers.ContentBlock{
 				Type: "file",
 				File: &providers.FileData{

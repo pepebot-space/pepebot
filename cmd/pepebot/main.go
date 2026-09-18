@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.22"
+const version = "0.5.23"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -187,7 +187,7 @@ func printHelp() {
 	fmt.Printf("\n  🐸 PEPEBOT v%s\n", version)
 	fmt.Println("  Personal AI Assistant")
 	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("\nUsage: pepebot <command> [options]\n")
+	fmt.Print("\nUsage: pepebot <command> [options]\n\n")
 	fmt.Println("Commands:")
 	fmt.Println("  onboard     Initialize pepebot configuration and workspace")
 	fmt.Println("  agent       Interact with the agent directly")
@@ -242,7 +242,7 @@ func onboard() {
 	}
 
 	// Welcome banner with ASCII art
-	fmt.Println("\n")
+	fmt.Print("\n\n")
 	fmt.Println("     ___")
 	fmt.Println("    (o o)")
 	fmt.Println("   (  >  )")
@@ -251,7 +251,7 @@ func onboard() {
 	fmt.Println("")
 	fmt.Println("  🐸 PEPEBOT SETUP WIZARD")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("Let's get you started with your AI assistant.\n")
+	fmt.Print("Let's get you started with your AI assistant.\n\n")
 
 	reader := bufio.NewReader(os.Stdin)
 	cfg := config.DefaultConfig()
@@ -1842,8 +1842,8 @@ func loadAgentRegistry() (*agent.AgentRegistry, error) {
 
 func agentHelpCmd() {
 	fmt.Println("\n🐸 Pepebot Agent Management")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Println("Usage: pepebot agent <subcommand> [options]\n")
+	fmt.Print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+	fmt.Print("Usage: pepebot agent <subcommand> [options]\n\n")
 	fmt.Println("Subcommands:")
 	fmt.Println("  list                    List all registered agents")
 	fmt.Println("  register <name>         Register a new agent")
@@ -1887,7 +1887,7 @@ func agentListCmd() {
 	}
 
 	fmt.Println("\n🐸 Registered Agents")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 
 	// Sort agent names for consistent output
 	names := make([]string, 0, len(agents))
@@ -2111,7 +2111,7 @@ func agentShowCmd() {
 	}
 
 	fmt.Printf("\n🐸 Agent: %s\n", name)
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 	fmt.Printf("  Status:      %s\n", status)
 	fmt.Printf("  Model:       %s\n", agentDef.Model)
 	if agentDef.Provider != "" {

@@ -43,3 +43,42 @@ func TestBuildUserMessageUnreachableFileDegrades(t *testing.T) {
 		t.Fatalf("want single text block, got %#v", blocks)
 	}
 }
+
+// A channel image arrives as a signed, expiring CDN link. Passing that URL to
+// the provider means the provider has to fetch it, and z.ai answers every such
+// request with "图片输入格式/解析错误" — proven against the live endpoint. So
+// images are inlined like every other attachment.
+func TestBuildUserMessageInlinesRemoteImage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("\x89PNG\r\n\x1a\nfake"))
+	}))
+	defer srv.Close()
+
+	cb := &ContextBuilder{}
+	msg := cb.buildUserMessage("apa ini", []string{srv.URL + "/foto.png"})
+
+	blocks, ok := msg.Content.([]providers.ContentBlock)
+	if !ok || len(blocks) != 2 {
+		t.Fatalf("want 2 content blocks, got %#v", msg.Content)
+	}
+	if blocks[1].Type != "image_url" || blocks[1].ImageURL == nil {
+		t.Fatalf("want image_url block, got %#v", blocks[1])
+	}
+	if !strings.HasPrefix(blocks[1].ImageURL.URL, "data:image/png;base64,") {
+		t.Fatalf("image was passed through as a URL instead of inlined: %q", blocks[1].ImageURL.URL)
+	}
+}
+
+func TestBuildUserMessageUnreachableImageDegrades(t *testing.T) {
+	cb := &ContextBuilder{}
+	msg := cb.buildUserMessage("apa ini", []string{"http://127.0.0.1:1/foto.png"})
+
+	blocks, ok := msg.Content.([]providers.ContentBlock)
+	if !ok || len(blocks) != 2 {
+		t.Fatalf("want 2 content blocks, got %#v", msg.Content)
+	}
+	// One dead image must not 400 the entire conversation.
+	if blocks[1].Type != "text" || !strings.Contains(blocks[1].Text, "could not be read") {
+		t.Fatalf("want a text placeholder, got %#v", blocks[1])
+	}
+}
