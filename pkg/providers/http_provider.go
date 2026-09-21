@@ -100,6 +100,7 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 	if temperature, ok := options["temperature"].(float64); ok {
 		requestBody["temperature"] = temperature
 	}
+	applyExtraBody(requestBody, options)
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
@@ -153,12 +154,36 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 	return parsed, nil
 }
 
+// applyExtraBody copies caller-supplied request fields into the body verbatim.
+//
+// This is how a thinking model is told not to think. GLM spends its output budget
+// on reasoning_content before it writes a single character of the answer — on a
+// tight budget the reasoning consumes all of it and `content` comes back empty,
+// which the agent loop can only report as "no response to give". Of the four ways
+// to ask for that upstream, only extra_body survives the litellm hop:
+//
+//	"extra_body": {"thinking": {"type": "disabled"}}
+//
+// Kept as a passthrough rather than a named flag so any other provider-specific
+// parameter can be set the same way without another release.
+func applyExtraBody(requestBody map[string]interface{}, options map[string]interface{}) {
+	extra, ok := options["extra_body"].(map[string]interface{})
+	if !ok || len(extra) == 0 {
+		return
+	}
+	requestBody["extra_body"] = extra
+}
+
 func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 	var apiResponse struct {
 		Choices []struct {
 			Message struct {
-				Content   string `json:"content"`
-				ToolCalls []struct {
+				Content string `json:"content"`
+				// Thinking models put their prose here and can leave Content
+				// empty when the output budget runs out mid-thought. Better a
+				// verbose answer than "no response to give".
+				ReasoningContent string `json:"reasoning_content"`
+				ToolCalls        []struct {
 					ID       string `json:"id"`
 					Type     string `json:"type"`
 					Function *struct {
@@ -184,6 +209,15 @@ func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 	}
 
 	choice := apiResponse.Choices[0]
+
+	content := choice.Message.Content
+	if content == "" && choice.Message.ReasoningContent != "" {
+		content = choice.Message.ReasoningContent
+		logger.WarnCF("provider", "Model returned only reasoning_content; using it as the reply", map[string]interface{}{
+			"finish_reason": choice.FinishReason,
+			"chars":         len(content),
+		})
+	}
 
 	toolCalls := make([]ToolCall, 0, len(choice.Message.ToolCalls))
 	for _, tc := range choice.Message.ToolCalls {
@@ -216,7 +250,7 @@ func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 	}
 
 	return &LLMResponse{
-		Content:      choice.Message.Content,
+		Content:      content,
 		ToolCalls:    toolCalls,
 		FinishReason: choice.FinishReason,
 		Usage:        apiResponse.Usage,
@@ -241,6 +275,7 @@ func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model
 	if temperature, ok := options["temperature"].(float64); ok {
 		requestBody["temperature"] = temperature
 	}
+	applyExtraBody(requestBody, options)
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
@@ -268,6 +303,23 @@ func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model
 		return fmt.Errorf("API error: %s", string(body))
 	}
 
+	var reasoning strings.Builder
+	sentContent := false
+
+	// flushReasoning emits the buffered thinking only when the answer never
+	// came — a budget exhausted mid-thought used to reach the user as
+	// "I've completed processing but have no response to give."
+	flushReasoning := func() {
+		if sentContent || reasoning.Len() == 0 {
+			return
+		}
+		logger.WarnCF("provider", "Stream ended with reasoning but no answer; sending the reasoning", map[string]interface{}{
+			"chars": reasoning.Len(),
+		})
+		callback(StreamChunk{Content: reasoning.String()})
+		sentContent = true
+	}
+
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -283,6 +335,7 @@ func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model
 		data := strings.TrimPrefix(line, "data: ")
 
 		if data == "[DONE]" {
+			flushReasoning()
 			callback(StreamChunk{Done: true})
 			return nil
 		}
@@ -290,7 +343,8 @@ func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model
 		var chunk struct {
 			Choices []struct {
 				Delta struct {
-					Content string `json:"content"`
+					Content          string `json:"content"`
+					ReasoningContent string `json:"reasoning_content"`
 				} `json:"delta"`
 				FinishReason *string `json:"finish_reason"`
 			} `json:"choices"`
@@ -303,9 +357,18 @@ func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model
 		if len(chunk.Choices) > 0 {
 			delta := chunk.Choices[0].Delta
 			if delta.Content != "" {
+				sentContent = true
 				callback(StreamChunk{Content: delta.Content})
 			}
+			// Reasoning is buffered, never streamed: a thinking model emits
+			// several times more of it than answer, and the user asked a
+			// question, not for the deliberation. It is only used if the answer
+			// never arrives — see flushReasoning.
+			if delta.ReasoningContent != "" {
+				reasoning.WriteString(delta.ReasoningContent)
+			}
 			if chunk.Choices[0].FinishReason != nil && *chunk.Choices[0].FinishReason == "stop" {
+				flushReasoning()
 				callback(StreamChunk{Done: true})
 				return nil
 			}
@@ -316,6 +379,7 @@ func (p *HTTPProvider) ChatStream(ctx context.Context, messages []Message, model
 		return fmt.Errorf("error reading stream: %w", err)
 	}
 
+	flushReasoning()
 	callback(StreamChunk{Done: true})
 	return nil
 }

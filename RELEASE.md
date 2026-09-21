@@ -1,31 +1,46 @@
-# 🐸 Pepebot v0.5.24 - Your Bot Can See Again
+# 🐸 Pepebot v0.5.25 - No More "No Response To Give"
 
-**Release Date:** 2026-09-18
+**Release Date:** 2026-09-21
 
 ## 🐛 What's Fixed
 
-### Send it a photo and it actually looks at it
+### That apology message, explained and fixed
 
-Images sent through Discord, Telegram or WhatsApp were handed to the model as a link, which meant the *model's* servers had to go and download it. Measured against a live endpoint, that never worked: `zai/glm-4.5v` refuses every remote image URL — even a plain public one — with `图片输入格式/解析错误`, while the exact same image sent inline is described correctly.
+If your bot kept answering with:
 
-So the bot wasn't blind. It was being handed a URL it couldn't open.
-
-Pepebot now downloads images and sends the real bytes, the same way it already does for PDFs and documents since v0.5.21. Chat attachments are signed links that expire anyway, so nobody's provider could reliably fetch them.
-
-Files that can't be fetched, or are over 20 MB, still degrade to a short text note instead of breaking the whole message.
-
-### CI is green again
-
-`go test ./...` also runs `go vet`, and seven stray `fmt.Println("…\n")` calls were failing its checks — so the test job had been red on every release for a while, no matter how the tests did. Fixed, with byte-identical output.
-
-### Attach a file straight from the terminal
-
-```bash
-pepebot agent -m "Tulisan apa di gambar ini?" --media ./foto.png
-pepebot agent -m "Ringkas laporan ini" --media https://example.com/laporan.pdf
+```
+I've completed processing but have no response to give.
 ```
 
-Repeatable, and it takes the same path a Discord or Telegram attachment does — which is how the image fix above was verified end to end instead of by eye.
+…it wasn't confused. It was cut off mid-thought.
+
+GLM models think out loud before answering, and that thinking is paid for out of the same `max_tokens` budget as the answer. Measured on a live stream, one ordinary reply was **3,246 characters of reasoning followed by 800 characters of answer** — four to one. When the budget ran out during the thinking part, the answer never got written, and pepebot had nothing to show you.
+
+Three fixes, smallest first:
+
+**1. If the answer is missing, you get the model's thinking instead.** A long, truncated answer is more useful than an apology. Reasoning is held back while a real answer is still coming, so normal replies look exactly as before.
+
+**2. You can turn the thinking off.** In `~/.pepebot/config.json`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "extra_body": { "thinking": { "type": "disabled" } }
+    }
+  }
+}
+```
+
+Four ways of asking for this were tested against a live endpoint; this is the only one that survives the proxy in between. With it, a 200-token budget that previously produced *nothing* produces a full answer.
+
+**3. Your conversations stop being compacted for no reason.** `max_tokens` was doing double duty as both the reply budget and the context window, so a bot on a 128k model was summarizing its history as if it had 8k. There is now a separate setting:
+
+```json
+{ "agents": { "defaults": { "max_tokens": 8192, "context_window": 128000 } } }
+```
+
+Older configs keep working — if `context_window` is absent, `max_tokens` is used as before.
 
 ## 📦 Installation
 
