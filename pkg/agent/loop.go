@@ -33,6 +33,8 @@ type AgentLoop struct {
 	model          string
 	temperature    float64
 	contextWindow  int
+	maxTokens      int
+	extraBody      map[string]interface{}
 	maxIterations  int
 	sessions       *session.SessionManager
 	contextBuilder *ContextBuilder
@@ -61,6 +63,30 @@ func (al *AgentLoop) attachMemory(cfg *config.Config) {
 	al.profile = memory.Profile(al.workspace, cfg.Memory.UserCharLimit)
 	al.tools.Register(tools.NewMemoryTool(al.notes, al.profile))
 	al.contextBuilder.SetMemory(al.notes, al.profile)
+}
+
+// contextWindowFor reads the input window, falling back to the output budget for
+// configs written before the two were separate fields.
+func contextWindowFor(cfg *config.Config) int {
+	if cfg.Agents.Defaults.ContextWindow > 0 {
+		return cfg.Agents.Defaults.ContextWindow
+	}
+	return cfg.Agents.Defaults.MaxTokens
+}
+
+// chatOptions are the per-request knobs every LLM call shares. max_tokens is the
+// output budget; it used to be passed as al.contextWindow, which conflated the
+// two and made summarization fire at 75% of the output budget instead of the
+// model's real window.
+func (al *AgentLoop) chatOptions() map[string]interface{} {
+	opts := map[string]interface{}{
+		"max_tokens":  al.maxTokens,
+		"temperature": al.temperature,
+	}
+	if len(al.extraBody) > 0 {
+		opts["extra_body"] = al.extraBody
+	}
+	return opts
 }
 
 func (al *AgentLoop) memoryStores() (*memory.Store, *memory.Store) {
@@ -178,7 +204,9 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		workspace:      workspace,
 		model:          cfg.Agents.Defaults.Model,
 		temperature:    cfg.Agents.Defaults.Temperature,
-		contextWindow:  cfg.Agents.Defaults.MaxTokens,
+		contextWindow:  contextWindowFor(cfg),
+		maxTokens:      cfg.Agents.Defaults.MaxTokens,
+		extraBody:      cfg.Agents.Defaults.ExtraBody,
 		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
 		sessions:       sessionsManager,
 		contextBuilder: contextBuilder,
@@ -281,7 +309,9 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 		workspace:      workspace,
 		model:          model,
 		temperature:    temperature,
-		contextWindow:  maxTokens,
+		contextWindow:  contextWindowFor(cfg),
+		maxTokens:      maxTokens,
+		extraBody:      cfg.Agents.Defaults.ExtraBody,
 		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
 		sessions:       sessionsManager,
 		contextBuilder: contextBuilder,
@@ -424,10 +454,7 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 		}
 
 		// Non-streaming call for tool iterations
-		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
-			"max_tokens":  al.contextWindow,
-			"temperature": al.temperature,
-		})
+		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, al.chatOptions())
 
 		if err != nil {
 			return fmt.Errorf("LLM call failed: %w", err)
@@ -440,10 +467,7 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 			if response.Content != "" {
 				// Use streaming for the final call instead
 				// Re-do the last call with streaming
-				err := al.provider.ChatStream(ctx, messages, al.model, map[string]interface{}{
-					"max_tokens":  al.contextWindow,
-					"temperature": al.temperature,
-				}, callback)
+				err := al.provider.ChatStream(ctx, messages, al.model, al.chatOptions(), callback)
 				if err != nil {
 					// Fallback: emit the non-streamed content
 					callback(providers.StreamChunk{Content: response.Content})
@@ -592,10 +616,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			"tools":     len(providerToolDefs),
 		})
 
-		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
-			"max_tokens":  al.contextWindow,
-			"temperature": al.temperature,
-		})
+		response, err := al.provider.Chat(ctx, messages, providerToolDefs, al.model, al.chatOptions())
 
 		if err != nil {
 			logger.ErrorCF("agent", "LLM call failed", map[string]interface{}{

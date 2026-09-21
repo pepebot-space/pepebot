@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.25] - 2026-09-21
+
+### Fixed
+- **"I've completed processing but have no response to give." now has a cause and three fixes.** `zai/glm-4.5v` is a thinking model: it streams `reasoning_content` first and the answer only afterwards. Measured on a live stream, one ordinary reply was 836 reasoning deltas (3,246 chars) followed by 245 content deltas (800 chars) — the deliberation is four times the answer, and it is spent from the same `max_tokens` budget. When the budget runs out mid-thought the response comes back `finish_reason: "length"` with `content: ""`, and `pkg/agent/loop.go` had nothing to report but that sentence.
+  - **`reasoning_content` is used as the reply when `content` is empty**, on both the non-streaming and streaming paths. A verbose, truncated answer beats an apology. Reasoning is buffered rather than streamed, and emitted only if the answer never arrives — nobody asked to watch the model deliberate.
+  - **`agents.defaults.extra_body` is merged into every request verbatim**, which is how a thinking model is told not to think. Four forms were tried against the live endpoint; only one survives the litellm hop: `"extra_body": {"thinking": {"type": "disabled"}}`. `thinking` and `reasoning_effort` at the top level, and `extra_body` under other spellings, all still returned `content: 0, reasoning: 902`. With it, the same 200-token budget that produced nothing now produces a complete 712-character answer.
+  - **`agents.defaults.context_window` is now separate from `max_tokens`** (default 128000). One number was serving as both the output budget and the context window, so sessions on a 128k model were being summarized at 75% of *8k* — history was compacted constantly, for no reason. `max_tokens` is the output budget again; `context_window` drives summarization and the oversized-message guard.
+  - Tests: `TestReasoningContentUsedWhenAnswerIsEmpty`, `TestAnswerWinsOverReasoning`, `TestExtraBodyReachesTheRequest`, `TestNoExtraBodyKeyWhenUnset`, `TestStreamFallsBackToReasoningOnlyWhenNoAnswerArrives`.
+
 ## [0.5.24] - 2026-09-18
 
 ### Added

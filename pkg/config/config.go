@@ -40,12 +40,21 @@ type AgentsConfig struct {
 }
 
 type AgentDefaults struct {
-	Workspace         string  `json:"workspace" env:"PEPEBOT_AGENTS_DEFAULTS_WORKSPACE"`
-	Model             string  `json:"model" env:"PEPEBOT_AGENTS_DEFAULTS_MODEL"`
-	Provider          string  `json:"provider,omitempty" env:"PEPEBOT_AGENTS_DEFAULTS_PROVIDER"`
-	MaxTokens         int     `json:"max_tokens" env:"PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS"`
-	Temperature       float64 `json:"temperature" env:"PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE"`
-	MaxToolIterations int     `json:"max_tool_iterations" env:"PEPEBOT_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
+	Workspace string `json:"workspace" env:"PEPEBOT_AGENTS_DEFAULTS_WORKSPACE"`
+	Model     string `json:"model" env:"PEPEBOT_AGENTS_DEFAULTS_MODEL"`
+	Provider  string `json:"provider,omitempty" env:"PEPEBOT_AGENTS_DEFAULTS_PROVIDER"`
+	MaxTokens int    `json:"max_tokens" env:"PEPEBOT_AGENTS_DEFAULTS_MAX_TOKENS"`
+	// ContextWindow is the model's input window, used to decide when a session
+	// gets summarized. MaxTokens used to stand in for both, so an 8k output
+	// budget also declared an 8k context and sessions were compacted at 6k
+	// tokens on a model that holds 128k.
+	ContextWindow int `json:"context_window" env:"PEPEBOT_AGENTS_DEFAULTS_CONTEXT_WINDOW"`
+	// ExtraBody is merged into every request body verbatim. Its reason for
+	// existing is {"thinking": {"type": "disabled"}} for GLM, the only form
+	// that survives the litellm hop.
+	ExtraBody         map[string]interface{} `json:"extra_body,omitempty"`
+	Temperature       float64                `json:"temperature" env:"PEPEBOT_AGENTS_DEFAULTS_TEMPERATURE"`
+	MaxToolIterations int                    `json:"max_tool_iterations" env:"PEPEBOT_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
 }
 
 type ChannelsConfig struct {
@@ -217,6 +226,7 @@ func DefaultConfig() *Config {
 				Workspace:         "~/.pepebot/workspace",
 				Model:             "maia/gemini-2.5-flash",
 				MaxTokens:         8192,
+				ContextWindow:     128000,
 				Temperature:       0.7,
 				MaxToolIterations: 20,
 			},
