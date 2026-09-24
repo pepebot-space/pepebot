@@ -34,6 +34,12 @@ func (am *AgentManager) SetRestartFunc(fn func()) {
 	am.restartFunc = fn
 }
 
+// ModelReconcilePrompt is how a disagreement between config.json and the agent
+// registry gets settled. The CLI sets it when there is a terminal to ask at;
+// under systemd it stays nil and the registry simply wins, with a log line
+// naming both values.
+var ModelReconcilePrompt ModelPrompt
+
 // NewAgentManager creates a new agent manager
 func NewAgentManager(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider) (*AgentManager, error) {
 	registry := NewAgentRegistry(cfg.WorkspacePath())
@@ -46,6 +52,13 @@ func NewAgentManager(cfg *config.Config, bus *bus.MessageBus, provider providers
 	// Initialize from config if empty
 	if err := registry.InitializeFromConfig(cfg); err != nil {
 		return nil, fmt.Errorf("failed to initialize registry: %w", err)
+	}
+
+	// One model, one home. config.json seeds a fresh install; the registry owns
+	// it afterwards, and a disagreement is put to the user rather than settled
+	// silently — see AgentRegistry.ReconcileModel.
+	if err := registry.ReconcileModel(cfg, ModelReconcilePrompt); err != nil {
+		return nil, fmt.Errorf("failed to reconcile model config: %w", err)
 	}
 
 	// Save registry if it was just initialized

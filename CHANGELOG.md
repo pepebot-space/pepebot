@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.26] - 2026-09-24
+
+### Added
+- **One canonical model reference: `<provider>:<model_id>`** (`docs/providers.md`). Everything left of the first colon names the endpoint, everything right of it is sent upstream untouched — `maiarouter:zai/glm-4.5v`, `openai:gpt-4.1`, `custom:ollama/qwen3`. Splitting on the colon rather than guessing at slashes is what makes it unambiguous: a vendor namespace inside the model id keeps its slashes and survives intact. The old `provider` + bare model id pair still works, and when both are present the colon form wins as the more specific of the two.
+- **`providers.custom`: any OpenAI-compatible endpoint, named in config instead of added to the code.** A new gateway — 9router, litellm, Ollama, vLLM — is now a config edit rather than another `case` in the provider factory and another release. Addressed as `custom:<name>/<model>`; with no model, the entry's own `model` is used. A custom endpoint's namespace is its own, so its model id goes out with no prefix stripping: a gateway may legitimately want `kr/claude-sonnet-4.5`.
+
+### Changed
+- **The model now lives in one place: the agent registry.** `agents.defaults.model` in `config.json` seeds a fresh install and nothing more. Previously both held a model, the registry silently won, and editing `config.json` looked like it did nothing — which is how a model id with the provider name glued to its front survived being "fixed" in `config.json` twice (v0.5.20). At startup the two are reconciled: identical (or merely spelled differently) means the entry is rewritten canonically and nothing is asked; a real disagreement asks which to use, and the answer is persisted so it is asked once.
+  - **The question is only asked where someone can answer it.** With no terminal — a gateway under systemd — the registry wins and both values are logged as a warning, so the mismatch is discoverable instead of silent. Terminal detection uses `readline.IsTerminal` (already a dependency) rather than an `os.ModeCharDevice` test, which would have accepted `/dev/null` and printed a question into the journal.
+  - Tests: `TestParseModelRef` (10 cases), `TestModelRefRoundTrips`, and six registry reconciliation tests covering fresh install, both prompt answers, the no-terminal path, legacy migration, and persistence.
+
 ## [0.5.25] - 2026-09-21
 
 ### Fixed
