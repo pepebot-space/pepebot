@@ -202,7 +202,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 		bus:            bus,
 		provider:       provider,
 		workspace:      workspace,
-		model:          cfg.Agents.Defaults.Model,
+		model:          providers.WireModel(cfg, cfg.Agents.Defaults.Provider, cfg.Agents.Defaults.Model),
 		temperature:    cfg.Agents.Defaults.Temperature,
 		contextWindow:  contextWindowFor(cfg),
 		maxTokens:      cfg.Agents.Defaults.MaxTokens,
@@ -282,8 +282,10 @@ func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provide
 
 	sessionsManager := session.NewSessionManager(filepath.Join(filepath.Dir(cfg.WorkspacePath()), "sessions"))
 
-	// Use agent definition values, fallback to config defaults
-	model := agentDef.Model
+	// Use agent definition values, fallback to config defaults. The registry
+	// entry is the canonical "<provider>:<model_id>"; resolve it to the id the
+	// upstream expects before it ever reaches a request.
+	model := providers.WireModel(cfg, agentDef.Provider, agentDef.Model)
 	temperature := agentDef.Temperature
 	if temperature == 0 {
 		temperature = cfg.Agents.Defaults.Temperature

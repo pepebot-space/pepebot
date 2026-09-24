@@ -9,6 +9,7 @@ import (
 
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/providers"
 )
 
 // AgentDefinition defines a registered agent configuration
@@ -284,4 +285,83 @@ func (ar *AgentRegistry) GetOrDefault(name string) (*AgentDefinition, string, er
 	}
 
 	return nil, "", fmt.Errorf("no agents available")
+}
+
+// ModelPrompt is asked which of two disagreeing models should win. It returns
+// true to overwrite the registry with the config value. A nil prompt — no
+// terminal to ask at, as under systemd — means keep the registry.
+type ModelPrompt func(registryModel, configModel string) (bool, error)
+
+// ReconcileModel settles the one duplicated setting in pepebot's config.
+//
+// The model lived in two places: agents.defaults.model in config.json and the
+// "default" entry in the agent registry. The registry silently won, so editing
+// config.json looked like it did nothing — and when the registry held a stale
+// value, the request went out with it. That is how a model id with the provider
+// name glued to its front survived being "fixed" in config.json twice (v0.5.20).
+//
+// The registry is the source of truth. config.json seeds a fresh install, and
+// when the two disagree the user is asked rather than one silently winning.
+func (ar *AgentRegistry) ReconcileModel(cfg *config.Config, ask ModelPrompt) error {
+	ar.mu.Lock()
+	def, exists := ar.Agents["default"]
+	ar.mu.Unlock()
+
+	configModel := providers.ParseModelRef(cfg.Agents.Defaults.Provider, cfg.Agents.Defaults.Model).String()
+
+	// Fresh install: seed the registry and there is nothing to reconcile.
+	if !exists || def.Model == "" {
+		if configModel == "" {
+			return nil
+		}
+		if err := ar.InitializeFromConfig(cfg); err != nil {
+			return err
+		}
+		ar.mu.Lock()
+		ar.Agents["default"].Model = configModel
+		ar.Agents["default"].Provider = ""
+		ar.mu.Unlock()
+		return ar.Save()
+	}
+
+	registryModel := providers.ParseModelRef(def.Provider, def.Model).String()
+	if registryModel == configModel || configModel == "" {
+		// Still rewrite a legacy spelling into the canonical one, so what the
+		// user reads back is what they could type.
+		if def.Model != registryModel || def.Provider != "" {
+			ar.mu.Lock()
+			def.Model, def.Provider = registryModel, ""
+			ar.mu.Unlock()
+			return ar.Save()
+		}
+		return nil
+	}
+
+	// Logged before anything is asked, so the disagreement is on the record even
+	// where there is no terminal — a gateway that silently prefers the registry
+	// is exactly how editing config.json came to look like it did nothing.
+	logger.WarnCF("agent", "config.json and the agent registry name different models", map[string]interface{}{
+		"registry": registryModel,
+		"config":   configModel,
+		"using":    registryModel,
+		"hint":     "run `pepebot agent` in a terminal to choose, or edit workspace/agents/registry.json",
+	})
+
+	if ask == nil {
+		return nil
+	}
+
+	useConfig, err := ask(registryModel, configModel)
+	if err != nil {
+		return err
+	}
+	if !useConfig {
+		return nil
+	}
+
+	ar.mu.Lock()
+	def.Model, def.Provider = configModel, ""
+	ar.mu.Unlock()
+	logger.InfoCF("agent", "Registry model overwritten from config.json", map[string]interface{}{"model": configModel})
+	return ar.Save()
 }

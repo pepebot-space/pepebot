@@ -111,6 +111,18 @@ type ProvidersConfig struct {
 	Vertex     VertexConfig     `json:"vertex"`
 	OpenCodeGo OpenCodeGoConfig `json:"opencodego"`
 	Realtime   RealtimeConfig   `json:"realtime"`
+	// Custom holds any OpenAI-compatible endpoint by name, addressed as
+	// custom:<name>/<model>. Adding a gateway — 9router, litellm, Ollama,
+	// vLLM — is a config edit rather than another case in the factory and
+	// another release.
+	Custom map[string]CustomProviderConfig `json:"custom,omitempty"`
+}
+
+type CustomProviderConfig struct {
+	APIKey  string `json:"api_key"`
+	APIBase string `json:"api_base"`
+	// Model is used when the reference names only the endpoint (custom:ollama).
+	Model string `json:"model,omitempty"`
 }
 
 // RealtimeConfig points at a custom OpenAI-Realtime-compatible live endpoint.

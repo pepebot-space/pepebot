@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.25"
+const version = "0.5.26"
 const logo = "🐸"
 
 func copyDirectory(src, dst string) error {
@@ -1042,6 +1042,9 @@ func agentCmd() {
 		os.Exit(1)
 	}
 
+	// Only the CLI can ask; the gateway leaves this nil.
+	agent.ModelReconcilePrompt = interactiveModelPrompt
+
 	bus := bus.NewMessageBus()
 
 	// Create agent manager for multi-agent support
@@ -1433,6 +1436,38 @@ func statusCmd() {
 func getConfigPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".pepebot", "config.json")
+}
+
+// interactiveModelPrompt asks which model wins when config.json and the agent
+// registry disagree. It is installed only where there is a terminal to answer
+// at: a gateway under systemd must never block on a question nobody can see,
+// so there the registry wins and the mismatch is logged instead.
+func interactiveModelPrompt(registryModel, configModel string) (bool, error) {
+	// readline is already a dependency and does the real ioctl check. An
+	// os.ModeCharDevice test is not enough: /dev/null is a character device
+	// too, so a service started with stdin on /dev/null would "pass" it and
+	// print a question into the journal that nobody can answer.
+	if !readline.IsTerminal(int(os.Stdin.Fd())) {
+		return false, nil
+	}
+
+	fmt.Printf("\n⚠️  Two different models are configured:\n")
+	fmt.Printf("    agent registry : %s   (this is what runs today)\n", registryModel)
+	fmt.Printf("    config.json    : %s\n\n", configModel)
+	fmt.Printf("Use the config.json model and overwrite the registry? [y/N]: ")
+
+	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return false, nil // no answer available: keep what is already running
+	}
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	overwrite := answer == "y" || answer == "yes"
+	if overwrite {
+		fmt.Printf("→ registry set to %s\n\n", configModel)
+	} else {
+		fmt.Printf("→ keeping %s; edit workspace/agents/registry.json to change it\n\n", registryModel)
+	}
+	return overwrite, nil
 }
 
 func loadConfig() (*config.Config, error) {

@@ -394,6 +394,44 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 
 // CreateProviderWithOverrides creates a provider with optional model and provider overrides.
 // If overrideModel/overrideProvider are empty, falls back to config defaults.
+// customProvider resolves custom:<endpoint>/<model> against providers.custom.
+//
+// The endpoint's namespace is its own: whatever model id it is given goes out
+// untouched, with no prefix stripping. A gateway may legitimately want
+// "zai/glm-4.7" or "kr/claude-sonnet-4.5", and pepebot has no business
+// second-guessing a name it does not own.
+func customProvider(cfg *config.Config, ref ModelRef) (LLMProvider, error) {
+	entry, ok := cfg.Providers.Custom[ref.Endpoint]
+	if !ok {
+		return nil, fmt.Errorf("no custom provider named %q in providers.custom", ref.Endpoint)
+	}
+	if entry.APIBase == "" {
+		return nil, fmt.Errorf("custom provider %q has no api_base", ref.Endpoint)
+	}
+	return NewHTTPProviderFor("", entry.APIKey, entry.APIBase), nil
+}
+
+// WireModel is the model id that actually goes on the request for a configured
+// (provider, model) pair — the canonical reference resolved down to what the
+// upstream expects. Without it "zai:glm-4.5v" would be sent verbatim and the API
+// would refuse a model by that name.
+func WireModel(cfg *config.Config, provider, model string) string {
+	ref := ParseModelRef(provider, model)
+	if ref.Provider == "custom" {
+		return CustomModel(cfg, ref)
+	}
+	return ref.Model
+}
+
+// CustomModel reports the model id to send to a custom endpoint, falling back to
+// the endpoint's configured default when the reference named only the endpoint.
+func CustomModel(cfg *config.Config, ref ModelRef) string {
+	if ref.Model != "" {
+		return ref.Model
+	}
+	return cfg.Providers.Custom[ref.Endpoint].Model
+}
+
 func CreateProviderWithOverrides(cfg *config.Config, overrideModel, overrideProvider string) (LLMProvider, error) {
 	model := cfg.Agents.Defaults.Model
 	if overrideModel != "" {
@@ -403,6 +441,14 @@ func CreateProviderWithOverrides(cfg *config.Config, overrideModel, overrideProv
 	if overrideProvider != "" {
 		provider = strings.ToLower(overrideProvider)
 	}
+
+	// One canonical spelling, resolved once: "<provider>:<model_id>", or the
+	// provider field with a bare model id.
+	ref := ParseModelRef(provider, model)
+	if ref.Provider == "custom" {
+		return customProvider(cfg, ref)
+	}
+	provider, model = ref.Provider, ref.Model
 
 	var apiKey, apiBase string
 

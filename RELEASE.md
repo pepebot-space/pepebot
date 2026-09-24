@@ -1,46 +1,55 @@
-# 🐸 Pepebot v0.5.25 - No More "No Response To Give"
+# 🐸 Pepebot v0.5.26 - One Model, One Place, One Spelling
 
-**Release Date:** 2026-09-21
+**Release Date:** 2026-09-24
 
-## 🐛 What's Fixed
+## ⚡ What's New
 
-### That apology message, explained and fixed
+### Write the model one way
 
-If your bot kept answering with:
-
-```
-I've completed processing but have no response to give.
+```json
+{ "agents": { "defaults": { "model": "maiarouter:zai/glm-4.5v" } } }
 ```
 
-…it wasn't confused. It was cut off mid-thought.
+Left of the colon is the endpoint, right of it is the model — sent exactly as written. No more wondering whether `maiarouter/zai/glm-5.3` means a provider, a vendor, or a model: slashes belong to the model id, and only the first colon splits.
 
-GLM models think out loud before answering, and that thinking is paid for out of the same `max_tokens` budget as the answer. Measured on a live stream, one ordinary reply was **3,246 characters of reasoning followed by 800 characters of answer** — four to one. When the budget ran out during the thinking part, the answer never got written, and pepebot had nothing to show you.
+If you prefer the old pair, it still works:
 
-Three fixes, smallest first:
+```json
+{ "agents": { "defaults": { "provider": "maiarouter", "model": "zai/glm-4.5v" } } }
+```
 
-**1. If the answer is missing, you get the model's thinking instead.** A long, truncated answer is more useful than an apology. Reasoning is held back while a real answer is still coming, so normal replies look exactly as before.
-
-**2. You can turn the thinking off.** In `~/.pepebot/config.json`:
+### Add any endpoint without waiting for a release
 
 ```json
 {
-  "agents": {
-    "defaults": {
-      "extra_body": { "thinking": { "type": "disabled" } }
+  "providers": {
+    "custom": {
+      "9router": { "api_base": "http://localhost:20128/v1", "api_key": "..." },
+      "ollama":  { "api_base": "http://minipepe:11434/v1", "api_key": "-", "model": "qwen3" }
     }
   }
 }
 ```
 
-Four ways of asking for this were tested against a live endpoint; this is the only one that survives the proxy in between. With it, a 200-token budget that previously produced *nothing* produces a full answer.
+Then just name it: `custom:9router/kr/claude-sonnet-4.5`, `custom:ollama/qwen3`. Anything that speaks the OpenAI shape — a gateway, a local model server, your own proxy — is a config edit now, not a code change.
 
-**3. Your conversations stop being compacted for no reason.** `max_tokens` was doing double duty as both the reply budget and the context window, so a bot on a 128k model was summarizing its history as if it had 8k. There is now a separate setting:
+### The model lives in one place, and pepebot asks before changing it
 
-```json
-{ "agents": { "defaults": { "max_tokens": 8192, "context_window": 128000 } } }
+The model used to be set in two places — `config.json` and the agent registry — and the registry quietly won. Editing `config.json` looked like it did nothing, and a stale entry kept going out on the wire.
+
+The registry is now the source of truth, `config.json` seeds a fresh install, and when the two disagree pepebot asks:
+
+```
+⚠️  Two different models are configured:
+    agent registry : custom:mr/zai/glm-4.5v   (this is what runs today)
+    config.json    : maiarouter:zai/glm-4.5v
+
+Use the config.json model and overwrite the registry? [y/N]:
 ```
 
-Older configs keep working — if `context_window` is absent, `max_tokens` is used as before.
+Answer once and it is remembered. Running as a service with no terminal? Nothing blocks — the registry wins and both values go into the log, so you can still see the mismatch.
+
+Full details: [docs/providers.md](docs/providers.md)
 
 ## 📦 Installation
 
@@ -58,6 +67,6 @@ pepebot gateway
 ## 🔗 Links
 
 - [Changelog](CHANGELOG.md)
+- [Providers Guide](docs/providers.md)
 - [Memory Guide](docs/memory.md)
 - [Documentation](docs/README.md)
-- [Installation Guide](docs/install.md)
