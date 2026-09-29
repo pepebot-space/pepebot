@@ -146,3 +146,19 @@ func TestStreamFallsBackToReasoningOnlyWhenNoAnswerArrives(t *testing.T) {
 		}
 	})
 }
+
+// 9Router answers a non-streaming request with Content-Type: text/event-stream
+// and appends "data: [DONE]" after the JSON. json.Unmarshal calls that trailing
+// garbage and fails the whole response, so every request to such a gateway died
+// before this.
+func TestSSEFramedJSONResponseIsParsed(t *testing.T) {
+	body := []byte(`{"choices":[{"message":{"content":"Hijau"},"finish_reason":"stop"}],"usage":{"total_tokens":96}}data: [DONE]` + "\n\n")
+
+	resp, err := (&HTTPProvider{}).parseResponse(body)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if resp.Content != "Hijau" {
+		t.Errorf("content = %q, want the answer before the SSE framing", resp.Content)
+	}
+}

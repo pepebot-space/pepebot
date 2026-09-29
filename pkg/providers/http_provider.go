@@ -197,7 +197,11 @@ func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 		Usage *UsageInfo `json:"usage"`
 	}
 
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
+	// Decode the first JSON value and ignore whatever follows it. 9Router answers
+	// a non-streaming request with Content-Type: text/event-stream and appends
+	// "data: [DONE]\n\n" after the JSON body — json.Unmarshal rejects that whole
+	// response as trailing garbage, so every call to such a gateway failed.
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&apiResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
