@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.27] - 2026-09-29
+
+### Fixed
+- **A gateway that frames its JSON reply as SSE is now readable.** 9Router answers a *non-streaming* `/v1/chat/completions` with `Content-Type: text/event-stream` and appends `data: [DONE]\n\n` after the JSON object. `json.Unmarshal` treats that suffix as trailing garbage and rejects the entire response, so every request to such a gateway failed before the reply was ever looked at. Parsing now decodes the first JSON value and ignores what follows it.
+  - Test: `TestSSEFramedJSONResponseIsParsed`.
+
 ## [0.5.26] - 2026-09-24
 
 ### Added
