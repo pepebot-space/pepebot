@@ -1,14 +1,31 @@
-# 🐸 Pepebot v0.5.27 - Talks To Gateways That Bend The Rules
+# 🐸 Pepebot v0.5.28 - Voice Without The Wait
 
-**Release Date:** 2026-09-29
+**Release Date:** 2026-10-03
 
-## 🐛 What's Fixed
+## ⚡ What's New
 
-### A reply that ends with `data: [DONE]` no longer breaks everything
+### Turn off tools for voice, and get 1.5 seconds back
 
-Some gateways — 9Router among them — answer a plain, non-streaming request with `Content-Type: text/event-stream` and glue `data: [DONE]` onto the end of the JSON. Strictly speaking that is not a JSON document, and pepebot's parser refused all of it: the answer was sitting right there and every single request failed anyway.
+Tool definitions are sent to the model again on every single turn. In a text chat nobody notices. On a voice call it is the whole experience:
 
-Pepebot now reads the JSON object and ignores whatever framing follows it. Point it at a gateway like that and it just works.
+| Live session | Time to first token |
+|---|---|
+| Without tools | **591 ms** |
+| With pepebot's 16 tools attached | **2131 ms** |
+
+Measured end to end against a real voice server one LAN hop away, five samples each.
+
+Until now the only way to switch them off was for every client to say so in its setup message. Now the deployment can decide:
+
+```json
+{ "live": { "enable_tools": false } }
+```
+
+A client that asks either way still wins, and leaving it unset keeps tools on — nothing changes for anyone who does not set it.
+
+### How much does pepebot's Live proxy cost? Almost nothing
+
+While measuring the above, the proxy itself came out at **585 ms** to first token versus **595 ms** talking straight to the voice server. The relay is in the noise; what costs you is the tool prefill above, and how far away your voice server is.
 
 ## 📦 Installation
 
