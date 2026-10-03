@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.28] - 2026-10-03
+
+### Added
+- **`live.enable_tools`: a deployment-wide default for whether Live sessions carry pepebot's tools.** Tool definitions are prefilled again on every turn, and on voice that is the difference between **591 ms and 2131 ms to first token** — measured end to end against a jalak/qwen3.8-27b server one 0.34 ms LAN hop away, five samples each. Until now the only lever was `enable_tools` in each client's setup message, so every client had to know to ask. The resolution order is: the client decides, config decides for clients that do not, and tools stay on when neither says anything — so existing deployments are unchanged.
+  - Test: `TestResolveEnableTools` covers all six combinations, including no config and no setup message.
+
+### Measured
+- Pepebot's Live proxy costs essentially nothing on the wire: **585 ms** to first token through the gateway versus **595 ms** straight to the upstream (medians of five). The latency that matters is the tool prefill above and the network distance to the voice server — on the same datacenter hop the proxy itself is in the noise.
+
 ## [0.5.27] - 2026-09-29
 
 ### Fixed
