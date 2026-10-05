@@ -19,17 +19,29 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
-type OpenCodeProvider struct {
-	apiKey     string
-	apiBase    string
-	httpClient *http.Client
+type AnthropicProvider struct {
+	apiKey       string
+	apiBase      string
+	defaultModel string
+	label        string
+	sendSampling bool
+	httpClient   *http.Client
 }
 
-func NewOpenCodeProvider(apiKey, apiBase string) *OpenCodeProvider {
+// NewAnthropicProvider speaks the Anthropic Messages API: POST {base}/v1/messages
+// with x-api-key, which is what PDFs require. The OpenAI-compatible endpoint
+// Anthropic also serves accepts text and images but rejects a document block
+// ("messages.0.user.content.str: Input should be a valid string"), so a bot that
+// needs to read PDFs has to come through here.
+func NewAnthropicProvider(apiKey, apiBase string) *AnthropicProvider {
 	if apiBase == "" {
-		apiBase = "https://opencode.ai/zen/go"
+		apiBase = "https://api.anthropic.com"
 	}
-	return &OpenCodeProvider{
+	// Tolerate a base written with the version already on it: this provider
+	// appends /v1/messages itself, and every other provider in pepebot is
+	// configured with the /v1 suffix.
+	apiBase = strings.TrimSuffix(strings.TrimSuffix(apiBase, "/"), "/v1")
+	return &AnthropicProvider{
 		apiKey:  apiKey,
 		apiBase: apiBase,
 		httpClient: &http.Client{
@@ -38,7 +50,28 @@ func NewOpenCodeProvider(apiKey, apiBase string) *OpenCodeProvider {
 	}
 }
 
-func (p *OpenCodeProvider) Chat(ctx context.Context, messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) (*LLMResponse, error) {
+// NewOpenCodeProvider is the same provider pointed at opencode.ai's zen gateway,
+// which serves the same Anthropic Messages shape.
+func NewOpenCodeProvider(apiKey, apiBase string) *AnthropicProvider {
+	if apiBase == "" {
+		apiBase = "https://opencode.ai/zen/go"
+	}
+	p := NewAnthropicProvider(apiKey, apiBase)
+	p.defaultModel = "minimax-m3"
+	p.label = "opencode"
+	// The gateway fronts models that still take sampling parameters.
+	p.sendSampling = true
+	return p
+}
+
+func (p *AnthropicProvider) name() string {
+	if p.label != "" {
+		return p.label
+	}
+	return "anthropic"
+}
+
+func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) (*LLMResponse, error) {
 	toolNames := make([]string, 0, len(tools))
 	for _, t := range tools {
 		toolNames = append(toolNames, t.Function.Name)
@@ -82,7 +115,7 @@ func (p *OpenCodeProvider) Chat(ctx context.Context, messages []Message, tools [
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("opencode API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("%s API error (status %d): %s", p.name(), resp.StatusCode, string(body))
 	}
 
 	parsed, err := p.parseAnthropicResponse(body)
@@ -106,7 +139,7 @@ func (p *OpenCodeProvider) Chat(ctx context.Context, messages []Message, tools [
 	return parsed, nil
 }
 
-func (p *OpenCodeProvider) ChatStream(ctx context.Context, messages []Message, model string, options map[string]interface{}, callback StreamCallback) error {
+func (p *AnthropicProvider) ChatStream(ctx context.Context, messages []Message, model string, options map[string]interface{}, callback StreamCallback) error {
 	requestBody := p.buildAnthropicRequest(messages, nil, model, options)
 	requestBody["stream"] = true
 
@@ -134,7 +167,7 @@ func (p *OpenCodeProvider) ChatStream(ctx context.Context, messages []Message, m
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("opencode API error (status %d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("%s API error (status %d): %s", p.name(), resp.StatusCode, string(body))
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -193,11 +226,14 @@ func (p *OpenCodeProvider) ChatStream(ctx context.Context, messages []Message, m
 	return nil
 }
 
-func (p *OpenCodeProvider) GetDefaultModel() string {
-	return "minimax-m3"
+func (p *AnthropicProvider) GetDefaultModel() string {
+	if p.defaultModel != "" {
+		return p.defaultModel
+	}
+	return "claude-sonnet-5-5"
 }
 
-func (p *OpenCodeProvider) buildAnthropicRequest(messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) map[string]interface{} {
+func (p *AnthropicProvider) buildAnthropicRequest(messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) map[string]interface{} {
 	request := map[string]interface{}{
 		"model": model,
 	}
@@ -301,14 +337,18 @@ func (p *OpenCodeProvider) buildAnthropicRequest(messages []Message, tools []Too
 		request["max_tokens"] = 4096
 	}
 
-	if temperature, ok := options["temperature"].(float64); ok {
+	// Sampling parameters were removed from the current Claude models: Sonnet 5
+	// and 5.5, Opus 5 and 5.5, Opus 4.7/4.8 and the Fable line all answer
+	// "`temperature` is deprecated for this model" with a 400. Only the gateway
+	// flavour, which fronts models that still accept them, sends it.
+	if temperature, ok := options["temperature"].(float64); ok && p.sendSampling {
 		request["temperature"] = temperature
 	}
 
 	return request
 }
 
-func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
+func (p *AnthropicProvider) buildContent(msg Message) interface{} {
 	switch content := msg.Content.(type) {
 	case string:
 		if content == "" {
@@ -332,6 +372,23 @@ func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
 							"type": "text",
 							"text": text,
 						})
+					}
+				case "file":
+					// A document block is how Anthropic takes a PDF. Without
+					// this the block was dropped and the model answered as if
+					// no file had been attached.
+					if file, ok := blockMap["file"].(map[string]interface{}); ok {
+						if data, ok := file["file_data"].(string); ok && strings.HasPrefix(data, "data:") {
+							mimeType, b64 := parseDataURL(data)
+							result = append(result, map[string]interface{}{
+								"type": "document",
+								"source": map[string]interface{}{
+									"type":       "base64",
+									"media_type": mimeType,
+									"data":       b64,
+								},
+							})
+						}
 					}
 				case "image_url":
 					if imgURL, ok := blockMap["image_url"].(map[string]interface{}); ok {
@@ -366,7 +423,7 @@ func (p *OpenCodeProvider) buildContent(msg Message) interface{} {
 	}
 }
 
-func (p *OpenCodeProvider) parseAnthropicResponse(body []byte) (*LLMResponse, error) {
+func (p *AnthropicProvider) parseAnthropicResponse(body []byte) (*LLMResponse, error) {
 	var resp struct {
 		Content []struct {
 			Type  string                 `json:"type"`

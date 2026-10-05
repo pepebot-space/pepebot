@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.29] - 2026-10-05
+
+### Added
+- **The `anthropic` provider now speaks the native Messages API, and reads PDFs.** It previously pointed at an OpenAI-shaped `/chat/completions`. Anthropic does serve an OpenAI-compatible endpoint, and text and images work there — but a `file` content block is rejected outright (`messages.0.user.content.str: Input should be a valid string`, HTTP 400), so no PDF could ever reach the model. The native `/v1/messages` path takes a `document` block and reads the same PDF correctly, verified against `claude-sonnet-5-5`.
+  - `buildContent` gained the missing `file` → `document` translation. Before this the block was not merely rejected, it was **silently dropped**: the model answered as though nothing had been attached.
+  - Tests: `TestAnthropicProviderTranslatesFileToDocument`, `TestAnthropicProviderTranslatesImage`.
+
+### Changed
+- **`OpenCodeProvider` is now `AnthropicProvider`** (file renamed to `anthropic_provider.go`). It always spoke the Anthropic Messages wire format — `POST {base}/v1/messages` with `x-api-key` and `anthropic-version` — and the old name hid that from anyone looking for Anthropic support. `NewOpenCodeProvider` stays as a thin constructor over the same type with opencode's gateway base and default model, so nothing that used it changes.
+  - `NewAnthropicProvider` defaults to `https://api.anthropic.com` and trims a `/v1` suffix from a configured base, since every other provider in pepebot is configured with that suffix and this one appends `/v1/messages` itself.
+  - Error messages name the flavour that produced them instead of always saying "opencode".
+- **Sampling parameters are no longer sent to Anthropic.** `temperature` was removed from the current Claude models; Sonnet 5.5 answers a request carrying it with `` `temperature` is deprecated for this model `` and a 400, which made every request fail. The gateway flavour, which fronts models that still accept sampling, keeps sending it.
+  - Test: `TestAnthropicProviderOmitsSamplingForClaude`.
+
 ## [0.5.28] - 2026-10-03
 
 ### Added
