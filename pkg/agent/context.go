@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/memory"
@@ -348,11 +350,20 @@ func fetchRemoteAsDataURL(url string) string {
 	if mimeType == "" {
 		mimeType = resp.Header.Get("Content-Type")
 	}
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
 	if idx := strings.Index(mimeType, ";"); idx > 0 {
 		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	// Last resort, ask the bytes. A CDN that serves every attachment as
+	// application/octet-stream would otherwise hand the model a PDF labelled as
+	// binary, which it refuses — and the upload's own name is no help when the
+	// link has none.
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		if sniffed := sniffMedia(data); sniffed != "" {
+			mimeType = sniffed
+		}
+	}
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
 	}
 
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data))
@@ -416,6 +427,24 @@ func (cb *ContextBuilder) buildUserMessage(text string, media []string) provider
 			// All other file types (documents, audio, video) use file format
 			// Format: { "type": "file", "file": { "file_data": "data:mime/type;base64,..." } }
 			// Reference: https://developers.openai.com/api/docs/guides/pdf-files
+			// Word, PowerPoint and Excel are zip archives of XML — no model
+			// reads them, on any provider. Unzip and send the words instead.
+			if mimeType, b64 := providers.ParseDataURL(processedURL); isOfficeDocument(mimeType) {
+				if raw, err := base64.StdEncoding.DecodeString(b64); err == nil {
+					if text, err := extractOfficeText(mimeType, raw); err == nil {
+						content = append(content, providers.ContentBlock{
+							Type: "text",
+							Text: fmt.Sprintf("[isi dokumen %s]\n\n%s", filepath.Base(mediaURL), text),
+						})
+						continue
+					} else {
+						logger.WarnCF("agent", "Could not read Office document", map[string]interface{}{
+							"file": mediaURL, "error": err.Error(),
+						})
+					}
+				}
+			}
+
 			content = append(content, providers.ContentBlock{
 				Type: "file",
 				File: &providers.FileData{
@@ -429,4 +458,25 @@ func (cb *ContextBuilder) buildUserMessage(text string, media []string) provider
 		Role:    "user",
 		Content: content,
 	}
+}
+
+// sniffMedia identifies the handful of formats worth recognising by their magic
+// bytes: the ones a model can actually read. Anything else keeps whatever label
+// it arrived with.
+func sniffMedia(data []byte) string {
+	switch {
+	case bytes.HasPrefix(data, []byte("%PDF-")):
+		return "application/pdf"
+	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
+		return "image/png"
+	case bytes.HasPrefix(data, []byte("\xff\xd8\xff")):
+		return "image/jpeg"
+	case bytes.HasPrefix(data, []byte("GIF87a")), bytes.HasPrefix(data, []byte("GIF89a")):
+		return "image/gif"
+	case len(data) > 11 && bytes.Equal(data[0:4], []byte("RIFF")) && bytes.Equal(data[8:12], []byte("WEBP")):
+		return "image/webp"
+	case utf8.Valid(data) && !bytes.ContainsRune(data, 0):
+		return "text/plain"
+	}
+	return ""
 }

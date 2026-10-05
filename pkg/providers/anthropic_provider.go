@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,6 +63,58 @@ func NewOpenCodeProvider(apiKey, apiBase string) *AnthropicProvider {
 	// The gateway fronts models that still take sampling parameters.
 	p.sendSampling = true
 	return p
+}
+
+// documentBlock renders an attachment the way the Messages API takes it, or nil
+// when the API has no shape for that type.
+//
+// Two shapes exist and they are not interchangeable: a PDF goes as base64, and
+// text goes as decoded text under a "text" source. Everything else — .docx,
+// .xlsx, .pptx, archives, binaries — has no document shape at all, and sending
+// one anyway fails the whole request with a 400 rather than just that block.
+// Those become a plain note so the rest of the message still gets an answer.
+func documentBlock(mimeType, b64 string) map[string]interface{} {
+	if mimeType == "application/pdf" {
+		return map[string]interface{}{
+			"type": "document",
+			"source": map[string]interface{}{
+				"type":       "base64",
+				"media_type": "application/pdf",
+				"data":       b64,
+			},
+		}
+	}
+
+	if !isTextualMedia(mimeType) {
+		return nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"type": "document",
+		"source": map[string]interface{}{
+			"type":       "text",
+			"media_type": "text/plain",
+			"data":       string(decoded),
+		},
+	}
+}
+
+// isTextualMedia reports whether the bytes are text the model can simply read.
+// Markdown, CSV, JSON, YAML, source code and logs all arrive under a long tail
+// of media types, so this asks what the content is rather than listing names.
+func isTextualMedia(mimeType string) bool {
+	if strings.HasPrefix(mimeType, "text/") {
+		return true
+	}
+	switch mimeType {
+	case "application/json", "application/xml", "application/x-yaml", "application/yaml",
+		"application/javascript", "application/x-sh", "application/csv", "application/sql":
+		return true
+	}
+	return strings.HasSuffix(mimeType, "+json") || strings.HasSuffix(mimeType, "+xml")
 }
 
 func (p *AnthropicProvider) name() string {
@@ -374,20 +427,22 @@ func (p *AnthropicProvider) buildContent(msg Message) interface{} {
 						})
 					}
 				case "file":
-					// A document block is how Anthropic takes a PDF. Without
-					// this the block was dropped and the model answered as if
-					// no file had been attached.
+					// A document block is how Anthropic takes an attachment.
+					// Without this case the block was dropped entirely and the
+					// model answered as if nothing had been attached.
 					if file, ok := blockMap["file"].(map[string]interface{}); ok {
 						if data, ok := file["file_data"].(string); ok && strings.HasPrefix(data, "data:") {
 							mimeType, b64 := parseDataURL(data)
-							result = append(result, map[string]interface{}{
-								"type": "document",
-								"source": map[string]interface{}{
-									"type":       "base64",
-									"media_type": mimeType,
-									"data":       b64,
-								},
-							})
+							name, _ := file["filename"].(string)
+							if doc := documentBlock(mimeType, b64); doc != nil {
+								result = append(result, doc)
+							} else {
+								result = append(result, map[string]interface{}{
+									"type": "text",
+									"text": fmt.Sprintf("[attachment %s is a %s, which this model cannot read directly]",
+										strings.TrimSpace(name+" "), mimeType),
+								})
+							}
 						}
 					}
 				case "image_url":

@@ -284,3 +284,30 @@ func TestAnthropicProviderOmitsSamplingForClaude(t *testing.T) {
 		t.Errorf("gateway temperature = %v, want it preserved", gateway["temperature"])
 	}
 }
+
+// Anthropic takes exactly two document shapes. A PDF goes as base64; text goes
+// as decoded text. Anything else has no shape at all, and sending one fails the
+// whole request — so it degrades to a note instead.
+func TestAnthropicProviderDocumentShapes(t *testing.T) {
+	p := NewAnthropicProvider("k", "")
+
+	blocks := p.buildContent(Message{Role: "user", Content: []ContentBlock{
+		{Type: "file", File: &FileData{FileData: "data:text/markdown;base64,aGFsbyBkdW5pYQ=="}},
+	}}).([]map[string]interface{})
+	src := blocks[0]["source"].(map[string]interface{})
+	if src["type"] != "text" || src["media_type"] != "text/plain" || src["data"] != "halo dunia" {
+		t.Errorf("markdown document = %#v, want decoded text", src)
+	}
+
+	blocks = p.buildContent(Message{Role: "user", Content: []ContentBlock{
+		{Type: "file", File: &FileData{
+			FileData: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBA==",
+		}},
+	}}).([]map[string]interface{})
+	if blocks[0]["type"] != "text" {
+		t.Fatalf("docx produced %v; an unsupported type must not become a document block", blocks[0]["type"])
+	}
+	if txt, _ := blocks[0]["text"].(string); txt == "" {
+		t.Error("unsupported attachment produced no explanation")
+	}
+}
