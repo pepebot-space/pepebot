@@ -33,14 +33,19 @@ func DetectFileType(urlOrPath string) (FileType, string) {
 		return categorizeByMimeType(mimeType, ""), mimeType
 	}
 
-	// Extract extension from URL or path
-	ext := strings.ToLower(filepath.Ext(urlOrPath))
-	if ext == "" {
-		// Try to extract from URL query parameters
-		if idx := strings.Index(urlOrPath, "?"); idx > 0 {
-			ext = strings.ToLower(filepath.Ext(urlOrPath[:idx]))
-		}
+	// Strip the query and fragment before looking at the extension. A chat
+	// attachment is a signed URL — ".../laporan.pdf?ex=...&hm=..." — and
+	// filepath.Ext returns ".pdf?ex=...&hm=..." for it, which matches no MIME
+	// type at all. The old guard only ran when the extension came back empty,
+	// which for these URLs it never did, so every Discord attachment was typed
+	// as application/octet-stream: Anthropic answered
+	// "document.source.base64.media_type: Input should be 'application/pdf'"
+	// and the PDF never reached the model.
+	trimmed := urlOrPath
+	if idx := strings.IndexAny(trimmed, "?#"); idx >= 0 {
+		trimmed = trimmed[:idx]
 	}
+	ext := strings.ToLower(filepath.Ext(trimmed))
 
 	// Get MIME type from extension
 	mimeType := mime.TypeByExtension(ext)

@@ -82,3 +82,31 @@ func TestBuildUserMessageUnreachableImageDegrades(t *testing.T) {
 		t.Fatalf("want a text placeholder, got %#v", blocks[1])
 	}
 }
+
+// A CDN that labels every attachment application/octet-stream would otherwise
+// hand the model a PDF tagged as binary, which it refuses outright.
+func TestFetchRemoteSniffsTypeWhenServerIsVague(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write([]byte("%PDF-1.4 isi laporan"))
+	}))
+	defer srv.Close()
+
+	// No usable extension in the path either — only the bytes can say.
+	got := fetchRemoteAsDataURL(srv.URL + "/attachment/9f3a")
+	if !strings.HasPrefix(got, "data:application/pdf;base64,") {
+		t.Errorf("data URL = %.40q, want it recognised as a PDF", got)
+	}
+}
+
+func TestFetchRemoteKeepsServerTypeWhenItIsUseful(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png; charset=binary")
+		w.Write([]byte("\x89PNG\r\n\x1a\nfake"))
+	}))
+	defer srv.Close()
+
+	if got := fetchRemoteAsDataURL(srv.URL + "/foto"); !strings.HasPrefix(got, "data:image/png;base64,") {
+		t.Errorf("data URL = %.40q, want the server's type with the charset trimmed", got)
+	}
+}

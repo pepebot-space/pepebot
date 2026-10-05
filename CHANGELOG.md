@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.30] - 2026-10-05
+
+### Fixed
+- **Chat attachments were typed `application/octet-stream`, so PDFs were refused.** A Discord attachment is a signed URL — `.../laporan.pdf?ex=…&hm=…` — and `filepath.Ext` returns `.pdf?ex=…&hm=…` for it, which matches no MIME type. The guard that stripped the query only ran when the extension came back empty, which for these URLs it never did. Anthropic answered `document.source.base64.media_type: Input should be 'application/pdf'` and the document never reached the model. The query and fragment are now stripped before the extension is read, which fixes images from the same source too — a `.png?ex=…` was equally mistyped.
+  - **Media type is sniffed from the bytes as a last resort**, for a CDN that labels everything `application/octet-stream` and a link with no extension at all: `%PDF-`, PNG, JPEG, GIF, WebP magic, else valid UTF-8 means text.
+  - Tests: `TestDetectFileTypeIgnoresQueryAndFragment`, `TestFetchRemoteSniffsTypeWhenServerIsVague`, `TestFetchRemoteKeepsServerTypeWhenItIsUseful`.
+
+### Added
+- **Word, PowerPoint and Excel attachments are converted to text before any provider sees them** (`pkg/agent/office.go`). No model reads OOXML: Anthropic has no document shape for it, and the OpenAI-shaped providers hand the model bytes it cannot parse — an attached `.docx` was a dead end everywhere. They are zip archives of XML, so pepebot unzips and sends the words, which works on every model including text-only ones. Spreadsheets resolve the shared string table, so text cells come through as text rather than indices; output is capped at 200k characters with a visible truncation note.
+  - Tests: `TestExtractDocxText`, `TestExtractPptxTextAcrossSlides`, `TestExtractXlsxResolvesSharedStrings`, `TestExtractOfficeRejectsNonArchive`, `TestIsOfficeDocument`.
+- **Anthropic document blocks now match what the API accepts.** A PDF goes as base64, text goes under a `text` source decoded, and a type with no document shape degrades to a short note instead of failing the whole request with a 400.
+  - Test: `TestAnthropicProviderDocumentShapes`.
+
 ## [0.5.29] - 2026-10-05
 
 ### Added

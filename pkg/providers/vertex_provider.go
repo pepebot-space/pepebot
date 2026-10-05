@@ -561,6 +561,13 @@ func getMessageContentString(content interface{}) string {
 }
 
 // parseDataURL parses a data URL into mime type and base64 data
+// ParseDataURL splits a data URL into its media type and base64 payload. It is
+// exported because the agent needs the same split to decide whether an
+// attachment is something it should convert before any provider sees it.
+func ParseDataURL(dataURL string) (string, string) {
+	return parseDataURL(dataURL)
+}
+
 func parseDataURL(dataURL string) (string, string) {
 	// Format: data:mime/type;base64,....
 	if !strings.HasPrefix(dataURL, "data:") {

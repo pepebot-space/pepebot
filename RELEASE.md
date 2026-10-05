@@ -1,29 +1,37 @@
-# 🐸 Pepebot v0.5.29 - Claude, With PDFs
+# 🐸 Pepebot v0.5.30 - Send It Any Document
 
 **Release Date:** 2026-10-05
 
+## 🐛 What's Fixed
+
+### PDFs from chat finally arrive
+
+v0.5.29 made PDFs work — from the command line. Attach one in Discord and it still failed, for a dull reason: chat attachments are signed links like `.../laporan.pdf?ex=68a9&hm=9f3a`, and the code reading the file extension got `.pdf?ex=68a9&hm=9f3a`, which matches no file type at all. Every attachment was labelled "unknown binary", and the model refused it.
+
+Fixed, and the same bug was quietly breaking **images** from chat too — a `.png?ex=…` was mislabelled exactly the same way.
+
+Pepebot now also checks the file's actual contents when a server is unhelpful, so an attachment served as "unknown binary" with no extension in the link is still recognised.
+
 ## ⚡ What's New
 
-### Point pepebot at Claude and send it documents
+### Word, Excel and PowerPoint
 
-```json
-{
-  "providers": { "anthropic": { "api_key": "sk-ant-...", "api_base": "https://api.anthropic.com" } },
-  "agents": { "defaults": { "model": "anthropic:claude-sonnet-5-5" } }
-}
+No model can read a `.docx` — it is a zip file full of XML. Attach one and nothing useful happened, on any provider.
+
+Pepebot now opens them and sends the text:
+
+```
+You:  [notulen.docx] Kode dokumen apa yang disebut?
+🐸    Kode dokumen: NOTULEN-4412
 ```
 
-Text, images, and **PDFs** all work.
+Spreadsheets come through as rows (`Tayangan | 478.307`), presentations slide by slide. Works on every model, including the ones that cannot take documents at all.
 
-The PDF part took a change of road. Anthropic serves an OpenAI-compatible endpoint, and pepebot was using it — fine for text and images, but hand it a document and it answers with a 400. Pepebot now talks to Anthropic's own Messages API instead, which takes documents natively. Same config, no flags.
+Very long documents are cut at 200k characters with a note saying so, rather than silently crowding out the conversation.
 
-Worse than the 400, until now a PDF sent through this provider was **silently dropped**: the request succeeded and the model answered as if you had attached nothing at all. That is fixed.
+### An unsupported file no longer kills the message
 
-### Two fixes you would have hit immediately
-
-**`temperature` no longer breaks every request.** The current Claude models removed sampling parameters — Sonnet 5.5 rejects a request carrying `temperature` outright. Pepebot no longer sends it to Anthropic.
-
-**The provider is called what it is.** `OpenCodeProvider` always spoke Anthropic's wire format; it is now `AnthropicProvider`, and errors say which endpoint they came from. Existing opencode setups are untouched.
+Send something nothing can read and you get a short note about that one attachment — the rest of your message still gets answered, instead of the whole request failing.
 
 ## 📦 Installation
 
@@ -31,16 +39,8 @@ Worse than the 400, until now a PDF sent through this provider was **silently dr
 curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.sh | bash
 ```
 
-## 🚀 Quick Start
-
-```bash
-pepebot onboard
-pepebot gateway
-```
-
 ## 🔗 Links
 
 - [Changelog](CHANGELOG.md)
 - [Providers Guide](docs/providers.md)
-- [Memory Guide](docs/memory.md)
 - [Documentation](docs/README.md)
