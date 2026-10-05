@@ -10,32 +10,40 @@ import (
 	"testing"
 )
 
-func TestOpenCodeProvider_GetDefaultModel(t *testing.T) {
-	provider := NewOpenCodeProvider("test-key", "")
-	expected := "minimax-m3"
-	if provider.GetDefaultModel() != expected {
-		t.Errorf("Expected default model %s, got %s", expected, provider.GetDefaultModel())
+func TestAnthropicProvider_GetDefaultModel(t *testing.T) {
+	if got := NewAnthropicProvider("test-key", "").GetDefaultModel(); got != "claude-sonnet-5-5" {
+		t.Errorf("Anthropic default model = %s", got)
+	}
+	if got := NewOpenCodeProvider("test-key", "").GetDefaultModel(); got != "minimax-m3" {
+		t.Errorf("OpenCode default model = %s", got)
 	}
 }
 
-func TestOpenCodeProvider_DefaultAPIBase(t *testing.T) {
-	provider := NewOpenCodeProvider("test-key", "")
-	expected := "https://opencode.ai/zen/go"
-	if provider.apiBase != expected {
-		t.Errorf("Expected apiBase %s, got %s", expected, provider.apiBase)
+func TestAnthropicProvider_DefaultAPIBase(t *testing.T) {
+	if got := NewAnthropicProvider("test-key", "").apiBase; got != "https://api.anthropic.com" {
+		t.Errorf("Anthropic default apiBase = %s", got)
+	}
+	// The same provider pointed at opencode's gateway keeps its own default.
+	if got := NewOpenCodeProvider("test-key", "").apiBase; got != "https://opencode.ai/zen/go" {
+		t.Errorf("OpenCode default apiBase = %s", got)
+	}
+	// A base written with /v1 already on it still resolves: this provider
+	// appends /v1/messages itself.
+	if got := NewAnthropicProvider("k", "https://api.anthropic.com/v1").apiBase; got != "https://api.anthropic.com" {
+		t.Errorf("apiBase with /v1 = %s, want it trimmed", got)
 	}
 }
 
-func TestOpenCodeProvider_CustomAPIBase(t *testing.T) {
+func TestAnthropicProvider_CustomAPIBase(t *testing.T) {
 	customBase := "https://custom.opencode.ai/api"
-	provider := NewOpenCodeProvider("test-key", customBase)
+	provider := NewAnthropicProvider("test-key", customBase)
 	if provider.apiBase != customBase {
 		t.Errorf("Expected apiBase %s, got %s", customBase, provider.apiBase)
 	}
 }
 
-func TestOpenCodeProvider_BuildAnthropicRequest(t *testing.T) {
-	provider := NewOpenCodeProvider("test-key", "")
+func TestAnthropicProvider_BuildAnthropicRequest(t *testing.T) {
+	provider := NewAnthropicProvider("test-key", "")
 
 	messages := []Message{
 		{Role: "user", Content: "Hello"},
@@ -54,8 +62,8 @@ func TestOpenCodeProvider_BuildAnthropicRequest(t *testing.T) {
 	}
 }
 
-func TestOpenCodeProvider_BuildAnthropicRequestWithSystem(t *testing.T) {
-	provider := NewOpenCodeProvider("test-key", "")
+func TestAnthropicProvider_BuildAnthropicRequestWithSystem(t *testing.T) {
+	provider := NewAnthropicProvider("test-key", "")
 
 	messages := []Message{
 		{Role: "system", Content: "You are a helpful assistant."},
@@ -70,8 +78,8 @@ func TestOpenCodeProvider_BuildAnthropicRequestWithSystem(t *testing.T) {
 	}
 }
 
-func TestOpenCodeProvider_BuildAnthropicRequestWithTools(t *testing.T) {
-	provider := NewOpenCodeProvider("test-key", "")
+func TestAnthropicProvider_BuildAnthropicRequestWithTools(t *testing.T) {
+	provider := NewAnthropicProvider("test-key", "")
 
 	messages := []Message{
 		{Role: "user", Content: "What is the weather?"},
@@ -112,8 +120,8 @@ func TestOpenCodeProvider_BuildAnthropicRequestWithTools(t *testing.T) {
 // Regression: the agent loop stores tool calls OpenAI-style (Function.Arguments
 // as a JSON string, Arguments nil). Sending that through as `input` yields null
 // and the API rejects the whole request with a 400.
-func TestOpenCodeProvider_ToolUseInputIsAlwaysObject(t *testing.T) {
-	provider := NewOpenCodeProvider("test-key", "")
+func TestAnthropicProvider_ToolUseInputIsAlwaysObject(t *testing.T) {
+	provider := NewAnthropicProvider("test-key", "")
 
 	cases := map[string]ToolCall{
 		"openai shape": {ID: "t1", Type: "function", Function: &FunctionCall{Name: "exec", Arguments: `{"command":"echo hi"}`}},
@@ -163,8 +171,8 @@ func toolUseBlock(t *testing.T, request map[string]interface{}) map[string]inter
 // Regression: the agent builds multimodal content as a typed []ContentBlock, but
 // providers used to only recognize the JSON-decoded []interface{} shape, so images
 // fell through to fmt.Sprintf and reached the model as a Go struct dump.
-func TestOpenCodeProvider_MultimodalContent(t *testing.T) {
-	provider := NewOpenCodeProvider("test-key", "")
+func TestAnthropicProvider_MultimodalContent(t *testing.T) {
+	provider := NewAnthropicProvider("test-key", "")
 
 	typed := []ContentBlock{
 		{Type: "text", Text: "what color?"},
@@ -208,5 +216,71 @@ func TestDetectFileType_DataURL(t *testing.T) {
 		if got, _ := DetectFileType(url); got != want {
 			t.Errorf("DetectFileType(%q) = %q, want %q", truncateString(url, 40), got, want)
 		}
+	}
+}
+
+// A PDF arrives as an OpenAI-shaped file block and has to leave as an Anthropic
+// document block. Before this the case was simply missing: the block was
+// dropped and the model answered as if nothing had been attached. Measured
+// against claude-sonnet-5-5, a document block reads the file correctly while
+// the same PDF on Anthropic's OpenAI-compatible endpoint returns a 400.
+func TestAnthropicProviderTranslatesFileToDocument(t *testing.T) {
+	p := NewAnthropicProvider("k", "")
+	msg := Message{Role: "user", Content: []ContentBlock{
+		{Type: "text", Text: "apa isinya"},
+		{Type: "file", File: &FileData{FileData: "data:application/pdf;base64,JVBERi0xLjQ="}},
+	}}
+
+	blocks, ok := p.buildContent(msg).([]map[string]interface{})
+	if !ok {
+		t.Fatalf("unexpected content shape: %#v", p.buildContent(msg))
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("got %d blocks, want text + document: %#v", len(blocks), blocks)
+	}
+
+	doc := blocks[1]
+	if doc["type"] != "document" {
+		t.Fatalf("second block = %v, want a document block", doc["type"])
+	}
+	src, _ := doc["source"].(map[string]interface{})
+	if src["type"] != "base64" || src["media_type"] != "application/pdf" || src["data"] != "JVBERi0xLjQ=" {
+		t.Errorf("document source = %#v", src)
+	}
+}
+
+// Images keep working through the same path.
+func TestAnthropicProviderTranslatesImage(t *testing.T) {
+	p := NewAnthropicProvider("k", "")
+	msg := Message{Role: "user", Content: []ContentBlock{
+		{Type: "image_url", ImageURL: &ImageURL{URL: "data:image/png;base64,QUJD"}},
+	}}
+
+	blocks := p.buildContent(msg).([]map[string]interface{})
+	if len(blocks) != 1 || blocks[0]["type"] != "image" {
+		t.Fatalf("blocks = %#v, want one image block", blocks)
+	}
+	src := blocks[0]["source"].(map[string]interface{})
+	if src["media_type"] != "image/png" || src["data"] != "QUJD" {
+		t.Errorf("image source = %#v", src)
+	}
+}
+
+// Sonnet 5.5 answers a request carrying temperature with
+// "`temperature` is deprecated for this model" and a 400 — sampling parameters
+// are gone from the current Claude models. The gateway flavour still sends them.
+func TestAnthropicProviderOmitsSamplingForClaude(t *testing.T) {
+	opts := map[string]interface{}{"max_tokens": 1024, "temperature": 0.7}
+
+	direct := NewAnthropicProvider("k", "").buildAnthropicRequest(
+		[]Message{{Role: "user", Content: "hai"}}, nil, "claude-sonnet-5-5", opts)
+	if _, present := direct["temperature"]; present {
+		t.Error("temperature was sent to the Anthropic API; the model rejects it")
+	}
+
+	gateway := NewOpenCodeProvider("k", "").buildAnthropicRequest(
+		[]Message{{Role: "user", Content: "hai"}}, nil, "minimax-m3", opts)
+	if gateway["temperature"] != 0.7 {
+		t.Errorf("gateway temperature = %v, want it preserved", gateway["temperature"])
 	}
 }

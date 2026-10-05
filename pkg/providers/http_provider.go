@@ -482,11 +482,15 @@ func CreateProviderWithOverrides(cfg *config.Config, overrideModel, overrideProv
 				apiBase = "https://openrouter.ai/api/v1"
 			}
 		case "anthropic":
-			apiKey = cfg.Providers.Anthropic.APIKey
-			apiBase = cfg.Providers.Anthropic.APIBase
-			if apiBase == "" {
-				apiBase = "https://api.anthropic.com/v1"
+			// Native Messages API, not the OpenAI-compatible endpoint: the
+			// compatible one rejects a document block, so PDFs only work here.
+			if cfg.Providers.Anthropic.APIKey == "" {
+				return nil, fmt.Errorf("no API key configured for provider: anthropic")
 			}
+			return NewAnthropicProvider(
+				cfg.Providers.Anthropic.APIKey,
+				cfg.Providers.Anthropic.APIBase,
+			), nil
 		case "openai":
 			apiKey = cfg.Providers.OpenAI.APIKey
 			apiBase = cfg.Providers.OpenAI.APIBase

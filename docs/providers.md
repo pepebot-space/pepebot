@@ -57,6 +57,24 @@ written, with no prefix stripping. A gateway may legitimately want
 `kr/claude-sonnet-4.5`, and pepebot has no business second-guessing a name it
 does not own.
 
+## Anthropic
+
+The `anthropic` provider speaks Anthropic's native Messages API, not the
+OpenAI-compatible endpoint Anthropic also serves. That matters for one reason:
+the compatible endpoint rejects a document block, so a PDF can never reach the
+model through it. Native takes documents, so text, images and PDFs all work.
+
+```json
+{
+  "providers": { "anthropic": { "api_key": "sk-ant-...", "api_base": "https://api.anthropic.com" } },
+  "agents": { "defaults": { "model": "anthropic:claude-sonnet-5-5" } }
+}
+```
+
+`api_base` may be written with or without `/v1` — this provider appends
+`/v1/messages` itself. Sampling parameters (`temperature`) are not sent: the
+current Claude models removed them and answer a request carrying one with a 400.
+
 ## Where the model lives
 
 **The agent registry** — `workspace/agents/registry.json` — is the source of

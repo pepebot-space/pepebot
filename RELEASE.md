@@ -1,31 +1,29 @@
-# 🐸 Pepebot v0.5.28 - Voice Without The Wait
+# 🐸 Pepebot v0.5.29 - Claude, With PDFs
 
-**Release Date:** 2026-10-03
+**Release Date:** 2026-10-05
 
 ## ⚡ What's New
 
-### Turn off tools for voice, and get 1.5 seconds back
-
-Tool definitions are sent to the model again on every single turn. In a text chat nobody notices. On a voice call it is the whole experience:
-
-| Live session | Time to first token |
-|---|---|
-| Without tools | **591 ms** |
-| With pepebot's 16 tools attached | **2131 ms** |
-
-Measured end to end against a real voice server one LAN hop away, five samples each.
-
-Until now the only way to switch them off was for every client to say so in its setup message. Now the deployment can decide:
+### Point pepebot at Claude and send it documents
 
 ```json
-{ "live": { "enable_tools": false } }
+{
+  "providers": { "anthropic": { "api_key": "sk-ant-...", "api_base": "https://api.anthropic.com" } },
+  "agents": { "defaults": { "model": "anthropic:claude-sonnet-5-5" } }
+}
 ```
 
-A client that asks either way still wins, and leaving it unset keeps tools on — nothing changes for anyone who does not set it.
+Text, images, and **PDFs** all work.
 
-### How much does pepebot's Live proxy cost? Almost nothing
+The PDF part took a change of road. Anthropic serves an OpenAI-compatible endpoint, and pepebot was using it — fine for text and images, but hand it a document and it answers with a 400. Pepebot now talks to Anthropic's own Messages API instead, which takes documents natively. Same config, no flags.
 
-While measuring the above, the proxy itself came out at **585 ms** to first token versus **595 ms** talking straight to the voice server. The relay is in the noise; what costs you is the tool prefill above, and how far away your voice server is.
+Worse than the 400, until now a PDF sent through this provider was **silently dropped**: the request succeeded and the model answered as if you had attached nothing at all. That is fixed.
+
+### Two fixes you would have hit immediately
+
+**`temperature` no longer breaks every request.** The current Claude models removed sampling parameters — Sonnet 5.5 rejects a request carrying `temperature` outright. Pepebot no longer sends it to Anthropic.
+
+**The provider is called what it is.** `OpenCodeProvider` always spoke Anthropic's wire format; it is now `AnthropicProvider`, and errors say which endpoint they came from. Existing opencode setups are untouched.
 
 ## 📦 Installation
 
