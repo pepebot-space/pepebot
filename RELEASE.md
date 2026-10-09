@@ -1,37 +1,28 @@
-# 🐸 Pepebot v0.5.30 - Send It Any Document
+# 🐸 Pepebot v0.5.31 - Tell Me Why
 
-**Release Date:** 2026-10-05
+**Release Date:** 2026-10-09
 
 ## 🐛 What's Fixed
 
-### PDFs from chat finally arrive
+### "I've completed processing but have no response to give."
 
-v0.5.29 made PDFs work — from the command line. Attach one in Discord and it still failed, for a dull reason: chat attachments are signed links like `.../laporan.pdf?ex=68a9&hm=9f3a`, and the code reading the file extension got `.pdf?ex=68a9&hm=9f3a`, which matches no file type at all. Every attachment was labelled "unknown binary", and the model refused it.
+That sentence told you nothing, and it was hiding two very different events.
 
-Fixed, and the same bug was quietly breaking **images** from chat too — a `.png?ex=…` was mislabelled exactly the same way.
+When a safety classifier declines a request, the API answers **200 OK with no content** and a reason attached. When an answer is cut off before the model writes a word, same thing — empty, with a different reason. Pepebot read the (missing) content, dropped the reason on the floor, and shrugged.
 
-Pepebot now also checks the file's actual contents when a server is unhelpful, so an attachment served as "unknown binary" with no extension in the link is still recognised.
+Now you get the actual reason — the request was declined, or the token budget ran out — and the log records it either way.
 
-## ⚡ What's New
-
-### Word, Excel and PowerPoint
-
-No model can read a `.docx` — it is a zip file full of XML. Attach one and nothing useful happened, on any provider.
-
-Pepebot now opens them and sends the text:
+### The cron service no longer dies on an empty file
 
 ```
-You:  [notulen.docx] Kode dokumen apa yang disebut?
-🐸    Kode dokumen: NOTULEN-4412
+Error starting cron service: failed to load store: unexpected end of JSON input
 ```
 
-Spreadsheets come through as rows (`Tayangan | 478.307`), presentations slide by slide. Works on every model, including the ones that cannot take documents at all.
+A crash between creating `jobs.json` and writing to it leaves a zero-byte file. That is a schedule with nothing in it, not a corrupt one — but pepebot treated it as corrupt and failed on every start. A genuinely malformed file is still reported.
 
-Very long documents are cut at 200k characters with a note saying so, rather than silently crowding out the conversation.
+### Smaller
 
-### An unsupported file no longer kills the message
-
-Send something nothing can read and you get a short note about that one attachment — the rest of your message still gets answered, instead of the whole request failing.
+Provider log lines name the endpoint that produced them instead of always saying "OpenCode Go", and the debug line now includes the finish reason.
 
 ## 📦 Installation
 

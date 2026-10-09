@@ -130,7 +130,7 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 		toolNames = append(toolNames, t.Function.Name)
 	}
 
-	logger.DebugCF("provider", "OpenCode Go chat request", map[string]interface{}{
+	logger.DebugCF("provider", p.name()+" chat request", map[string]interface{}{
 		"model":      model,
 		"api_base":   p.apiBase,
 		"messages":   len(messages),
@@ -181,9 +181,9 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 		respToolNames = append(respToolNames, tc.Name)
 	}
 
-	logger.DebugCF("provider", "OpenCode Go chat response", map[string]interface{}{
-		"finish_reason":   parsed.FinishReason,
+	logger.DebugCF("provider", p.name()+" chat response", map[string]interface{}{
 		"content_len":     len(parsed.Content),
+		"finish_reason":   parsed.FinishReason,
 		"content_preview": truncateString(parsed.Content, 120),
 		"tool_calls":      len(parsed.ToolCalls),
 		"tool_names":      respToolNames,
@@ -488,14 +488,22 @@ func (p *AnthropicProvider) parseAnthropicResponse(body []byte) (*LLMResponse, e
 			Input map[string]interface{} `json:"input,omitempty"`
 		} `json:"content"`
 		StopReason string `json:"stop_reason"`
-		Usage      *struct {
+		// Populated only when stop_reason is "refusal": a safety classifier
+		// declined the request. It arrives as a 200 with no content at all, so
+		// without reading this a refusal is indistinguishable from an empty reply.
+		StopDetails *struct {
+			Type        string `json:"type"`
+			Category    string `json:"category"`
+			Explanation string `json:"explanation"`
+		} `json:"stop_details,omitempty"`
+		Usage *struct {
 			InputTokens  int `json:"input_tokens"`
 			OutputTokens int `json:"output_tokens"`
 		} `json:"usage,omitempty"`
 	}
 
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("opencode: failed to parse response: %w", err)
+		return nil, fmt.Errorf("%s: failed to parse response: %w", p.name(), err)
 	}
 
 	var contentParts []string
@@ -526,6 +534,28 @@ func (p *AnthropicProvider) parseAnthropicResponse(body []byte) (*LLMResponse, e
 		finishReason = "tool_calls"
 	case "stop_sequence":
 		finishReason = "stop"
+	case "refusal":
+		finishReason = "refusal"
+	}
+
+	// A reply with nothing in it is not "no response to give" — it has a reason,
+	// and the reason is in stop_reason. Reported here, because by the time the
+	// agent loop sees an empty string every bit of that is gone.
+	if len(contentParts) == 0 && len(toolCalls) == 0 {
+		reason, detail := resp.StopReason, ""
+		if resp.StopDetails != nil {
+			detail = strings.TrimSpace(resp.StopDetails.Category + " " + resp.StopDetails.Explanation)
+		}
+		logger.WarnCF("provider", "Model returned no content", map[string]interface{}{
+			"stop_reason": reason, "detail": detail, "blocks": len(resp.Content),
+		})
+		switch resp.StopReason {
+		case "refusal":
+			contentParts = append(contentParts, strings.TrimSpace(
+				"Permintaan ini ditolak oleh penyaring keamanan model. "+detail))
+		case "max_tokens":
+			contentParts = append(contentParts, "Jawaban terpotong sebelum sempat ditulis — anggaran token (max_tokens) habis.")
+		}
 	}
 
 	var usage *UsageInfo

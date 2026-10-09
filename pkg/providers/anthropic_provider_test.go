@@ -7,6 +7,7 @@
 package providers
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -309,5 +310,44 @@ func TestAnthropicProviderDocumentShapes(t *testing.T) {
 	}
 	if txt, _ := blocks[0]["text"].(string); txt == "" {
 		t.Error("unsupported attachment produced no explanation")
+	}
+}
+
+// A refusal arrives as HTTP 200 with no content at all. Dropping stop_reason
+// turned that into an empty string, which the agent loop could only report as
+// "I've completed processing but have no response to give." — the one message
+// that tells the user nothing about what happened.
+func TestEmptyReplyReportsItsReason(t *testing.T) {
+	p := NewAnthropicProvider("k", "")
+
+	refusal := []byte(`{"content":[],"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"declined"}}`)
+	resp, err := p.parseAnthropicResponse(refusal)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if resp.FinishReason != "refusal" {
+		t.Errorf("finish reason = %q, want refusal", resp.FinishReason)
+	}
+	if !strings.Contains(resp.Content, "cyber") || resp.Content == "" {
+		t.Errorf("content = %q, want it to name the refusal and its category", resp.Content)
+	}
+
+	truncated := []byte(`{"content":[],"stop_reason":"max_tokens"}`)
+	resp, err = p.parseAnthropicResponse(truncated)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !strings.Contains(resp.Content, "max_tokens") {
+		t.Errorf("content = %q, want it to say the budget ran out", resp.Content)
+	}
+
+	// A normal reply is untouched.
+	ok := []byte(`{"content":[{"type":"text","text":"Biru."}],"stop_reason":"end_turn"}`)
+	resp, err = p.parseAnthropicResponse(ok)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if resp.Content != "Biru." || resp.FinishReason != "stop" {
+		t.Errorf("normal reply changed: %q / %q", resp.Content, resp.FinishReason)
 	}
 }

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.31] - 2026-10-09
+
+### Fixed
+- **An empty reply now says why it was empty.** The Anthropic response parser read the content blocks and threw `stop_reason` away, so a reply with no blocks reached the agent loop as an empty string — and the only thing it could say was *"I've completed processing but have no response to give."* That message is the problem: a refusal arrives as HTTP 200 with no content and a `stop_reason` of `refusal` (plus a category and explanation in `stop_details`), and an answer cut off before it started arrives as `max_tokens`. Both now reach the user as what they are, and either way a WARN records the reason.
+  - Test: `TestEmptyReplyReportsItsReason`.
+- **An empty cron store no longer takes the cron service down.** A crash or a full disk between creating `jobs.json` and writing it leaves zero bytes; `json.Unmarshal` called that corrupt and pepebot failed on every start with `Error starting cron service: failed to load store: unexpected end of JSON input`. An empty file is a store with no jobs. Genuinely malformed content is still reported.
+  - Tests: `TestLoadStoreAcceptsEmptyFile`, `TestLoadStoreStillRejectsGarbage`, `TestLoadStoreMissingFileIsFine`.
+- Provider log lines and parse errors say which endpoint produced them instead of always reading "OpenCode Go", and the debug line now carries `finish_reason`.
+
 ## [0.5.30] - 2026-10-05
 
 ### Fixed

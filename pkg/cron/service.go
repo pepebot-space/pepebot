@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -238,6 +239,15 @@ func (cs *CronService) loadStore() error {
 			return nil
 		}
 		return err
+	}
+
+	// An empty file is a store with no jobs, not a broken one. A crash or a
+	// disk full between create and write leaves exactly that, and treating it
+	// as corrupt took the whole cron service down on every start:
+	// "Error starting cron service: failed to load store: unexpected end of
+	// JSON input" — for a file that said nothing at all.
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil
 	}
 
 	return json.Unmarshal(data, cs.store)
