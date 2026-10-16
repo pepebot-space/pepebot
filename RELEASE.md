@@ -1,51 +1,67 @@
-# 🐸 Pepebot v0.5.34 - You Can See It Learning
+# 🐸 Pepebot v0.5.35 - Hand It Off, Get Told When It's Done
 
 **Release Date:** 2026-10-16
 
 ## ⚡ What's New
 
-v0.5.33 taught the bot to keep what it works out. This answers the obvious next question: **how would you know?**
+### Delegation that actually comes back
 
-Until now: you wouldn't. It changed its memory and wrote skills, and mentioned it only in a log line on the server.
-
-### It tells you
+Ask for something slow and the bot no longer has to sit on the question:
 
 ```
-💾 Dicatat (2 hal)
+You:  analisa 92 skill ini, mana yang tidak pernah dipakai
+🐸    Saya kerjakan di latar, id t_8a373014.
+      …
+🐸    ✅ Tugas t_8a373014 (audit skill) selesai.
+      57 dari 92 skill tidak pernah terpakai. Tiga terbesar: …
 ```
 
-A short note in the same conversation, right after the background review keeps something.
+The result is **read by the bot before you see it** — you get the conclusion, not a dump of raw output.
+
+### The work can run anywhere
+
+A task names a route; what sits behind it is yours:
 
 ```json
-{ "memory": { "notify": "verbose" } }    // off | on (default) | verbose
+{ "tasks": { "routes": {
+    "riset":  { "executor": "exec", "target": "ssh herdr 'claude -p \"$PEPEBOT_TASK_PROMPT\"'" },
+    "render": { "executor": "http", "target": "http://100.64.0.9:9000/jobs" }
+}}}
 ```
 
-`verbose` says what it kept.
+Sending a job to Claude on another machine is **a line of config**, not a feature pepebot had to learn. Pepebot never knows what is on the other end.
 
-### You can ask
+### The hook
+
+A remote worker is handed where to report and a token that works for that one task:
 
 ```sh
-$ pepebot learned
-
-🧠 Ingatan
-──────────────────────────────────
-
-Catatan agent (159/2200 karakter)
-  • Rilis pepebot: melompati langkah 1-2 (go test & golangci-lint harus 0)
-    sudah dua kali membuat rilis gagal di CI.
-
-Profil kamu (31/1375 karakter)
-  • Selalu pakai zsh sebagai shell.
-
-📘 Skill yang ditulis sendiri
-──────────────────────────────────
-  • pepebot-release              2026-10-16 15:16
-    Open when preparing or performing a release of pepebot.
-
-  Hapus satu: rm -rf ~/.pepebot/workspace/skills/<nama>
+curl -X POST "$callback" -H "Authorization: Bearer $token" \
+     -d '{"status":"done","result":"Temuan: 3 anomali, terbesar di baris 418."}'
 ```
 
-Everything the bot taught itself, in one place, with the command to undo any of it.
+Send it twice and you still get one answer in the chat.
+
+### A restart no longer swallows your work
+
+Kill pepebot mid-task and it tells you when it comes back:
+
+```
+⚠️ Tugas t_a5e75c9f (impor data besar) terhenti karena pepebot restart.
+   Mau dilanjutkan? Balas "lanjutkan t_a5e75c9f" atau "batalkan t_a5e75c9f".
+```
+
+Your call, not the bot's.
+
+Full details: [docs/tasks.md](docs/tasks.md)
+
+## 🐛 Fixed along the way
+
+Three bugs the tests and the end-to-end run turned up: a worker could overwrite a task that had already finished (and report it twice), the hook rejected valid callbacks coming from a different process, and a one-shot CLI run exited while its own delegated task was still going.
+
+## 🧹 Removed
+
+The old `spawn` sketch: never registered, no tools, results delivered nowhere, ids lost on every restart.
 
 ## 📦 Installation
 
@@ -56,5 +72,5 @@ curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.
 ## 🔗 Links
 
 - [Changelog](CHANGELOG.md)
+- [Delegation guide](docs/tasks.md)
 - [Agent-written skills](docs/skills-agent.md)
-- [Memory Guide](docs/memory.md)

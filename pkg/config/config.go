@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,7 @@ type Config struct {
 	Tools     ToolsConfig     `json:"tools"`
 	Memory    MemoryConfig    `json:"memory"`
 	Skills    SkillsConfig    `json:"skills"`
+	Tasks     TasksConfig     `json:"tasks"`
 	mu        sync.RWMutex
 }
 
@@ -48,6 +50,29 @@ type MemoryConfig struct {
 // capability than it has today, not a wider one: a validated name, the
 // frontmatter the loader needs, and a created_by marker that makes every one of
 // them findable and removable.
+// TasksConfig controls delegation: work handed to someone else, tracked by id,
+// reported back to the chat that asked.
+type TasksConfig struct {
+	Enabled *bool `json:"enabled,omitempty" env:"PEPEBOT_TASKS_ENABLED"`
+	// Workers is how many run at once. Zero means the host's thread count.
+	Workers int `json:"workers,omitempty" env:"PEPEBOT_TASKS_WORKERS"`
+	// CallbackURL is pepebot's own address as a remote worker will see it.
+	// Pepebot cannot derive this: the gateway binds 127.0.0.1 by default, which
+	// is unreachable from anywhere else. Set it when a worker lives on another
+	// machine — a Tailscale address, for example.
+	CallbackURL string `json:"callback_url,omitempty" env:"PEPEBOT_TASKS_CALLBACK_URL"`
+	// Routes name the places work can be sent. The agent picks a route by
+	// name; what sits behind it is the operator's business.
+	//
+	//   "riset": {"executor": "exec", "target": "ssh herdr 'claude -p \"$PEPEBOT_TASK_PROMPT\"'"}
+	Routes map[string]TaskRouteConfig `json:"routes,omitempty"`
+}
+
+type TaskRouteConfig struct {
+	Executor string `json:"executor"`
+	Target   string `json:"target,omitempty"`
+}
+
 type SkillsConfig struct {
 	// AgentManaged registers the skill_manage tool and lets the background
 	// review propose skills. Default true.
@@ -711,4 +736,27 @@ func (c *Config) AgentManagedSkills() bool {
 		return true
 	}
 	return *c.Skills.AgentManaged
+}
+
+// TasksEnabled reports whether delegation is available. Unset means on.
+func (c *Config) TasksEnabled() bool {
+	if c.Tasks.Enabled == nil {
+		return true
+	}
+	return *c.Tasks.Enabled
+}
+
+// GatewayAddress is where pepebot's own HTTP server can be reached, as best it
+// knows. tasks.callback_url wins because only the operator knows what a remote
+// worker can route to; otherwise it is the bind address, which is right for a
+// worker on the same host and useless for one anywhere else.
+func (c *Config) GatewayAddress() string {
+	if base := strings.TrimSpace(c.Tasks.CallbackURL); base != "" {
+		return strings.TrimRight(base, "/")
+	}
+	host := c.Gateway.Host
+	if host == "" || host == "0.0.0.0" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("http://%s:%d", host, c.Gateway.Port)
 }

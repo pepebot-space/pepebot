@@ -126,6 +126,11 @@ func (gs *GatewayServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/config", gs.corsMiddleware(gs.handleConfig))
 	mux.HandleFunc("/v1/restart", gs.corsMiddleware(gs.handleRestart))
 	mux.HandleFunc("/v1/send", gs.corsMiddleware(gs.handleSend))
+	mux.HandleFunc("/v1/tasks", gs.corsMiddleware(gs.handleListTasks))
+	// The completion hook. A worker anywhere — another host, a script, Claude
+	// behind an ssh — reports here with the token it was handed, and pepebot
+	// takes it from there.
+	mux.HandleFunc("/v1/tasks/", gs.corsMiddleware(gs.handleTaskRoutes))
 
 	// Live API WebSocket endpoint
 	if gs.liveServer != nil {

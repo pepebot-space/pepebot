@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.35] - 2026-10-16
+
+### Added
+- **Delegation: tasks with ids, run anywhere, reported back to the chat that asked** (`pkg/tasks`, `docs/tasks.md`). Work too slow to answer inline gets an id immediately, runs somewhere else, and returns as a message in the same conversation — read by the agent first, so the chat gets the conclusion rather than a dump.
+  - Three executors: `internal` (pepebot's own loop with its tools, in a session of its own), `exec` (any command — `ssh host 'claude -p …'` is a config line, not code in pepebot), and `http` (a worker elsewhere, which answers through the hook).
+  - **The completion hook**: `POST /v1/tasks/{id}/result` authenticated by a token issued per task. A leaked token finishes one job and nothing else; a retried callback is accepted once, so a worker that sends twice does not answer twice in the chat.
+  - **`tasks.callback_url`** is handed to every remote job, because pepebot cannot guess it: the gateway binds `127.0.0.1`, which is useless to a worker on another machine. A remote route configured without it fails loudly instead of dispatching work that can never report back.
+  - **A restart no longer loses work silently.** Tasks that were running become `stale` and the requester is asked whether to run them again — `resume` or `cancel`. The sketch this replaces kept tasks in a map and lost every one on restart, without a word.
+  - Limits: depth 3, a queue sized to the host's thread count, results over ~4000 characters spilled to `workspace/task-results/` and summarised in chat.
+  - Tests: 8 in `pkg/tasks` covering delegation, failure reporting, callback auth and idempotency, restart-to-stale-and-resume, the depth cap, unknown executors, result spilling, and an empty store.
+
+### Fixed
+- **A worker could overwrite a task that had already finished.** If a callback arrived before the queue got to the task, the worker set it back to `running` and the next callback reported the same work a second time. Found by the test, then again in the end-to-end run.
+- **The completion hook rejected valid callbacks across processes** (HTTP 403). The CLI delegating and the gateway serving the hook are two processes over one task file; the gateway read it only at startup, so it answered "unknown task" for work it had simply not seen. Readers now re-read when the file changes.
+- **A one-shot CLI run exited while its delegated task was still running**, leaving it to be found as `stale` at the next start. The CLI now waits for delegated work the same way it waits for the memory review.
+
+### Removed
+- The unused `spawn` / `SubagentManager` sketch: never registered as a tool, no tools of its own, results stored in a map and delivered nowhere, ids lost on restart. `pkg/tasks` is what it was reaching for.
+
 ## [0.5.34] - 2026-10-16
 
 ### Added
