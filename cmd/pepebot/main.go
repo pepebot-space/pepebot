@@ -31,6 +31,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/gateway"
 	"github.com/pepebot-space/pepebot/pkg/heartbeat"
 	"github.com/pepebot-space/pepebot/pkg/logger"
+	"github.com/pepebot-space/pepebot/pkg/memory"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/skills"
 	"github.com/pepebot-space/pepebot/pkg/tools"
@@ -38,7 +39,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.33"
+const version = "0.5.34"
 const logo = "🐸"
 
 func main() {
@@ -88,6 +89,8 @@ func main() {
 		statusCmd()
 	case "cron":
 		cronCmd()
+	case "learned":
+		learnedCmd()
 	case "skills":
 		if len(os.Args) < 3 {
 			skillsHelp()
@@ -176,6 +179,7 @@ func printHelp() {
 	fmt.Println("                --media <path|url>  Attach an image, PDF, audio or video (repeatable)")
 	fmt.Println("  status      Show pepebot status")
 	fmt.Println("  cron        Manage scheduled tasks")
+	fmt.Println("  learned             Show what the agent has taught itself")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
 	fmt.Println("  workflow    Manage and execute workflows")
 	fmt.Println("              Subcommands:")
@@ -1451,6 +1455,60 @@ func interactiveModelPrompt(registryModel, configModel string) (bool, error) {
 		fmt.Printf("→ keeping %s; edit workspace/agents/registry.json to change it\n\n", registryModel)
 	}
 	return overwrite, nil
+}
+
+// learnedCmd shows what the agent has taught itself: the notes it keeps and the
+// skills it wrote. Learning used to be visible only as a log line on the
+// server, which is to say not visible at all.
+func learnedCmd() {
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+	workspace := cfg.WorkspacePath()
+
+	fmt.Println("🧠 Ingatan")
+	fmt.Println("──────────────────────────────────")
+	shown := false
+	for label, store := range map[string]*memory.Store{
+		"Catatan agent": memory.Notes(workspace, cfg.Memory.CharLimit),
+		"Profil kamu":   memory.Profile(workspace, cfg.Memory.UserCharLimit),
+	} {
+		entries := store.Entries()
+		if len(entries) == 0 {
+			continue
+		}
+		shown = true
+		used, limit := store.Usage()
+		fmt.Printf("\n%s (%d/%d karakter)\n", label, used, limit)
+		for _, e := range entries {
+			for _, line := range strings.Split(e, "\n") {
+				if strings.TrimSpace(line) != "" {
+					fmt.Printf("  • %s\n", strings.TrimSpace(line))
+				}
+			}
+		}
+	}
+	if !shown {
+		fmt.Println("  (belum ada)")
+	}
+
+	fmt.Println("\n📘 Skill yang ditulis sendiri")
+	fmt.Println("──────────────────────────────────")
+	learned := skills.Learned(workspace)
+	if len(learned) == 0 {
+		fmt.Println("  (belum ada)")
+	}
+	for _, s := range learned {
+		fmt.Printf("  • %-28s %s\n", s.Name, s.CreatedAt.Local().Format("2006-01-02 15:04"))
+		if s.Description != "" {
+			fmt.Printf("    %s\n", s.Description)
+		}
+	}
+	if len(learned) > 0 {
+		fmt.Printf("\n  Hapus satu: rm -rf %s/skills/<nama>\n", workspace)
+	}
 }
 
 func loadConfig() (*config.Config, error) {

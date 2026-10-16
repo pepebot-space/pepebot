@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/memory"
 	"github.com/pepebot-space/pepebot/pkg/providers"
@@ -156,6 +157,8 @@ func (al *AgentLoop) reviewTurn(sessionKey string) {
 		return
 	}
 
+	var learned []string
+
 	for _, op := range ops {
 		store := notes
 		if strings.EqualFold(op.Target, "user") {
@@ -180,6 +183,7 @@ func (al *AgentLoop) reviewTurn(sessionKey string) {
 				"action": op.Action, "target": op.Target,
 				"entry": truncateString(op.Content, 120),
 			})
+			learned = append(learned, "ingatan: "+truncateString(strings.TrimSpace(op.Content), 90))
 		case errors.Is(applyErr, memory.ErrDuplicate):
 			// Already known — the common case, and not worth a log line.
 		default:
@@ -190,17 +194,19 @@ func (al *AgentLoop) reviewTurn(sessionKey string) {
 			})
 		}
 	}
-	al.applyReviewSkills(proposed)
+	learned = append(learned, al.applyReviewSkills(proposed)...)
+	al.notifyLearned(sessionKey, learned)
 }
 
 // applyReviewSkills writes what the review decided is worth keeping as a
 // procedure. It goes through the same author as the tool, so a skill written
 // unattended gets the same name validation, the same content scan, the same
 // size limit and the same created_by marker as one the agent wrote on purpose.
-func (al *AgentLoop) applyReviewSkills(proposed []reviewSkill) {
+func (al *AgentLoop) applyReviewSkills(proposed []reviewSkill) []string {
 	if !al.skillsManaged || len(proposed) == 0 {
-		return
+		return nil
 	}
+	var learned []string
 	author := skills.NewAgentAuthor(al.workspace)
 
 	for _, p := range proposed {
@@ -225,7 +231,46 @@ func (al *AgentLoop) applyReviewSkills(proposed []reviewSkill) {
 		logger.InfoCF("skills", "Skill written by background review", map[string]interface{}{
 			"skill": p.Name, "action": p.Action, "description": truncateString(p.Description, 120),
 		})
+		verb := "skill baru"
+		if strings.EqualFold(p.Action, "patch") {
+			verb = "skill diperbarui"
+		}
+		learned = append(learned, verb+": "+p.Name)
 	}
+	return learned
+}
+
+// notifyLearned tells the user, in the conversation they were just having, that
+// something was kept from it.
+//
+// The review runs after the reply has already gone out, so this is a second,
+// short message rather than part of the answer. Without it the only record was
+// a log line on the server, which is to say nowhere anybody was looking — and a
+// bot that quietly edits what it believes about you should at least say so.
+func (al *AgentLoop) notifyLearned(sessionKey string, learned []string) {
+	if len(learned) == 0 || al.bus == nil {
+		return
+	}
+	mode := strings.ToLower(strings.TrimSpace(al.memoryCfg.Notify))
+	if mode == "" {
+		mode = "on"
+	}
+	if mode == "off" {
+		return
+	}
+
+	// Session keys are "<channel>:<chat id>"; anything else came from a path
+	// with no channel to answer on.
+	channel, chatID, ok := strings.Cut(sessionKey, ":")
+	if !ok || channel == "" || chatID == "" || channel == "cli" {
+		return
+	}
+
+	content := fmt.Sprintf("💾 Dicatat (%d hal)", len(learned))
+	if mode == "verbose" {
+		content = "💾 Dicatat:\n- " + strings.Join(learned, "\n- ")
+	}
+	al.bus.PublishOutbound(bus.OutboundMessage{Channel: channel, ChatID: chatID, Content: content})
 }
 
 // parseReviewOps pulls the ops out of a reply that may be wrapped in prose or a
