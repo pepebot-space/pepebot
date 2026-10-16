@@ -14,6 +14,8 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/logger"
 	"github.com/pepebot-space/pepebot/pkg/providers"
 	"github.com/pepebot-space/pepebot/pkg/session"
+	"github.com/pepebot-space/pepebot/pkg/tasks"
+	"github.com/pepebot-space/pepebot/pkg/tools"
 )
 
 // AgentManager manages multiple agent instances
@@ -27,7 +29,12 @@ type AgentManager struct {
 	defaultAgent string
 	inFlight     sync.Map // map[sessionKey]context.CancelFunc
 	restartFunc  func()   // called to trigger graceful restart
+	taskManager  *tasks.Manager
 }
+
+// Tasks exposes the delegation manager, so the gateway can serve the
+// completion hook and the CLI can list what is running.
+func (am *AgentManager) Tasks() *tasks.Manager { return am.taskManager }
 
 // SetRestartFunc sets the function called when a restart is requested via /restart command
 func (am *AgentManager) SetRestartFunc(fn func()) {
@@ -54,6 +61,8 @@ func NewAgentManager(cfg *config.Config, bus *bus.MessageBus, provider providers
 		return nil, fmt.Errorf("failed to initialize registry: %w", err)
 	}
 
+	// Delegation: work too slow to answer inline, tracked by id and reported
+	// back to the chat that asked for it.
 	// One model, one home. config.json seeds a fresh install; the registry owns
 	// it afterwards, and a disagreement is put to the user rather than settled
 	// silently — see AgentRegistry.ReconcileModel.
@@ -68,14 +77,59 @@ func NewAgentManager(cfg *config.Config, bus *bus.MessageBus, provider providers
 		})
 	}
 
-	return &AgentManager{
+	am := &AgentManager{
 		config:       cfg,
 		bus:          bus,
 		provider:     provider,
 		registry:     registry,
 		agents:       make(map[string]*AgentLoop),
 		defaultAgent: "default",
-	}, nil
+	}
+
+	if cfg.TasksEnabled() {
+		if err := am.startTasks(); err != nil {
+			logger.WarnCF("tasks", "Delegation unavailable", map[string]interface{}{"error": err.Error()})
+		}
+	}
+	return am, nil
+}
+
+// startTasks brings up the delegation manager and the executors it can reach.
+//
+// The default agent is both the reporter — it reads a finished result and
+// answers in the chat that asked — and the "internal" executor, which is
+// pepebot doing the work itself with its own tools.
+func (am *AgentManager) startTasks() error {
+	loop, err := am.GetOrCreateAgent(am.defaultAgent)
+	if err != nil {
+		return err
+	}
+
+	manager, err := tasks.NewManager(am.config.WorkspacePath(), loop, tasks.Options{
+		Workers: am.config.Tasks.Workers,
+	})
+	if err != nil {
+		return err
+	}
+
+	manager.Register("internal", loop.internalExecutor())
+	manager.Register("exec", &tasks.ExecExecutor{})
+	manager.Register("http", &tasks.HTTPExecutor{CallbackURL: am.config.GatewayAddress()})
+
+	manager.Start(context.Background())
+	am.taskManager = manager
+
+	// Every agent gets the tool, so delegation works from any of them.
+	routes := map[string]tools.TaskRoute{}
+	for name, r := range am.config.Tasks.Routes {
+		routes[name] = tools.TaskRoute{Executor: r.Executor, Target: r.Target}
+	}
+	loop.tools.Register(tools.NewTaskTool(manager, routes, "internal"))
+
+	logger.InfoCF("tasks", "Delegation ready", map[string]interface{}{
+		"callback": am.config.GatewayAddress(), "routes": len(routes),
+	})
+	return nil
 }
 
 // GetOrCreateAgent gets an existing agent or creates a new one
@@ -585,5 +639,20 @@ func (am *AgentManager) WaitForBackground(timeout time.Duration) {
 
 	for _, loop := range loops {
 		loop.WaitForBackground(timeout)
+	}
+
+	// Delegated work too: a one-shot CLI run that exits while a task is still
+	// running leaves it to be found as "stale" at the next start, which is a
+	// confusing way to learn that the answer never came. Waiting here bounds
+	// that to the timeout; anything longer genuinely belongs to the gateway.
+	if am.taskManager == nil {
+		return
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if len(am.taskManager.Active()) == 0 {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 }
