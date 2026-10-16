@@ -45,8 +45,15 @@ func NewVertexLiveProvider(credentialsFile, projectID, region string, liveCfg co
 		return nil, fmt.Errorf("vertex live: failed to read credentials file %s: %w", credentialsFile, err)
 	}
 
-	creds, err := google.CredentialsFromJSON(context.Background(), credBytes,
-		"https://www.googleapis.com/auth/cloud-platform",
+	// Both CredentialsFromJSON and its params form are marked deprecated: they
+	// accept a credential configuration without validating it, which matters
+	// when the file is not under your control. The supported replacement lives
+	// in cloud.google.com/go/auth, a module pepebot does not otherwise need —
+	// and this file is read from a path the operator configured, not from an
+	// untrusted source. Revisit if credentials ever arrive from elsewhere.
+	//nolint:staticcheck // see above: replacement needs a new module
+	creds, err := google.CredentialsFromJSONWithParams(context.Background(), credBytes,
+		google.CredentialsParams{Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"}},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("vertex live: failed to parse credentials: %w", err)

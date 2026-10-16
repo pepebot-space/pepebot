@@ -15,6 +15,8 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/bus"
 	"github.com/pepebot-space/pepebot/pkg/config"
 	"github.com/pepebot-space/pepebot/pkg/voice"
+
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 type TelegramChannel struct {
@@ -155,7 +157,9 @@ func (c *TelegramChannel) sendWithMedia(chatID int64, htmlContent, plainContent 
 	if pID, ok := c.placeholders.Load(fmt.Sprintf("%d", chatID)); ok {
 		c.placeholders.Delete(fmt.Sprintf("%d", chatID))
 		deleteMsg := tgbotapi.NewDeleteMessage(chatID, pID.(int))
-		c.bot.Send(deleteMsg)
+		if _, err := c.bot.Send(deleteMsg); err != nil {
+			logger.ErrorCF("telegram", "Failed to send message", map[string]interface{}{"error": err.Error()})
+		}
 	}
 
 	// Use HTML content if available, otherwise plain
@@ -318,7 +322,7 @@ func (c *TelegramChannel) handleMessage(update tgbotapi.Update) {
 		content += message.Caption
 	}
 
-	if message.Photo != nil && len(message.Photo) > 0 {
+	if len(message.Photo) > 0 {
 		photo := message.Photo[len(message.Photo)-1]
 		photoPath := c.downloadPhoto(photo.FileID)
 		if photoPath != "" {
@@ -388,7 +392,9 @@ func (c *TelegramChannel) handleMessage(update tgbotapi.Update) {
 	log.Printf("Telegram message from %s: %s...", senderID, truncateString(content, 50))
 
 	// Thinking indicator
-	c.bot.Send(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping))
+	if _, err := c.bot.Send(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)); err != nil {
+		logger.ErrorCF("telegram", "Failed to send message", map[string]interface{}{"error": err.Error()})
+	}
 
 	stopChan := make(chan struct{})
 	c.stopThinking.Store(fmt.Sprintf("%d", chatID), stopChan)
@@ -412,7 +418,9 @@ func (c *TelegramChannel) handleMessage(update tgbotapi.Update) {
 					i++
 					text := fmt.Sprintf("Thinking%s %s", dots[i%len(dots)], emotes[i%len(emotes)])
 					edit := tgbotapi.NewEditMessageText(cid, mid, text)
-					c.bot.Send(edit)
+					if _, err := c.bot.Send(edit); err != nil {
+						logger.ErrorCF("telegram", "Failed to send message", map[string]interface{}{"error": err.Error()})
+					}
 				}
 			}
 		}(chatID, pID, stopChan)

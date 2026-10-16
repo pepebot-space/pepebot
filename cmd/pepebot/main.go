@@ -38,42 +38,8 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.31"
+const version = "0.5.32"
 const logo = "🐸"
-
-func copyDirectory(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(dst, relPath)
-
-		if info.IsDir() {
-			return os.MkdirAll(dstPath, info.Mode())
-		}
-
-		srcFile, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer srcFile.Close()
-
-		dstFile, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer dstFile.Close()
-
-		_, err = io.Copy(dstFile, srcFile)
-		return err
-	})
-}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -235,7 +201,7 @@ func onboard() {
 		fmt.Printf("Config already exists at %s\n", configPath)
 		fmt.Print("Overwrite? (y/n): ")
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 		if strings.ToLower(strings.TrimSpace(response)) != "y" {
 			fmt.Println("Aborted.")
 			return
@@ -344,7 +310,6 @@ func onboard() {
 		fmt.Println("\n✓ Using default: MAIA Router")
 		selectedProvider = "maiarouter"
 		defaultModel = "maia/gemini-2.5-flash"
-		providerURL = "https://maiarouter.ai"
 	}
 
 	// Step 2: API Key / Credentials
@@ -651,9 +616,9 @@ func onboard() {
 
 	// Create workspace structure
 	workspace := cfg.WorkspacePath()
-	os.MkdirAll(workspace, 0755)
-	os.MkdirAll(filepath.Join(workspace, "memory"), 0755)
-	os.MkdirAll(filepath.Join(workspace, "skills"), 0755)
+	_ = os.MkdirAll(workspace, 0755)
+	_ = os.MkdirAll(filepath.Join(workspace, "memory"), 0755)
+	_ = os.MkdirAll(filepath.Join(workspace, "skills"), 0755)
 	fmt.Printf("✓ Workspace created at: %s\n", workspace)
 
 	// Create workspace templates
@@ -933,13 +898,15 @@ Discussions: https://github.com/pepebot-space/pepebot/discussions
 	for filename, content := range templates {
 		filePath := filepath.Join(workspace, filename)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			os.WriteFile(filePath, []byte(content), 0644)
+			if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+				fmt.Printf("⚠️  Could not write %s: %v\n", filePath, err)
+			}
 			fmt.Printf("  Created %s\n", filename)
 		}
 	}
 
 	memoryDir := filepath.Join(workspace, "memory")
-	os.MkdirAll(memoryDir, 0755)
+	_ = os.MkdirAll(memoryDir, 0755)
 	memoryFile := filepath.Join(memoryDir, "MEMORY.md")
 	if _, err := os.Stat(memoryFile); os.IsNotExist(err) {
 		memoryContent := `# Long-term Memory
@@ -964,12 +931,14 @@ This file stores important information that should persist across sessions.
 - Channel settings
 - Skills enabled
 `
-		os.WriteFile(memoryFile, []byte(memoryContent), 0644)
+		if err := os.WriteFile(memoryFile, []byte(memoryContent), 0644); err != nil {
+			fmt.Printf("⚠️  Could not write %s: %v\n", memoryFile, err)
+		}
 		fmt.Println("  Created memory/MEMORY.md")
 
 		skillsDir := filepath.Join(workspace, "skills")
 		if _, err := os.Stat(skillsDir); os.IsNotExist(err) {
-			os.MkdirAll(skillsDir, 0755)
+			_ = os.MkdirAll(skillsDir, 0755)
 			fmt.Println("  Created skills/")
 		}
 	}
@@ -977,7 +946,9 @@ This file stores important information that should persist across sessions.
 	for filename, content := range templates {
 		filePath := filepath.Join(workspace, filename)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			os.WriteFile(filePath, []byte(content), 0644)
+			if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+				fmt.Printf("⚠️  Could not write %s: %v\n", filePath, err)
+			}
 			fmt.Printf("  Created %s\n", filename)
 		}
 	}
@@ -1172,7 +1143,7 @@ func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 func simpleInteractiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print(fmt.Sprintf("%s You: ", logo))
+		fmt.Printf("%s You: ", logo)
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
@@ -1346,7 +1317,13 @@ func gatewayRun(sigChan chan os.Signal) bool {
 		fmt.Printf("Error starting channels: %v\n", err)
 	}
 
-	go agentManager.Run(ctx)
+	go func() {
+		// Run returns when the bus closes; a non-nil error here is the reason
+		// the agent stopped answering, and used to vanish.
+		if err := agentManager.Run(ctx); err != nil {
+			logger.WarnCF("gateway", "Agent manager stopped", map[string]interface{}{"error": err.Error()})
+		}
+	}()
 
 	fmt.Printf("✓ Gateway started on %s:%d\n", cfg.Gateway.Host, cfg.Gateway.Port)
 	fmt.Println("Press Ctrl+C to stop")
@@ -1361,10 +1338,10 @@ func gatewayRun(sigChan chan os.Signal) bool {
 		fmt.Println("\nShutting down...")
 	}
 	cancel()
-	gatewayServer.Stop(context.Background())
+	_ = gatewayServer.Stop(context.Background())
 	heartbeatService.Stop()
 	cronService.Stop()
-	channelManager.StopAll(context.Background())
+	_ = channelManager.StopAll(context.Background())
 
 	if restart {
 		fmt.Println("✓ Gateway stopped (restarting)")
@@ -1588,7 +1565,7 @@ func cronAddCmd(storePath string) {
 		case "-e", "--every":
 			if i+1 < len(args) {
 				var sec int64
-				fmt.Sscanf(args[i+1], "%d", &sec)
+				_, _ = fmt.Sscanf(args[i+1], "%d", &sec)
 				everySec = &sec
 				i++
 			}
@@ -1679,49 +1656,6 @@ func cronEnableCmd(storePath string, disable bool) {
 		fmt.Printf("✓ Job '%s' %s\n", job.Name, status)
 	} else {
 		fmt.Printf("✗ Job %s not found\n", jobID)
-	}
-}
-
-func skillsCmd() {
-	if len(os.Args) < 3 {
-		skillsHelp()
-		return
-	}
-
-	subcommand := os.Args[2]
-
-	cfg, err := loadConfig()
-	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	workspace := cfg.WorkspacePath()
-	installer := skills.NewSkillInstaller(workspace)
-	skillsLoader := skills.NewSkillsLoader(workspace, "")
-
-	switch subcommand {
-	case "list":
-		skillsListCmd(skillsLoader)
-	case "install":
-		skillsInstallCmd(installer)
-	case "remove", "uninstall":
-		if len(os.Args) < 4 {
-			fmt.Println("Usage: pepebot skills remove <skill-name>")
-			return
-		}
-		skillsRemoveCmd(installer, os.Args[3])
-	case "search":
-		skillsSearchCmd(installer)
-	case "show":
-		if len(os.Args) < 4 {
-			fmt.Println("Usage: pepebot skills show <skill-name>")
-			return
-		}
-		skillsShowCmd(skillsLoader, os.Args[3])
-	default:
-		fmt.Printf("Unknown skills command: %s\n", subcommand)
-		skillsHelp()
 	}
 }
 
@@ -1995,12 +1929,12 @@ func agentRegisterCmd() {
 			}
 		case "--temperature":
 			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%f", &temperature)
+				_, _ = fmt.Sscanf(args[i+1], "%f", &temperature)
 				i++
 			}
 		case "--max-tokens":
 			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%d", &maxTokens)
+				_, _ = fmt.Sscanf(args[i+1], "%d", &maxTokens)
 				i++
 			}
 		}
@@ -2487,7 +2421,7 @@ func workflowDeleteCmd(workspace string, cfg *config.Config, name string) {
 
 	fmt.Printf("Delete workflow %q? (y/n): ", name)
 	var response string
-	fmt.Scanln(&response)
+	_, _ = fmt.Scanln(&response)
 	if strings.ToLower(strings.TrimSpace(response)) != "y" {
 		fmt.Println("Aborted.")
 		return

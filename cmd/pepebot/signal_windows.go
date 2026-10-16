@@ -8,7 +8,7 @@ import "os"
 // since SIGHUP is not available on Windows.
 type restartSignal struct{}
 
-func (restartSignal) Signal() {}
+func (restartSignal) Signal()        {}
 func (restartSignal) String() string { return "restart" }
 
 var restartChan chan<- os.Signal

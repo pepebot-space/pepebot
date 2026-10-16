@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/pepebot-space/pepebot/pkg/providers"
+
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 type Session struct {
@@ -32,8 +34,10 @@ func NewSessionManager(storage string) *SessionManager {
 	}
 
 	if storage != "" {
-		os.MkdirAll(storage, 0755)
-		sm.loadSessions()
+		_ = os.MkdirAll(storage, 0755)
+		if err := sm.loadSessions(); err != nil {
+			logger.WarnCF("session", "Could not load stored sessions; starting empty", map[string]interface{}{"error": err.Error()})
+		}
 	}
 
 	return sm

@@ -1,28 +1,44 @@
-# 🐸 Pepebot v0.5.31 - Tell Me Why
+# 🐸 Pepebot v0.5.32 - Housekeeping That Pays Rent
 
-**Release Date:** 2026-10-09
+**Release Date:** 2026-10-16
 
-## 🐛 What's Fixed
+## ⚡ What's New
 
-### "I've completed processing but have no response to give."
+### Pepebot now tells you when your config is wrong
 
-That sentence told you nothing, and it was hiding two very different events.
+Every check added here is a mistake that really happened and took an afternoon to find, because the complaint always arrived somewhere else:
 
-When a safety classifier declines a request, the API answers **200 OK with no content** and a reason attached. When an answer is cut off before the model writes a word, same thing — empty, with a different reason. Pepebot read the (missing) content, dropped the reason on the floor, and shrugged.
+| What you wrote | What you used to see |
+|---|---|
+| `provider: maiarouter` + `model: maiarouter/zai/glm-5.3` | `no healthy deployments for this model` |
+| `model: custom:r9/myr` with no `providers.custom.r9` | a dial error |
+| `context_window` below `max_tokens` | nothing — sessions just compacted far too early, forever |
 
-Now you get the actual reason — the request was declined, or the token budget ran out — and the log records it either way.
-
-### The cron service no longer dies on an empty file
+Now pepebot says so at startup, naming the setting and the fix:
 
 ```
-Error starting cron service: failed to load store: unexpected end of JSON input
+WARN config: agents.defaults.model "maiarouter/zai/glm-5.3" repeats the provider name;
+     write "zai/glm-5.3", or use the canonical "maiarouter:zai/glm-5.3"
 ```
 
-A crash between creating `jobs.json` and writing to it leaves a zero-byte file. That is a schedule with nothing in it, not a corrupt one — but pepebot treated it as corrupt and failed on every start. A genuinely malformed file is still reported.
+These are warnings. A bot that starts and complains beats one that refuses to start.
 
-### Smaller
+## 🧹 Cleanup
 
-Provider log lines name the endpoint that produced them instead of always saying "OpenCode Go", and the debug line now includes the finish reason.
+### The lint job is green for the first time
+
+63 findings down to 0. That matters beyond tidiness: with the job permanently red, a new problem looked exactly like the old noise.
+
+Most of them were dropped errors, and several were real:
+
+- a session that failed to save — the conversation gone at the next restart, with nothing in the log
+- cron schedules that failed to persist
+- a Telegram reply that never reached the user
+- a config file that onboarding never actually wrote
+
+Those now report. The ones that genuinely cannot be acted on — writing to a client that already hung up — are marked as deliberate, with the reason written down once.
+
+Also: five dead functions deleted, and the turn-completion sequence (record, summarize, review, save) that had been copied into three code paths is now one function. Every past fix to it had to be made three times, and the streaming copies were each missed once.
 
 ## 📦 Installation
 

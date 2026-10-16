@@ -50,6 +50,11 @@ type ChatFileData struct {
 
 // parseMessageContent extracts text content and media URLs from a ChatMessage.
 // Content can be a plain string or an array of content blocks (OpenAI multimodal format).
+// Response writes are explicitly ignored throughout this file. By the time
+// Encode or Write fails the status line is already sent and the client is
+// usually gone; there is no second response to send and nothing the handler
+// can do about it. Errors that happen *before* the write are returned normally.
+
 func parseMessageContent(msg ChatMessage) (text string, media []string) {
 	switch v := msg.Content.(type) {
 	case string:
@@ -87,14 +92,6 @@ func parseMessageContent(msg ChatMessage) (text string, media []string) {
 	default:
 		return fmt.Sprintf("%v", v), nil
 	}
-}
-
-// getContentString returns the string representation of ChatMessage content for responses
-func getContentString(content interface{}) string {
-	if s, ok := content.(string); ok {
-		return s
-	}
-	return fmt.Sprintf("%v", content)
 }
 
 type ChatCompletionResponse struct {
@@ -173,7 +170,7 @@ type ErrorDetail struct {
 // handleHealth returns a simple health check response
 func (gs *GatewayServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
 	})
 }
@@ -263,7 +260,7 @@ func (gs *GatewayServer) handleNonStreamingResponse(w http.ResponseWriter, r *ht
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // handleStreamingResponse handles SSE streaming chat completions
@@ -386,7 +383,7 @@ func (gs *GatewayServer) handleListModels(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ModelListResponse{
+	_ = json.NewEncoder(w).Encode(ModelListResponse{
 		Object: "list",
 		Data:   models,
 	})
@@ -402,7 +399,7 @@ func (gs *GatewayServer) handleListSessions(w http.ResponseWriter, r *http.Reque
 	sessions := gs.agentManager.GetSessions()
 	if sessions == nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SessionListResponse{Sessions: []SessionInfo{}})
+		_ = json.NewEncoder(w).Encode(SessionListResponse{Sessions: []SessionInfo{}})
 		return
 	}
 
@@ -419,7 +416,7 @@ func (gs *GatewayServer) handleListSessions(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SessionListResponse{Sessions: sessionInfos})
+	_ = json.NewEncoder(w).Encode(SessionListResponse{Sessions: sessionInfos})
 }
 
 // handleSessionRoutes dispatches session sub-routes
@@ -473,7 +470,7 @@ func (gs *GatewayServer) handleGetSession(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(session)
+	_ = json.NewEncoder(w).Encode(session)
 }
 
 // handleSessionNew clears and creates a new session
@@ -496,7 +493,7 @@ func (gs *GatewayServer) handleSessionNew(w http.ResponseWriter, r *http.Request
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":      "ok",
 		"session_key": sessionKey,
 		"message":     "Session cleared. Starting fresh conversation.",
@@ -518,7 +515,7 @@ func (gs *GatewayServer) handleSessionStop(w http.ResponseWriter, r *http.Reques
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"message": result,
 	})
@@ -538,7 +535,7 @@ func (gs *GatewayServer) handleDeleteSession(w http.ResponseWriter, r *http.Requ
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":      "ok",
 		"session_key": sessionKey,
 		"message":     "Session deleted.",
@@ -558,12 +555,12 @@ func (gs *GatewayServer) handleListAgents(w http.ResponseWriter, r *http.Request
 		// Fall back to listing from agent manager
 		agents := gs.agentManager.ListAgents()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(agents)
+		_ = json.NewEncoder(w).Encode(agents)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // handleListSkills lists all available skills
@@ -650,7 +647,7 @@ func (gs *GatewayServer) handleListSkills(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"skills": skills,
 	})
 }
@@ -726,7 +723,9 @@ func (gs *GatewayServer) handleSkillFileList(w http.ResponseWriter, skillDir, sk
 
 	var files []fileEntry
 
-	filepath.Walk(skillDir, func(path string, info os.FileInfo, err error) error {
+	// Per-entry errors are swallowed inside the walk function above, so the
+	// only error Walk itself can return is one it already handled.
+	_ = filepath.Walk(skillDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -757,7 +756,7 @@ func (gs *GatewayServer) handleSkillFileList(w http.ResponseWriter, skillDir, sk
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"skill": skillName,
 		"files": files,
 	})
@@ -807,7 +806,7 @@ func (gs *GatewayServer) handleSkillFileContent(w http.ResponseWriter, skillDir,
 	}
 
 	w.Header().Set("Content-Type", contentType)
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // handleSkillFileSave writes content to a file within a skill
@@ -852,7 +851,7 @@ func (gs *GatewayServer) handleSkillFileSave(w http.ResponseWriter, r *http.Requ
 	logger.InfoC("gateway", fmt.Sprintf("Skill file updated via dashboard: %s/%s", filepath.Base(skillDir), filePath))
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "ok",
 		"message": "File saved",
 		"path":    filePath,
@@ -922,7 +921,7 @@ func (gs *GatewayServer) handleListWorkflows(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"workflows": workflows,
 	})
 }
@@ -950,7 +949,7 @@ func (gs *GatewayServer) handleGetWorkflow(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // configPath returns the path to config.json
@@ -990,7 +989,7 @@ func (gs *GatewayServer) handleGetConfig(w http.ResponseWriter, r *http.Request)
 	maskAPIKeys(cfg)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cfg)
+	_ = json.NewEncoder(w).Encode(cfg)
 }
 
 // handlePutConfig saves the provided JSON to config.json
@@ -1026,7 +1025,7 @@ func (gs *GatewayServer) handlePutConfig(w http.ResponseWriter, r *http.Request)
 	logger.InfoC("gateway", "Config updated via dashboard")
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "ok",
 		"message": "Configuration saved. Restart gateway to apply changes.",
 	})
@@ -1088,7 +1087,7 @@ func (gs *GatewayServer) handleRestart(w http.ResponseWriter, r *http.Request) {
 	logger.InfoC("gateway", "Restart requested via API")
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"message": "Gateway restart initiated. Services will be back shortly.",
 	})
@@ -1137,7 +1136,7 @@ func (gs *GatewayServer) handleSend(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"note":    "Message queued for delivery via " + req.Channel,
 	})
@@ -1147,7 +1146,7 @@ func (gs *GatewayServer) handleSend(w http.ResponseWriter, r *http.Request) {
 func writeError(w http.ResponseWriter, statusCode int, message, errType string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(ErrorResponse{
+	_ = json.NewEncoder(w).Encode(ErrorResponse{
 		Error: ErrorDetail{
 			Message: message,
 			Type:    errType,

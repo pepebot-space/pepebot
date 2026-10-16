@@ -609,7 +609,7 @@ func (t *AdbUIDumpTool) Execute(ctx context.Context, args map[string]interface{}
 	for _, dumpPath := range dumpPaths {
 		// Try dump (ignore command output - it varies across Android versions/devices)
 		// Some output to stdout, some to stderr, some output nothing
-		t.helper.execAdb(ctx, device, 15*time.Second,
+		_, _ = t.helper.execAdb(ctx, device, 15*time.Second,
 			"shell", "uiautomator", "dump", dumpPath)
 
 		// Small delay to ensure file is fully written
@@ -625,7 +625,7 @@ func (t *AdbUIDumpTool) Execute(ctx context.Context, args map[string]interface{}
 		}
 
 		// Clean up (best effort)
-		t.helper.execAdb(ctx, device, 5*time.Second, "shell", "rm", dumpPath)
+		_, _ = t.helper.execAdb(ctx, device, 5*time.Second, "shell", "rm", dumpPath)
 
 		if err != nil || len(strings.TrimSpace(content)) == 0 {
 			continue
@@ -645,7 +645,7 @@ func (t *AdbUIDumpTool) Execute(ctx context.Context, args map[string]interface{}
 
 	// If all paths failed, try one more time with default path (no explicit path arg)
 	if output == "" {
-		t.helper.execAdb(ctx, device, 15*time.Second,
+		_, _ = t.helper.execAdb(ctx, device, 15*time.Second,
 			"shell", "uiautomator", "dump")
 		time.Sleep(200 * time.Millisecond)
 
@@ -660,7 +660,7 @@ func (t *AdbUIDumpTool) Execute(ctx context.Context, args map[string]interface{}
 				output = strings.TrimSpace(content)
 			}
 		}
-		t.helper.execAdb(ctx, device, 5*time.Second, "shell", "rm", "/sdcard/window_dump.xml")
+		_, _ = t.helper.execAdb(ctx, device, 5*time.Second, "shell", "rm", "/sdcard/window_dump.xml")
 	}
 
 	if output == "" {

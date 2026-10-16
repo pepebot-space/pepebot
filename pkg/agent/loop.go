@@ -26,6 +26,18 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
+const (
+	// noReplyMessage is what the user sees when a turn produced nothing at all.
+	// Providers now explain why when they can (a refusal, a truncated answer);
+	// this is the last resort.
+	noReplyMessage = "I've completed processing but have no response to give."
+
+	// maxHistoryMessages and summarizeAtPercent decide when a session gets
+	// compacted: either enough messages, or enough of the input window used.
+	maxHistoryMessages = 20
+	summarizeAtPercent = 75
+)
+
 type AgentLoop struct {
 	bus            *bus.MessageBus
 	provider       providers.LLMProvider
@@ -89,6 +101,44 @@ func (al *AgentLoop) chatOptions() map[string]interface{} {
 	return opts
 }
 
+// finishTurn records a completed exchange and runs everything that has to happen
+// after one: summarize when the history outgrows the window, let the background
+// review look at it, and persist.
+//
+// It exists because this sequence lived in three places. Every fix to it so far
+// — the memory review hook, the save that reported its error — had to be made
+// three times, and the streaming copies were each missed once.
+func (al *AgentLoop) finishTurn(sessionKey, userContent, reply string) {
+	al.sessions.AddMessage(sessionKey, "user", userContent)
+	al.sessions.AddMessage(sessionKey, "assistant", reply)
+
+	// Summarize when the history is long by either measure: plain message count,
+	// or 75% of the model's input window.
+	history := al.sessions.GetHistory(sessionKey)
+	if len(history) > maxHistoryMessages || al.estimateTokens(history) > al.contextWindow*summarizeAtPercent/100 {
+		if _, busy := al.summarizing.LoadOrStore(sessionKey, true); !busy {
+			go func() {
+				defer al.summarizing.Delete(sessionKey)
+				al.summarizeSession(sessionKey)
+			}()
+		}
+	}
+
+	al.maybeReview(sessionKey)
+	al.saveSession(sessionKey)
+}
+
+// saveSession persists a session and says so when it cannot. A dropped error
+// here means the conversation is gone at the next restart, with nothing in the
+// log to explain where it went.
+func (al *AgentLoop) saveSession(sessionKey string) {
+	if err := al.sessions.Save(al.sessions.GetOrCreate(sessionKey)); err != nil {
+		logger.ErrorCF("agent", "Failed to save session", map[string]interface{}{
+			"session": sessionKey, "error": err.Error(),
+		})
+	}
+}
+
 func (al *AgentLoop) memoryStores() (*memory.Store, *memory.Store) {
 	return al.notes, al.profile
 }
@@ -137,7 +187,7 @@ func (al *AgentLoop) SetManageAgentCaller(caller tools.AgentCaller) {
 
 func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
 	workspace := cfg.WorkspacePath()
-	os.MkdirAll(workspace, 0755)
+	_ = os.MkdirAll(workspace, 0755)
 
 	toolsRegistry := tools.NewToolRegistry()
 	toolsRegistry.Register(tools.NewReadFileTool(workspace))
@@ -224,7 +274,7 @@ func NewAgentLoop(cfg *config.Config, bus *bus.MessageBus, provider providers.LL
 // NewAgentLoopWithDefinition creates a new agent loop with specific agent definition
 func NewAgentLoopWithDefinition(cfg *config.Config, bus *bus.MessageBus, provider providers.LLMProvider, agentName string, agentDef *AgentDefinition) *AgentLoop {
 	workspace := cfg.WorkspacePath()
-	os.MkdirAll(workspace, 0755)
+	_ = os.MkdirAll(workspace, 0755)
 
 	toolsRegistry := tools.NewToolRegistry()
 	toolsRegistry.Register(tools.NewReadFileTool(workspace))
@@ -476,34 +526,16 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 					callback(providers.StreamChunk{Done: true})
 				}
 			} else {
-				callback(providers.StreamChunk{Content: "I've completed processing but have no response to give."})
+				callback(providers.StreamChunk{Content: noReplyMessage})
 				callback(providers.StreamChunk{Done: true})
 			}
 
 			// Save to session
 			finalContent := response.Content
 			if finalContent == "" {
-				finalContent = "I've completed processing but have no response to give."
+				finalContent = noReplyMessage
 			}
-			al.sessions.AddMessage(msg.SessionKey, "user", msg.Content)
-			al.sessions.AddMessage(msg.SessionKey, "assistant", finalContent)
-
-			newHistory := al.sessions.GetHistory(msg.SessionKey)
-			tokenEstimate := al.estimateTokens(newHistory)
-			threshold := al.contextWindow * 75 / 100
-
-			if len(newHistory) > 20 || tokenEstimate > threshold {
-				if _, loading := al.summarizing.LoadOrStore(msg.SessionKey, true); !loading {
-					go func() {
-						defer al.summarizing.Delete(msg.SessionKey)
-						al.summarizeSession(msg.SessionKey)
-					}()
-				}
-			}
-
-			al.maybeReview(msg.SessionKey)
-
-			al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
+			al.finishTurn(msg.SessionKey, msg.Content, finalContent)
 			return nil
 		}
 
@@ -549,14 +581,10 @@ func (al *AgentLoop) ProcessDirectStream(ctx context.Context, content string, me
 	}
 
 	// Max iterations reached - stream the final content we have
-	callback(providers.StreamChunk{Content: "I've completed processing but have no response to give."})
+	callback(providers.StreamChunk{Content: noReplyMessage})
 	callback(providers.StreamChunk{Done: true})
 
-	al.sessions.AddMessage(msg.SessionKey, "user", msg.Content)
-	al.sessions.AddMessage(msg.SessionKey, "assistant", "I've completed processing but have no response to give.")
-	al.maybeReview(msg.SessionKey)
-
-	al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
+	al.finishTurn(msg.SessionKey, msg.Content, noReplyMessage)
 
 	return nil
 }
@@ -689,32 +717,10 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	}
 
 	if finalContent == "" {
-		finalContent = "I've completed processing but have no response to give."
+		finalContent = noReplyMessage
 	}
 
-	al.sessions.AddMessage(msg.SessionKey, "user", msg.Content)
-	al.sessions.AddMessage(msg.SessionKey, "assistant", finalContent)
-
-	// Context compression logic
-	newHistory := al.sessions.GetHistory(msg.SessionKey)
-
-	// Token Awareness (Dynamic)
-	// Trigger if history > 20 messages OR estimated tokens > 75% of context window
-	tokenEstimate := al.estimateTokens(newHistory)
-	threshold := al.contextWindow * 75 / 100
-
-	if len(newHistory) > 20 || tokenEstimate > threshold {
-		if _, loading := al.summarizing.LoadOrStore(msg.SessionKey, true); !loading {
-			go func() {
-				defer al.summarizing.Delete(msg.SessionKey)
-				al.summarizeSession(msg.SessionKey)
-			}()
-		}
-	}
-
-	al.maybeReview(msg.SessionKey)
-
-	al.sessions.Save(al.sessions.GetOrCreate(msg.SessionKey))
+	al.finishTurn(msg.SessionKey, msg.Content, finalContent)
 
 	return finalContent, nil
 }
@@ -789,7 +795,7 @@ func (al *AgentLoop) summarizeSession(sessionKey string) {
 	if finalSummary != "" {
 		al.sessions.SetSummary(sessionKey, finalSummary)
 		al.sessions.TruncateHistory(sessionKey, 4)
-		al.sessions.Save(al.sessions.GetOrCreate(sessionKey))
+		al.saveSession(sessionKey)
 	}
 }
 

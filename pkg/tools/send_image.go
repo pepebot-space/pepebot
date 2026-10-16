@@ -116,10 +116,10 @@ func (t *SendImageTool) resolveFilePath(path string) string {
 	// Try to find the file in common locations
 	basename := filepath.Base(path)
 	candidates := []string{
-		path,                                   // as given
-		filepath.Join(t.workspace, path),       // relative to workspace
-		filepath.Join(t.workspace, basename),   // just filename in workspace
-		filepath.Join("/tmp", basename),         // /tmp
+		path,                                             // as given
+		filepath.Join(t.workspace, path),                 // relative to workspace
+		filepath.Join(t.workspace, basename),             // just filename in workspace
+		filepath.Join("/tmp", basename),                  // /tmp
 		filepath.Join("/tmp/pepebot_whatsapp", basename), // whatsapp downloads
 	}
 

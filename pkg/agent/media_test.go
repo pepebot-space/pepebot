@@ -13,7 +13,7 @@ import (
 // providers reject a bare http URL in file_data.
 func TestBuildUserMessageInlinesRemoteFile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("%PDF-1.4 hello"))
+		_, _ = w.Write([]byte("%PDF-1.4 hello"))
 	}))
 	defer srv.Close()
 
@@ -50,7 +50,7 @@ func TestBuildUserMessageUnreachableFileDegrades(t *testing.T) {
 // images are inlined like every other attachment.
 func TestBuildUserMessageInlinesRemoteImage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("\x89PNG\r\n\x1a\nfake"))
+		_, _ = w.Write([]byte("\x89PNG\r\n\x1a\nfake"))
 	}))
 	defer srv.Close()
 
@@ -88,7 +88,7 @@ func TestBuildUserMessageUnreachableImageDegrades(t *testing.T) {
 func TestFetchRemoteSniffsTypeWhenServerIsVague(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write([]byte("%PDF-1.4 isi laporan"))
+		_, _ = w.Write([]byte("%PDF-1.4 isi laporan"))
 	}))
 	defer srv.Close()
 
@@ -102,7 +102,7 @@ func TestFetchRemoteSniffsTypeWhenServerIsVague(t *testing.T) {
 func TestFetchRemoteKeepsServerTypeWhenItIsUseful(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png; charset=binary")
-		w.Write([]byte("\x89PNG\r\n\x1a\nfake"))
+		_, _ = w.Write([]byte("\x89PNG\r\n\x1a\nfake"))
 	}))
 	defer srv.Close()
 

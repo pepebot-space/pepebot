@@ -267,7 +267,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 	defer clientConn.Close()
 
 	// Step 1: Read setup message (with timeout)
-	clientConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	_ = clientConn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 	_, rawMsg, err := clientConn.ReadMessage()
 	if err != nil {
@@ -279,7 +279,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 	}
 
 	// Reset read deadline
-	clientConn.SetReadDeadline(time.Time{})
+	_ = clientConn.SetReadDeadline(time.Time{})
 
 	var setupMsg SetupMessage
 	if err := json.Unmarshal(rawMsg, &setupMsg); err != nil || setupMsg.Setup == nil {
@@ -564,7 +564,7 @@ func (ls *LiveServer) handleConnection(clientConn *websocket.Conn) {
 			"enabled":   videoEnabled,
 		},
 	})
-	clientConn.WriteMessage(websocket.TextMessage, confirmMsg)
+	_ = clientConn.WriteMessage(websocket.TextMessage, confirmMsg)
 
 	// Run bidirectional proxy
 	var wg sync.WaitGroup
@@ -664,7 +664,7 @@ func (ls *LiveServer) reconnectUpstream(ctx context.Context, session *LiveSessio
 			"session":  session.sessionKey,
 			"note":     "upstream conversation state was reset",
 		})
-		session.writeClient(websocket.TextMessage, notice)
+		_ = session.writeClient(websocket.TextMessage, notice)
 		return true
 	}
 
@@ -1409,7 +1409,7 @@ func (ls *LiveServer) sendError(conn *websocket.Conn, errMsg string) {
 	msg, _ := json.Marshal(map[string]interface{}{
 		"error": errMsg,
 	})
-	conn.WriteMessage(websocket.TextMessage, msg)
+	_ = conn.WriteMessage(websocket.TextMessage, msg)
 	conn.Close()
 }
 

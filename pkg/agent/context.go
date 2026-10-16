@@ -216,10 +216,10 @@ func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary str
 		}
 		chatID := metadata["channel_id"]
 
-		systemPrompt += fmt.Sprintf("\n\n## Current Conversation Context\n\n")
+		systemPrompt += "\n\n## Current Conversation Context\n\n"
 		systemPrompt += fmt.Sprintf("- Channel: %s\n", channel)
 		systemPrompt += fmt.Sprintf("- Chat ID: %s\n", chatID)
-		systemPrompt += fmt.Sprintf("\nIMPORTANT: When using the send_image tool, use these values:\n")
+		systemPrompt += "\nIMPORTANT: When using the send_image tool, use these values:\n"
 		systemPrompt += fmt.Sprintf("- channel: \"%s\"\n", channel)
 		systemPrompt += fmt.Sprintf("- chat_id: \"%s\"\n", chatID)
 	}
