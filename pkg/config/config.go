@@ -36,6 +36,11 @@ type MemoryConfig struct {
 	UserCharLimit  int  `json:"user_char_limit" env:"PEPEBOT_MEMORY_USER_CHAR_LIMIT"`
 	Review         bool `json:"review" env:"PEPEBOT_MEMORY_REVIEW"`
 	ReviewInterval int  `json:"review_interval" env:"PEPEBOT_MEMORY_REVIEW_INTERVAL"`
+	// Notify controls the one-line note in chat when the background review
+	// learned something: "off", "on" (default) or "verbose" (says what).
+	// Without it, learning only ever showed up in the server log, which is to
+	// say nowhere anybody was looking.
+	Notify string `json:"notify,omitempty" env:"PEPEBOT_MEMORY_NOTIFY"`
 }
 
 // SkillsConfig controls whether the agent may write its own skills — its
@@ -253,6 +258,7 @@ func DefaultConfig() *Config {
 			UserCharLimit:  memory.DefaultProfileLimit,
 			Review:         true,
 			ReviewInterval: 5,
+			Notify:         "on",
 		},
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{

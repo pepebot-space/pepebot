@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.34] - 2026-10-16
+
+### Added
+- **You can tell when the agent has learned something.** Until now it changed memory and wrote skills, and said so only in a server log line — which is to say nowhere anybody was looking.
+  - **It says so in the conversation**: a short `💾 Dicatat (2 hal)` after the background review keeps something. `memory.notify` takes `off`, `on` (default) or `verbose`, which names what was kept. The notice is a separate short message because the review runs after the answer has already been sent, and it is skipped for CLI sessions, which have no channel to answer on.
+  - **`pepebot learned`** lists what the agent taught itself: memory entries with how much of the limit they use, and the skills it wrote with their dates and the command to remove one.
+  - Tests: `TestNotifyLearnedTellsTheChannel`, `TestNotifyLearnedVerboseSaysWhat`, `TestNotifyLearnedStaysQuietWhenItShould`, `TestNotifyLearnedDefaultsToOn`, `TestLearnedListsOnlyAgentSkillsNewestFirst`, `TestLearnedOnEmptyWorkspace`.
+
 ## [0.5.33] - 2026-10-16
 
 ### Added

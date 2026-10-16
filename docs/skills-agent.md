@@ -55,6 +55,44 @@ grep -rl "created_by: agent" ~/.pepebot/workspace/skills/
 rm -rf ~/.pepebot/workspace/skills/<name>     # removing one is a directory delete
 ```
 
+## Knowing it happened
+
+Learning used to be visible only in the server log. Two ways now:
+
+**It tells you.** When the background review keeps something, it says so in the
+conversation it learned from:
+
+```
+💾 Dicatat (2 hal)
+```
+
+```json
+{ "memory": { "notify": "verbose" } }    // off | on (default) | verbose
+```
+
+`verbose` names what was kept. The notice is a second, short message — the
+review runs after the answer has already gone out.
+
+**You can ask.**
+
+```sh
+$ pepebot learned
+🧠 Ingatan
+──────────────────────────────────
+
+Catatan agent (159/2200 karakter)
+  • Rilis pepebot: melompati langkah 1-2 (go test & golangci-lint harus 0)
+    sudah dua kali membuat rilis gagal di CI.
+
+Profil kamu (31/1375 karakter)
+  • Selalu pakai zsh sebagai shell.
+
+📘 Skill yang ditulis sendiri
+──────────────────────────────────
+  • pepebot-release              2026-10-16 15:16
+    Open when preparing or performing a release of pepebot.
+```
+
 ## Turning it off
 
 ```json
