@@ -57,6 +57,7 @@ type AgentLoop struct {
 	summarizing    sync.Map
 	reviewing      sync.Map
 	memoryCfg      config.MemoryConfig
+	skillsManaged  bool
 	notes          *memory.Store
 	profile        *memory.Store
 	agentName      string
@@ -67,6 +68,14 @@ type AgentLoop struct {
 // memory leaves every store nil and the tool unregistered, so nothing downstream
 // has to test a flag.
 func (al *AgentLoop) attachMemory(cfg *config.Config) {
+	al.skillsManaged = cfg.AgentManagedSkills()
+	if al.skillsManaged {
+		// Procedural memory sits next to the factual kind: the memory tool keeps
+		// short facts, skill_manage keeps procedures that are only read when
+		// they are needed.
+		al.tools.Register(tools.NewSkillManageTool(al.workspace, al.contextBuilder.SkillsLoader()))
+	}
+
 	al.memoryCfg = cfg.Memory
 	if !cfg.Memory.Enabled {
 		return
@@ -126,6 +135,31 @@ func (al *AgentLoop) finishTurn(sessionKey, userContent, reply string) {
 
 	al.maybeReview(sessionKey)
 	al.saveSession(sessionKey)
+}
+
+// WaitForBackground blocks until the summarization and memory review started by
+// this turn have finished, or the timeout expires.
+//
+// A one-shot CLI run otherwise exits the moment the reply is printed, killing
+// the review goroutine mid-flight: `pepebot agent -m ...` learned nothing, ever,
+// while the long-running gateway learned fine. The race was invisible because
+// the review logs only once it has something to say.
+func (al *AgentLoop) WaitForBackground(timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		busy := false
+		for _, m := range []*sync.Map{&al.reviewing, &al.summarizing} {
+			m.Range(func(_, _ interface{}) bool {
+				busy = true
+				return false
+			})
+		}
+		if !busy {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	logger.DebugC("agent", "Background work still running at exit; leaving it")
 }
 
 // saveSession persists a session and says so when it cannot. A dropped error

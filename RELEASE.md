@@ -1,44 +1,45 @@
-# 🐸 Pepebot v0.5.32 - Housekeeping That Pays Rent
+# 🐸 Pepebot v0.5.33 - It Keeps What It Works Out
 
 **Release Date:** 2026-10-16
 
 ## ⚡ What's New
 
-### Pepebot now tells you when your config is wrong
+### Your bot can now write its own skills
 
-Every check added here is a mistake that really happened and took an afternoon to find, because the complaint always arrived somewhere else:
+Memory already remembered short facts — your preferences, your environment. But a *procedure* doesn't fit in one line, and pasting it into memory would make every single request pay for it.
 
-| What you wrote | What you used to see |
-|---|---|
-| `provider: maiarouter` + `model: maiarouter/zai/glm-5.3` | `no healthy deployments for this model` |
-| `model: custom:r9/myr` with no `providers.custom.r9` | a dial error |
-| `context_window` below `max_tokens` | nothing — sessions just compacted far too early, forever |
-
-Now pepebot says so at startup, naming the setting and the fix:
+Skills are the other half: read only when they're relevant, so they cost nothing until they're needed. Pepebot can now write them.
 
 ```
-WARN config: agents.defaults.model "maiarouter/zai/glm-5.3" repeats the provider name;
-     write "zai/glm-5.3", or use the canonical "maiarouter:zai/glm-5.3"
+You:  [walks the bot through a 6-step debugging routine]
+🐸    ...and I've saved that as a skill, so next time I'll follow it.
+
+[new session, days later]
+You:  Bot Discord diam lagi, gimana?
+🐸    1. systemctl is-active — sering "active" padahal mati, jangan berhenti di sini...
 ```
 
-These are warnings. A bot that starts and complains beats one that refuses to start.
+Two things write them: the bot itself during a conversation, and the background review afterwards. In testing, told explicitly *not* to call any tool, the bot answered "ok" — and the review afterwards filed the procedure as a skill and the one durable fact as a memory entry, on its own.
 
-## 🧹 Cleanup
+### What it will not do
 
-### The lint job is green for the first time
+This is a **narrower** power than the file-writing the bot already had, not a wider one:
 
-63 findings down to 0. That matters beyond tidiness: with the job permanently red, a new problem looked exactly like the old noise.
+- it cannot touch a skill it did not write — your installed and hand-written skills are off limits
+- it cannot overwrite one by picking a colliding name
+- it cannot escape the skills folder — odd names are rejected, not cleaned up
+- 32 KB per skill, because every skill's description is paid for on every request
+- instruction overrides, private keys and invisible characters are refused
 
-Most of them were dropped errors, and several were real:
+Every skill it writes is stamped `created_by: agent` with a timestamp, so finding them is a grep and removing one is a folder delete. Full details: [docs/skills-agent.md](docs/skills-agent.md).
 
-- a session that failed to save — the conversation gone at the next restart, with nothing in the log
-- cron schedules that failed to persist
-- a Telegram reply that never reached the user
-- a config file that onboarding never actually wrote
+Not for you? `{ "skills": { "agent_managed": false } }`.
 
-Those now report. The ones that genuinely cannot be acted on — writing to a client that already hung up — are marked as deliberate, with the reason written down once.
+## 🐛 What's Fixed
 
-Also: five dead functions deleted, and the turn-completion sequence (record, summarize, review, save) that had been copied into three code paths is now one function. Every past fix to it had to be made three times, and the streaming copies were each missed once.
+### One-shot runs never learned anything
+
+`pepebot agent -m "..."` exited the instant it printed the reply, killing the memory review mid-thought. The always-on gateway was fine — which is exactly why nobody noticed: memory worked *there* and silently didn't *here*. The CLI now waits for background work before it exits.
 
 ## 📦 Installation
 
@@ -49,5 +50,6 @@ curl -fsSL https://raw.githubusercontent.com/pepebot-space/pepebot/main/install.
 ## 🔗 Links
 
 - [Changelog](CHANGELOG.md)
-- [Providers Guide](docs/providers.md)
+- [Agent-written skills](docs/skills-agent.md)
+- [Memory Guide](docs/memory.md)
 - [Documentation](docs/README.md)

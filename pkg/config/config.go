@@ -22,6 +22,7 @@ type Config struct {
 	Live      LiveConfig      `json:"live"`
 	Tools     ToolsConfig     `json:"tools"`
 	Memory    MemoryConfig    `json:"memory"`
+	Skills    SkillsConfig    `json:"skills"`
 	mu        sync.RWMutex
 }
 
@@ -35,6 +36,17 @@ type MemoryConfig struct {
 	UserCharLimit  int  `json:"user_char_limit" env:"PEPEBOT_MEMORY_USER_CHAR_LIMIT"`
 	Review         bool `json:"review" env:"PEPEBOT_MEMORY_REVIEW"`
 	ReviewInterval int  `json:"review_interval" env:"PEPEBOT_MEMORY_REVIEW_INTERVAL"`
+}
+
+// SkillsConfig controls whether the agent may write its own skills — its
+// procedural memory. The agent already has write_file, so this is a narrower
+// capability than it has today, not a wider one: a validated name, the
+// frontmatter the loader needs, and a created_by marker that makes every one of
+// them findable and removable.
+type SkillsConfig struct {
+	// AgentManaged registers the skill_manage tool and lets the background
+	// review propose skills. Default true.
+	AgentManaged *bool `json:"agent_managed,omitempty" env:"PEPEBOT_SKILLS_AGENT_MANAGED"`
 }
 
 type AgentsConfig struct {
@@ -682,4 +694,15 @@ func GetChannelEnvToken(channel string) (string, string) {
 	}
 
 	return "", ""
+}
+
+// AgentManagedSkills reports whether the agent may write its own skills.
+// Unset means on: the capability is narrower than the write_file the agent
+// already has, and a bot that cannot keep what it learned relearns it every
+// time.
+func (c *Config) AgentManagedSkills() bool {
+	if c.Skills.AgentManaged == nil {
+		return true
+	}
+	return *c.Skills.AgentManaged
 }
