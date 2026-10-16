@@ -13,7 +13,7 @@ func notifyRestartSignal(sigChan chan<- os.Signal) {
 }
 
 func triggerRestart() {
-	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 }
 
 func isRestartSignal(sig os.Signal) bool {

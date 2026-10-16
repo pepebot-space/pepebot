@@ -59,7 +59,7 @@ type RecordedAction struct {
 
 // RecorderConfig holds tunable thresholds for gesture classification
 type RecorderConfig struct {
-	TapMaxDistance  float64       // max pixel distance to classify as tap (default: 30)
+	TapMaxDistance float64       // max pixel distance to classify as tap (default: 30)
 	TapMaxDuration time.Duration // max duration to classify as tap (default: 300ms)
 	DebounceWindow time.Duration // min time between recorded actions (default: 200ms)
 	SwipeMinDist   float64       // min pixel distance for swipe (default: 50)
@@ -68,7 +68,7 @@ type RecorderConfig struct {
 // DefaultRecorderConfig returns sensible defaults
 func DefaultRecorderConfig() RecorderConfig {
 	return RecorderConfig{
-		TapMaxDistance:  30,
+		TapMaxDistance: 30,
 		TapMaxDuration: 300 * time.Millisecond,
 		DebounceWindow: 200 * time.Millisecond,
 		SwipeMinDist:   50,
@@ -675,9 +675,9 @@ func (t *AdbRecordWorkflowTool) Execute(ctx context.Context, args map[string]int
 
 	// Step 4: Kill getevent process
 	if cmd.Process != nil {
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 	}
-	cmd.Wait()
+	_ = cmd.Wait()
 
 	if !stopped && len(actions) == 0 {
 		return "", fmt.Errorf("recording ended with no actions captured. Ensure you interact with the device screen and press Volume Down to stop")
@@ -693,7 +693,7 @@ func (t *AdbRecordWorkflowTool) Execute(ctx context.Context, args map[string]int
 	if err == nil && len(screenshotData) >= 8 && bytes.Equal(screenshotData[:8], pngSignature) {
 		localPath := t.helper.resolvePath(screenshotFilename)
 		dir := filepath.Dir(localPath)
-		os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0755)
 		if writeErr := os.WriteFile(localPath, screenshotData, 0644); writeErr == nil {
 			screenshotPath = localPath
 		}
@@ -701,7 +701,7 @@ func (t *AdbRecordWorkflowTool) Execute(ctx context.Context, args map[string]int
 
 	// Capture UI dump
 	uiDumpSummary := ""
-	t.helper.execAdb(ctx, device, 15*time.Second, "shell", "uiautomator", "dump", "/sdcard/window_dump.xml")
+	_, _ = t.helper.execAdb(ctx, device, 15*time.Second, "shell", "uiautomator", "dump", "/sdcard/window_dump.xml")
 	time.Sleep(200 * time.Millisecond)
 	uiContent, err := t.helper.execAdb(ctx, device, 12*time.Second, "shell", "cat", "/sdcard/window_dump.xml")
 	if err == nil && strings.Contains(uiContent, "<hierarchy") {
@@ -711,7 +711,7 @@ func (t *AdbRecordWorkflowTool) Execute(ctx context.Context, args map[string]int
 		}
 		uiDumpSummary = uiContent
 	}
-	t.helper.execAdb(ctx, device, 5*time.Second, "shell", "rm", "/sdcard/window_dump.xml")
+	_, _ = t.helper.execAdb(ctx, device, 5*time.Second, "shell", "rm", "/sdcard/window_dump.xml")
 
 	// Build goal text
 	goalParts := []string{"Verify the final screen state matches the expected outcome."}

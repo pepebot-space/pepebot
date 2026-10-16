@@ -10,6 +10,8 @@ import (
 	"github.com/caarlos0/env/v11"
 
 	"github.com/pepebot-space/pepebot/pkg/memory"
+
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 type Config struct {
@@ -362,6 +364,13 @@ func LoadConfig(path string) (*Config, error) {
 
 	// Overlay native provider environment variables (higher priority)
 	overlayNativeEnvVars(cfg)
+
+	// Say what is wrong at startup, where someone is looking, instead of letting
+	// it surface later as a provider error that names the model and not the
+	// config line that produced it.
+	for _, problem := range cfg.Validate() {
+		logger.WarnCF("config", "Configuration problem", map[string]interface{}{"problem": problem})
+	}
 
 	// Load the Live system prompt from file when set and no inline prompt given.
 	if cfg.Live.SystemPrompt == "" && cfg.Live.SystemPromptFile != "" {

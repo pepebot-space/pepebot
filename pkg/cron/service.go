@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/pepebot-space/pepebot/pkg/logger"
 )
 
 type CronSchedule struct {
@@ -67,7 +69,9 @@ func NewCronService(storePath string, onJob JobHandler) *CronService {
 		onJob:     onJob,
 		stopChan:  make(chan struct{}),
 	}
-	cs.loadStore()
+	if err := cs.loadStore(); err != nil {
+		logger.ErrorCF("cron", "Failed to reload job store", map[string]interface{}{"error": err.Error()})
+	}
 	return cs
 }
 
@@ -144,7 +148,9 @@ func (cs *CronService) checkJobs() {
 
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	cs.saveStore()
+	if err := cs.saveStore(); err != nil {
+		logger.ErrorCF("cron", "Failed to persist jobs", map[string]interface{}{"error": err.Error()})
+	}
 }
 
 func (cs *CronService) executeJob(job *CronJob) {
@@ -320,7 +326,9 @@ func (cs *CronService) removeJobUnsafe(jobID string) bool {
 	removed := len(cs.store.Jobs) < before
 
 	if removed {
-		cs.saveStore()
+		if err := cs.saveStore(); err != nil {
+			logger.ErrorCF("cron", "Failed to persist jobs", map[string]interface{}{"error": err.Error()})
+		}
 	}
 
 	return removed
@@ -342,7 +350,9 @@ func (cs *CronService) EnableJob(jobID string, enabled bool) *CronJob {
 				job.State.NextRunAtMS = nil
 			}
 
-			cs.saveStore()
+			if err := cs.saveStore(); err != nil {
+				logger.ErrorCF("cron", "Failed to persist jobs", map[string]interface{}{"error": err.Error()})
+			}
 			return job
 		}
 	}

@@ -47,24 +47,6 @@ func (c *FeishuChannel) Send(ctx context.Context, msg bus.OutboundMessage) error
 	return nil
 }
 
-func (c *FeishuChannel) handleIncomingMessage(data map[string]interface{}) {
-	senderID, _ := data["sender_id"].(string)
-	chatID, _ := data["chat_id"].(string)
-	content, _ := data["content"].(string)
-
-	log.Printf("Feishu message from %s: %s...", senderID, truncateString(content, 50))
-
-	metadata := make(map[string]string)
-	if messageID, ok := data["message_id"].(string); ok {
-		metadata["message_id"] = messageID
-	}
-	if userName, ok := data["sender_name"].(string); ok {
-		metadata["sender_name"] = userName
-	}
-
-	c.HandleMessage(senderID, chatID, content, nil, metadata)
-}
-
 func markdownToFeishuCard(markdown string) string {
 	return markdown
 }

@@ -196,7 +196,7 @@ func (si *SkillInstaller) InstallBuiltinSkills(ctx context.Context) error {
 		dstPath := filepath.Join(skillsDir, relPath)
 
 		if file.FileInfo().IsDir() {
-			os.MkdirAll(dstPath, 0755)
+			_ = os.MkdirAll(dstPath, 0755)
 			continue
 		}
 
@@ -235,38 +235,6 @@ func (si *SkillInstaller) InstallBuiltinSkills(ctx context.Context) error {
 
 	if installedCount == 0 {
 		return fmt.Errorf("no skills found in repository")
-	}
-
-	return nil
-}
-
-func copyDir(src, dst string) error {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(dst, 0755); err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-
-		if entry.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-		} else {
-			data, err := os.ReadFile(srcPath)
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(dstPath, data, 0644); err != nil {
-				return err
-			}
-		}
 	}
 
 	return nil

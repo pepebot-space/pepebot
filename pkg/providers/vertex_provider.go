@@ -53,8 +53,15 @@ func NewVertexProvider(credentialsFile, projectID, region string) (*VertexProvid
 	}
 
 	// Create OAuth2 token source with Vertex AI scope
-	creds, err := google.CredentialsFromJSON(context.Background(), credBytes,
-		"https://www.googleapis.com/auth/cloud-platform",
+	// Both CredentialsFromJSON and its params form are marked deprecated: they
+	// accept a credential configuration without validating it, which matters
+	// when the file is not under your control. The supported replacement lives
+	// in cloud.google.com/go/auth, a module pepebot does not otherwise need —
+	// and this file is read from a path the operator configured, not from an
+	// untrusted source. Revisit if credentials ever arrive from elsewhere.
+	//nolint:staticcheck // see above: replacement needs a new module
+	creds, err := google.CredentialsFromJSONWithParams(context.Background(), credBytes,
+		google.CredentialsParams{Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"}},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("vertex: failed to parse credentials: %w", err)
@@ -381,7 +388,10 @@ func (p *VertexProvider) buildGenerateContentRequest(messages []Message, tools [
 				if name == "" && tc.Function != nil {
 					name = tc.Function.Name
 					if tc.Function.Arguments != "" {
-						json.Unmarshal([]byte(tc.Function.Arguments), &args)
+						if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+							logger.WarnCF("provider", "Skipping unparsable part", map[string]interface{}{"error": err.Error()})
+							continue
+						}
 					}
 				}
 				parts = append(parts, map[string]interface{}{

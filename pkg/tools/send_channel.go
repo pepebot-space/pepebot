@@ -243,7 +243,7 @@ func parseTelegramResponse(body io.Reader) (string, error) {
 	var msgResult struct {
 		MessageID int `json:"message_id"`
 	}
-	json.Unmarshal(apiResp.Result, &msgResult)
+	_ = json.Unmarshal(apiResp.Result, &msgResult)
 
 	out, _ := json.Marshal(map[string]interface{}{
 		"success":    true,
@@ -368,7 +368,7 @@ func (t *DiscordSendTool) buildFileRequest(ctx context.Context, apiURL, content,
 	if err != nil {
 		return nil, err
 	}
-	payloadPart.Write(payloadBytes)
+	_, _ = payloadPart.Write(payloadBytes)
 
 	// File attachment part
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
@@ -404,7 +404,7 @@ func parseDiscordResponse(resp *http.Response) (string, error) {
 	var msg struct {
 		ID string `json:"id"`
 	}
-	json.Unmarshal(respBody, &msg)
+	_ = json.Unmarshal(respBody, &msg)
 
 	out, _ := json.Marshal(map[string]interface{}{
 		"success":    true,

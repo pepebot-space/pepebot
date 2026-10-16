@@ -68,7 +68,7 @@ type WorkflowHelper struct {
 // executor is typically a *tools.ToolRegistry.
 func NewWorkflowHelper(workspace string, executor ToolExecutor) *WorkflowHelper {
 	workflowsDir := filepath.Join(workspace, "workflows")
-	os.MkdirAll(workflowsDir, 0755)
+	_ = os.MkdirAll(workflowsDir, 0755)
 	return &WorkflowHelper{
 		workspace: workspace,
 		executor:  executor,

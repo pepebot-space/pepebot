@@ -220,7 +220,7 @@ func (t *ManageAgentTool) registerAgent(args map[string]interface{}) (string, er
 	}
 
 	// Create agent directory
-	os.MkdirAll(agentDir, 0755)
+	_ = os.MkdirAll(agentDir, 0755)
 
 	result := map[string]interface{}{
 		"success":   true,
@@ -487,7 +487,7 @@ func (t *ManageAgentTool) assignSkill(args map[string]interface{}) (string, erro
 
 	marker := "## Assigned Skills\n"
 	entry := fmt.Sprintf("- %s\n", skill)
-	updated := existing
+	var updated string
 
 	if strings.Contains(existing, entry) {
 		result := map[string]interface{}{

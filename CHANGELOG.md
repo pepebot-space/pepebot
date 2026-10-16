@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.32] - 2026-10-16
+
+### Added
+- **`config.Validate()` runs at startup and names what is wrong** (`pkg/config/validate.go`). Every check is a misconfiguration that actually happened on a live deployment and surfaced far from its cause: a model id with the provider name repeated inside it (the endpoint answered `no healthy deployments for this model`, naming the model and not the config line), a `custom:` model pointing at an endpoint nobody defined (a dial error), `context_window` smaller than `max_tokens` (sessions compacted at a fraction of the real window, silently, forever), a memory review enabled with a zero interval, and `live.enabled` with no provider. Problems are warnings, not a refusal to start.
+  - Tests: `TestProviderNameRepeatedInModel`, `TestCustomProviderMustExist`, `TestContextWindowSmallerThanMaxTokens`, `TestMemoryAndLiveChecks`, `TestCustomTarget`, `TestValidConfigHasNoProblems`.
+
+### Changed
+- **The lint job passes for the first time: 63 findings to 0.** It had been red on every release for months, which meant nobody could tell a new problem from the standing noise. The fixes were not cosmetic:
+  - **Errors that were being dropped on data paths now get reported**: `sessions.Save` (a failed save means the conversation is gone at the next restart), `cron.saveStore` and `loadStore` (schedules silently not persisted), `session.loadSessions` (history silently not loaded), `telegram.bot.Send` (a reply that never reached the user), `agentManager.Run` inside its goroutine (the reason the agent stopped answering), and `os.WriteFile` during onboarding (a config that was never written).
+  - Writes that genuinely cannot be acted on — a response to a client that has already gone, the logger writing to its own file — are now explicitly ignored with the reason written down once, not per line.
+  - Dead code deleted: `copyDir`, `copyDirectory`, `getContentString`, `skillsCmd`, `FeishuChannel.handleIncomingMessage`.
+  - Two deprecated Google credential calls documented with why the supported replacement is not worth a new module here, rather than left as silent warnings.
+- **The turn-completion sequence lives in one place** (`AgentLoop.finishTurn`). Recording the exchange, triggering summarization, running the memory review and saving were copied in three paths; every fix to that sequence so far had to be made three times, and the streaming copies were each missed once. The thresholds are named constants now (`maxHistoryMessages`, `summarizeAtPercent`) instead of `20` and `75` repeated inline, and the no-reply sentence is a single `noReplyMessage`.
+- `node_modules/` is gitignored.
+
 ## [0.5.31] - 2026-10-09
 
 ### Fixed

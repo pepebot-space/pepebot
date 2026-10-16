@@ -49,8 +49,8 @@ func TestExtraBodyReachesTheRequest(t *testing.T) {
 	var got map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
-		json.Unmarshal(raw, &got)
-		w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`))
+		_ = json.Unmarshal(raw, &got)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer srv.Close()
 
@@ -78,8 +78,8 @@ func TestNoExtraBodyKeyWhenUnset(t *testing.T) {
 	var got map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
-		json.Unmarshal(raw, &got)
-		w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`))
+		_ = json.Unmarshal(raw, &got)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer srv.Close()
 
@@ -100,9 +100,9 @@ func TestStreamFallsBackToReasoningOnlyWhenNoAnswerArrives(t *testing.T) {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			for _, c := range chunks {
-				io.WriteString(w, "data: "+c+"\n\n")
+				_, _ = io.WriteString(w, "data: "+c+"\n\n")
 			}
-			io.WriteString(w, "data: [DONE]\n\n")
+			_, _ = io.WriteString(w, "data: [DONE]\n\n")
 		}
 	}
 
