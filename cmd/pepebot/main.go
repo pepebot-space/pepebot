@@ -38,7 +38,7 @@ import (
 	"github.com/pepebot-space/pepebot/pkg/workflow"
 )
 
-const version = "0.5.32"
+const version = "0.5.33"
 const logo = "🐸"
 
 func main() {
@@ -1050,9 +1050,15 @@ func agentCmd() {
 			os.Exit(1)
 		}
 		fmt.Printf("\n%s %s\n", logo, response)
+
+		// The reply is printed, but the memory review this turn started is still
+		// running in a goroutine. Exiting now kills it, which is why a one-shot
+		// run never learned anything while the gateway did.
+		agentLoop.WaitForBackground(90 * time.Second)
 	} else {
 		fmt.Printf("%s Interactive mode (Ctrl+C to exit)\n\n", logo)
 		interactiveMode(agentLoop, sessionKey)
+		agentLoop.WaitForBackground(30 * time.Second)
 	}
 }
 

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.33] - 2026-10-16
+
+### Added
+- **The agent can keep what it worked out, as a skill** (`pkg/skills/author.go`, `pkg/tools/skill_manage.go`, `docs/skills-agent.md`). Memory already held short facts that ride in every prompt; this is the other half — procedures that are read only when relevant, so the expensive knowledge costs nothing until it is needed. Two paths write them: the `skill_manage` tool during a conversation (`create` / `patch` / `delete` / `list`), and the background review afterwards.
+  - It is a **narrower** capability than the `write_file` the agent already had, not a wider one: a validated name (`[a-z0-9-]`, 3-40 chars, so `../elsewhere` is rejected rather than sanitised), the frontmatter the loader needs, a 32 KB cap, the same instruction-override and invisible-character scan memory entries get, and a `created_by: agent` marker.
+  - **It cannot touch a skill it did not write.** Patch and delete check the marker first — improving an installed skill in place would be undone the next time that skill updates from its source. `create` refuses an existing name.
+  - The review sees the current skills summary, so it patches rather than duplicating, and the split holds in practice: told not to call any tool, the agent replied "ok" and the review afterwards saved the procedure as a skill and the one durable fact as a memory entry.
+  - Config: `skills.agent_managed` (unset means on).
+  - Tests: `TestCreateAndLoadBack`, `TestCreateRefusesToOverwrite`, `TestPatchAndDeleteOnlyTouchAgentSkills`, `TestPatchKeepsDescriptionWhenOmitted`, `TestNameCannotEscapeTheSkillsDirectory`, `TestRefusesInjectionAndOversizeContent`, `TestParseReviewSkills`, `TestParseReviewWithoutSkillsKey`.
+
+### Fixed
+- **A one-shot `pepebot agent -m "..."` never learned anything.** The memory review runs in a goroutine, and the CLI exited the moment it printed the reply — killing it mid-flight. The long-running gateway was unaffected, which is why the gap was invisible: memory worked there and silently did not here. The CLI now waits for background work before exiting (`AgentLoop.WaitForBackground`, 90s cap in one-shot mode).
+
 ## [0.5.32] - 2026-10-16
 
 ### Added

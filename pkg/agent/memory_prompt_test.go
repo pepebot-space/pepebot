@@ -78,7 +78,7 @@ func TestMemoryPromptEmptyWithoutStores(t *testing.T) {
 func TestParseReviewOpsToleratesWrapping(t *testing.T) {
 	reply := "Sure!\n```json\n{\"ops\": [{\"action\": \"add\", \"target\": \"user\", \"content\": \"suka ringkas\"}]}\n```\n"
 
-	ops, err := parseReviewOps(reply)
+	ops, _, err := parseReviewOps(reply)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -86,7 +86,41 @@ func TestParseReviewOpsToleratesWrapping(t *testing.T) {
 		t.Fatalf("ops = %+v", ops)
 	}
 
-	if _, err := parseReviewOps("tidak ada apa-apa"); err == nil {
+	if _, _, err := parseReviewOps("tidak ada apa-apa"); err == nil {
 		t.Error("a reply with no JSON should be reported as unusable")
+	}
+}
+
+// The review may also propose a procedure. It lands through the same author as
+// the tool, so a skill written unattended is validated, scanned and marked the
+// same way as one the agent wrote on purpose.
+func TestParseReviewSkills(t *testing.T) {
+	reply := "```json\n" + `{"ops": [], "skills": [{"action": "create", "name": "deploy-pepebot",
+	  "description": "Cara menaikkan pepebot ke server.", "body": "1. build\n2. scp\n3. restart"}]}` + "\n```"
+
+	ops, proposed, err := parseReviewOps(reply)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(ops) != 0 {
+		t.Errorf("ops = %v, want none", ops)
+	}
+	if len(proposed) != 1 || proposed[0].Name != "deploy-pepebot" || proposed[0].Action != "create" {
+		t.Fatalf("skills = %+v", proposed)
+	}
+	if !strings.Contains(proposed[0].Body, "scp") {
+		t.Errorf("body lost: %q", proposed[0].Body)
+	}
+}
+
+// A reply with only memory operations must still parse — the skills key is
+// absent far more often than it is present.
+func TestParseReviewWithoutSkillsKey(t *testing.T) {
+	ops, proposed, err := parseReviewOps(`{"ops": [{"action": "add", "target": "user", "content": "suka ringkas"}]}`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(ops) != 1 || len(proposed) != 0 {
+		t.Fatalf("ops=%v skills=%v", ops, proposed)
 	}
 }

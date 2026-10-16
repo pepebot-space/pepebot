@@ -572,3 +572,18 @@ func (am *AgentManager) cmdStatus(msg bus.InboundMessage) string {
 	return fmt.Sprintf("Agent: %s\nModel: %s\nSession: %s\nStatus: %s",
 		agentLoop.AgentName(), agentLoop.Model(), msg.SessionKey, processingStatus)
 }
+
+// WaitForBackground lets a one-shot caller wait for the background work its
+// turn started — the memory review and any summarization — before exiting.
+func (am *AgentManager) WaitForBackground(timeout time.Duration) {
+	am.mu.RLock()
+	loops := make([]*AgentLoop, 0, len(am.agents))
+	for _, loop := range am.agents {
+		loops = append(loops, loop)
+	}
+	am.mu.RUnlock()
+
+	for _, loop := range loops {
+		loop.WaitForBackground(timeout)
+	}
+}
